@@ -642,32 +642,10 @@
       position: relative;
       display: inline-block;
       border-radius: 5px;
-    }
-
-    .img-frame .zoom-icon {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      background: rgba(22, 31, 27, 0.45);
-      border-radius: 5px;
-      opacity: 0;
-      transition: opacity 0.12s;
       cursor: zoom-in;
     }
 
-    .img-frame:hover .zoom-icon {
-      opacity: 1;
-    }
-
     .img-frame.large {
-      border-radius: 8px;
-    }
-
-    .img-frame.large .zoom-icon {
-      font-size: 26px;
       border-radius: 8px;
     }
 
@@ -1039,7 +1017,6 @@
           <div class="img-frame large" id="editImgFrame" onclick="openEditImageLightbox()">
             <img class="img-preview" id="editImgPreview" style="display:none;">
             <div class="img-preview-empty" id="editImgEmpty">No image</div>
-            <div class="zoom-icon" title="View larger">🔍</div>
           </div>
           <div class="img-actions">
             <button class="btn secondary small" id="findImageBtn">Find image</button>
@@ -1550,9 +1527,9 @@
           (c.itemType === "slab" && (c.grader || c.grade) ? (` · ${c.grader || ""} ${c.grade || ""}`).trim() : "");
         let thumb;
         if (c.imageUrl && c.imageUrl.startsWith("http")) {
-          thumb = `<div class="img-frame" onclick="event.stopPropagation(); openLightbox(this.querySelector('img').src)"><img class="thumb" src="${escapeAttr(c.imageUrl)}" loading="lazy" onerror="this.style.display='none'"><div class="zoom-icon" title="View larger">🔍</div></div>`;
+          thumb = `<div class="img-frame" onclick="event.stopPropagation(); openLightbox(this.querySelector('img').src)"><img class="thumb" src="${escapeAttr(c.imageUrl)}" loading="lazy" onerror="this.style.display='none'"></div>`;
         } else if (c.imageUrl === "local" && c.imageData) {
-          thumb = `<div class="img-frame" onclick="event.stopPropagation(); openLightbox(this.querySelector('img').src)"><img class="thumb" src="${c.imageData}"><div class="zoom-icon" title="View larger">🔍</div></div>`;
+          thumb = `<div class="img-frame" onclick="event.stopPropagation(); openLightbox(this.querySelector('img').src)"><img class="thumb" src="${c.imageData}"></div>`;
         } else {
           thumb = `<div class="thumb-placeholder">—</div>`;
         }
