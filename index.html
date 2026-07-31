@@ -177,6 +177,7 @@
     input[type=text],
     input[type=number],
     input[type=url],
+    input[type=password],
     select,
     textarea {
       font-family: 'Inter', sans-serif;
@@ -221,6 +222,14 @@
       color: var(--ink-faint);
       padding: 8px 10px;
       border-bottom: 1px solid var(--border);
+    }
+
+    thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    thead th.sortable:hover {
+      color: var(--ink);
     }
 
     tbody td {
@@ -629,6 +638,39 @@
       display: block;
     }
 
+    .img-frame {
+      position: relative;
+      display: inline-block;
+      border-radius: 5px;
+    }
+
+    .img-frame .zoom-icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      background: rgba(22, 31, 27, 0.45);
+      border-radius: 5px;
+      opacity: 0;
+      transition: opacity 0.12s;
+      cursor: zoom-in;
+    }
+
+    .img-frame:hover .zoom-icon {
+      opacity: 1;
+    }
+
+    .img-frame.large {
+      border-radius: 8px;
+    }
+
+    .img-frame.large .zoom-icon {
+      font-size: 26px;
+      border-radius: 8px;
+    }
+
     .thumb-placeholder {
       width: 32px;
       height: 32px;
@@ -994,8 +1036,11 @@
       </div>
       <div class="modal-body">
         <div class="img-preview-wrap">
-          <img class="img-preview" id="editImgPreview" style="display:none;">
-          <div class="img-preview-empty" id="editImgEmpty">No image</div>
+          <div class="img-frame large" id="editImgFrame" onclick="openEditImageLightbox()">
+            <img class="img-preview" id="editImgPreview" style="display:none;">
+            <div class="img-preview-empty" id="editImgEmpty">No image</div>
+            <div class="zoom-icon" title="View larger">🔍</div>
+          </div>
           <div class="img-actions">
             <button class="btn secondary small" id="findImageBtn">Find image</button>
             <button class="btn secondary small" id="uploadImageBtn">Upload photo</button>
@@ -1090,11 +1135,19 @@
         <div class="name" id="confirmTitle">Are you sure?</div>
         <div class="meta" id="confirmMessage"></div>
       </div>
+      <div class="modal-body" id="confirmPasswordWrap" style="display:none;">
+        <input type="password" id="confirmPasswordInput" placeholder="Shared login password" autocomplete="off" style="width:100%;">
+        <div class="status-line err" id="confirmPasswordError" style="display:none;">Incorrect password.</div>
+      </div>
       <div class="modal-foot">
         <button class="btn ghost small" id="confirmCancelBtn">Cancel</button>
         <button class="btn danger small" id="confirmOkBtn">Confirm</button>
       </div>
     </div>
+  </div>
+
+  <div class="overlay" id="imageLightboxOverlay" onclick="closeLightbox()">
+    <img id="imageLightboxImg" style="max-width:90vw;max-height:90vh;border-radius:10px;object-fit:contain;">
   </div>
 
   <div class="toast" id="toast"></div>
@@ -1116,6 +1169,21 @@
     let selectedSkus = new Set();
     let pendingWorkbook = null;
     let pendingLocationDefault = "";
+    let sortState = { col: 'name', dir: 1 };
+
+    const SORT_COLUMNS = {
+      name: c => (c.name || "").toLowerCase(),
+      sku: c => (c.sku || "").toLowerCase(),
+      qty: c => c.qty,
+      price: c => c.price === null || c.price === undefined ? -Infinity : c.price,
+      updated: c => c.lastUpdated ? new Date(c.lastUpdated).getTime() : 0,
+    };
+
+    function setSort(col) {
+      if (sortState.col === col) sortState.dir *= -1;
+      else sortState = { col, dir: 1 };
+      renderCatalogTable();
+    }
 
     const FIELD_TARGETS = [
       { key: "sku", label: "SKU / Barcode", aliases: ["sku", "barcode", "tcgplayer id", "tcgplayerid", "product id", "productid", "id"] },
@@ -1163,11 +1231,18 @@
       return { name: cleanedName || name, itemType: "slab", grader: grader, grade: grade };
     }
 
-    function showConfirm(message, title) {
+    function showConfirm(message, title, opts) {
+      const requirePassword = !!(opts && opts.requirePassword);
       return new Promise((resolve) => {
         document.getElementById('confirmTitle').textContent = title || "Are you sure?";
         document.getElementById('confirmMessage').textContent = message;
         const overlay = document.getElementById('confirmOverlay');
+        const pwWrap = document.getElementById('confirmPasswordWrap');
+        const pwInput = document.getElementById('confirmPasswordInput');
+        const pwError = document.getElementById('confirmPasswordError');
+        pwWrap.style.display = requirePassword ? "block" : "none";
+        pwError.style.display = "none";
+        pwInput.value = "";
         overlay.classList.add('show');
         const okBtn = document.getElementById('confirmOkBtn');
         const cancelBtn = document.getElementById('confirmCancelBtn');
@@ -1175,13 +1250,44 @@
           overlay.classList.remove('show');
           okBtn.removeEventListener('click', onOk);
           cancelBtn.removeEventListener('click', onCancel);
+          pwInput.removeEventListener('keydown', onPwKeydown);
+          okBtn.disabled = false;
           resolve(result);
         }
-        function onOk() { cleanup(true); }
+        async function onOk() {
+          if (requirePassword) {
+            const pw = pwInput.value;
+            if (!pw) { pwError.textContent = "Enter the shared password."; pwError.style.display = "block"; return; }
+            okBtn.disabled = true;
+            const { error } = await supabaseClient.auth.signInWithPassword({ email: SHARED_LOGIN_EMAIL, password: pw });
+            okBtn.disabled = false;
+            if (error) { pwError.textContent = "Incorrect password."; pwError.style.display = "block"; return; }
+          }
+          cleanup(true);
+        }
         function onCancel() { cleanup(false); }
+        function onPwKeydown(e) { if (e.key === 'Enter') onOk(); }
         okBtn.addEventListener('click', onOk);
         cancelBtn.addEventListener('click', onCancel);
+        pwInput.addEventListener('keydown', onPwKeydown);
+        if (requirePassword) setTimeout(() => pwInput.focus(), 0);
       });
+    }
+
+    function openLightbox(url) {
+      if (!url) return;
+      document.getElementById('imageLightboxImg').src = url;
+      document.getElementById('imageLightboxOverlay').classList.add('show');
+    }
+
+    function closeLightbox() {
+      document.getElementById('imageLightboxOverlay').classList.remove('show');
+      document.getElementById('imageLightboxImg').src = "";
+    }
+
+    function openEditImageLightbox() {
+      const img = document.getElementById('editImgPreview');
+      if (img.style.display !== 'none' && img.src) openLightbox(img.src);
     }
 
     function parseMoney(v) {
@@ -1420,14 +1526,22 @@
         wrap.innerHTML = '<div class="empty"><span class="mark">No matches</span>Try a different search or filter.</div>';
         return;
       }
-      rows.sort((a, b) => a.name.localeCompare(b.name));
+      const sortKey = SORT_COLUMNS[sortState.col] || SORT_COLUMNS.name;
+      rows.sort((a, b) => {
+        const av = sortKey(a), bv = sortKey(b);
+        const cmp = typeof av === "string" ? av.localeCompare(bv) : (av > bv ? 1 : av < bv ? -1 : 0);
+        return cmp * sortState.dir;
+      });
 
       const visibleSkus = rows.map(r => r.sku);
       const allVisibleSelected = visibleSkus.length > 0 && visibleSkus.every(s => selectedSkus.has(s));
 
+      const sortArrow = col => sortState.col === col ? (sortState.dir === 1 ? " ▲" : " ▼") : "";
+      const sortTh = (col, label) => `<th class="sortable" onclick="setSort('${col}')">${label}${sortArrow(col)}</th>`;
+
       let html = `<table><thead><tr>
     <th><input type="checkbox" id="selectAllCheckbox" ${allVisibleSelected ? 'checked' : ''}></th>
-    <th></th><th>Item</th><th>SKU</th><th>Qty</th><th>Price</th><th>Updated</th><th></th>
+    <th></th>${sortTh('name', 'Item')}${sortTh('sku', 'SKU')}${sortTh('qty', 'Qty')}${sortTh('price', 'Price')}${sortTh('updated', 'Updated')}<th></th>
   </tr></thead><tbody>`;
       for (const c of rows.slice(0, 400)) {
         const qtyClass = c.qty <= 0 ? "qty-zero" : (c.qty <= 2 ? "qty-low" : "");
@@ -1436,9 +1550,9 @@
           (c.itemType === "slab" && (c.grader || c.grade) ? (` · ${c.grader || ""} ${c.grade || ""}`).trim() : "");
         let thumb;
         if (c.imageUrl && c.imageUrl.startsWith("http")) {
-          thumb = `<img class="thumb" src="${escapeAttr(c.imageUrl)}" loading="lazy" onerror="this.style.display='none'">`;
+          thumb = `<div class="img-frame" onclick="event.stopPropagation(); openLightbox(this.querySelector('img').src)"><img class="thumb" src="${escapeAttr(c.imageUrl)}" loading="lazy" onerror="this.style.display='none'"><div class="zoom-icon" title="View larger">🔍</div></div>`;
         } else if (c.imageUrl === "local" && c.imageData) {
-          thumb = `<img class="thumb" src="${c.imageData}">`;
+          thumb = `<div class="img-frame" onclick="event.stopPropagation(); openLightbox(this.querySelector('img').src)"><img class="thumb" src="${c.imageData}"><div class="zoom-icon" title="View larger">🔍</div></div>`;
         } else {
           thumb = `<div class="thumb-placeholder">—</div>`;
         }
@@ -1691,6 +1805,55 @@
       document.getElementById('editImgPreview').dataset.pendingUrl = "__clear__";
     });
 
+    async function pokemonQuery(q) {
+      const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=10`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.data || []).map(c => ({
+        url: (c.images && (c.images.large || c.images.small)),
+        label: `${c.name} (${(c.set && c.set.name) || ""})`
+      })).filter(r => r.url);
+    }
+
+    async function searchPokemon(name) {
+      // Exact phrase first (most precise), then a broader unquoted token match,
+      // then just the first word — set/promo codes like "XY83" typed after the
+      // name aren't part of the API's name field, so trailing words can sink an
+      // otherwise-good search unless we fall back to something broader.
+      let results = await pokemonQuery('name:"' + name + '"');
+      if (results.length) return results;
+      results = await pokemonQuery('name:' + name);
+      if (results.length) return results;
+      const firstWord = name.split(/\s+/)[0];
+      if (firstWord && firstWord !== name) {
+        results = await pokemonQuery('name:' + firstWord + '*');
+      }
+      return results;
+    }
+
+    async function ygoQuery(param, value) {
+      const res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?${param}=${encodeURIComponent(value)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const cards = data.data || [];
+      return cards.slice(0, 4).flatMap(c => (c.card_images || []).slice(0, 2).map(img => ({
+        url: img.image_url, label: c.name
+      })));
+    }
+
+    async function searchYugioh(name) {
+      // fname is already a fuzzy/substring match server-side; the fallback here
+      // is for names with an extra trailing word (misremembered subtitle, etc.)
+      // that keeps the full string from matching anything.
+      let results = await ygoQuery('fname', name);
+      if (results.length) return results;
+      const words = name.split(/\s+/);
+      if (words.length > 1) {
+        results = await ygoQuery('fname', words.slice(0, -1).join(' '));
+      }
+      return results;
+    }
+
     document.getElementById('findImageBtn').addEventListener('click', async () => {
       const name = document.getElementById('f_name').value.trim();
       const game = document.getElementById('f_game').value;
@@ -1711,23 +1874,9 @@
             })).filter(r => r.url);
           }
         } else if (game === "Pokemon") {
-          const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent('name:"' + name + '"')}`);
-          if (res.ok) {
-            const data = await res.json();
-            results = (data.data || []).slice(0, 6).map(c => ({
-              url: (c.images && (c.images.large || c.images.small)),
-              label: `${c.name} (${(c.set && c.set.name) || ""})`
-            })).filter(r => r.url);
-          }
+          results = await searchPokemon(name);
         } else if (game === "Yugioh") {
-          const res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(name)}`);
-          if (res.ok) {
-            const data = await res.json();
-            const cards = data.data || [];
-            results = cards.slice(0, 3).flatMap(c => (c.card_images || []).slice(0, 2).map(img => ({
-              url: img.image_url, label: c.name
-            })));
-          }
+          results = await searchYugioh(name);
         } else {
           statusEl.className = "status-line err";
           statusEl.textContent = "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.";
@@ -2225,7 +2374,7 @@
       toast("Sync history exported");
     });
     document.getElementById('clearAllBtn').addEventListener('click', async () => {
-      if (!(await showConfirm("This clears the shared catalog and sync queue for everyone using this Ledger. Continue?"))) return;
+      if (!(await showConfirm("This clears the shared catalog and sync queue for everyone using this Ledger. Continue?", "Reset all data", { requirePassword: true }))) return;
       await dbClearCatalog(); await dbClearQueue();
       catalog = []; queue = []; selectedSkus.clear();
       render();
