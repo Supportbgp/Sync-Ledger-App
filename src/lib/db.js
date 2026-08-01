@@ -1,7 +1,7 @@
 import { supabaseClient } from './supabase.js';
 import { normalizeCard } from './cardUtils.js';
 
-function rowToCard(r) {
+export function rowToCard(r) {
   return normalizeCard({
     sku: r.sku, name: r.name, set: r.set_name, game: r.game, condition: r.condition,
     printing: r.printing, qty: r.qty, price: r.price, notes: r.notes,
@@ -25,7 +25,7 @@ function cardToRow(c) {
   };
 }
 
-function rowToTicket(r) {
+export function rowToTicket(r) {
   return {
     id: r.id, sku: r.sku, name: r.name, set: r.set_name, condition: r.condition, printing: r.printing,
     price: r.price, qtySold: r.qty_sold, timestamp: new Date(r.ts).getTime(),
