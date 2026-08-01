@@ -1,16 +1,17 @@
 import { useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { downloadCsv } from '../../lib/csv.js';
 import { detectGrading, normalizeCard } from '../../lib/cardUtils.js';
 import {
   FIELD_TARGETS, guessHeader, parseCsvFile, readWorkbook, loadXlsxSheet,
 } from '../../lib/importParse.js';
+import ExportModal from './ExportModal.jsx';
 
 export default function ImportExportPanel({ catalog, queue, locations, onImport, onClearAll }) {
-  const { toast, showConfirm } = useUI();
+  const { showConfirm } = useUI();
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState({ text: "", kind: "" });
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const [workbook, setWorkbook] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
@@ -138,26 +139,6 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function exportFull() {
-    if (!catalog.length) { toast("Catalog is empty", true); return; }
-    downloadCsv("ledger_full_catalog.csv", catalog.map(c => ({
-      SKU: c.sku, Name: c.name, Set: c.set, Game: c.game, Condition: c.condition, Printing: c.printing,
-      Type: c.itemType, Grader: c.grader, Grade: c.grade, CertNumber: c.certNumber,
-      Qty: c.qty, Price: c.price, Notes: c.notes, Sold: c.sold, ImageURL: c.imageUrl, SourceURL: c.sourceUrl, Location: c.location,
-      LastUpdated: new Date(c.lastUpdated).toISOString(),
-    })));
-    toast("Full catalog exported");
-  }
-
-  function exportHistory() {
-    if (!queue.length) { toast("No sync history yet", true); return; }
-    downloadCsv("ledger_sync_history.csv", queue.map(t => ({
-      Time: new Date(t.timestamp).toISOString(), SKU: t.sku, Name: t.name, QtySold: t.qtySold,
-      CumulusDone: t.cumulusDone, SortSwiftDone: t.sortswiftDone,
-    })));
-    toast("Sync history exported");
-  }
-
   async function handleClearAll() {
     if (!(await showConfirm("This clears the shared catalog and sync queue for everyone using this Ledger. Continue?", "Reset all data", { requirePassword: true }))) return;
     await onClearAll();
@@ -243,11 +224,18 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
       <div className="card card-pad">
         <div className="section-label">Export</div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button className="btn secondary" onClick={exportFull}>Export full catalog CSV</button>
-          <button className="btn secondary" onClick={exportHistory}>Export sync history CSV</button>
+          <button className="btn secondary" onClick={() => setShowExportModal(true)}>Export…</button>
           <button className="btn ghost" onClick={handleClearAll}>Reset all data</button>
         </div>
       </div>
+      {showExportModal && (
+        <ExportModal
+          catalog={catalog}
+          queue={queue}
+          locations={locations}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ export function rowToCard(r) {
     itemType: r.item_type, grader: r.grader, grade: r.grade, certNumber: r.cert_number,
     sold: r.sold, sourceUrl: r.source_url, location: r.location,
     lastUpdated: r.last_updated ? new Date(r.last_updated).getTime() : Date.now(),
+    posSynced: r.pos_synced, tcgplayerSynced: r.tcgplayer_synced, collectrSynced: r.collectr_synced,
   });
 }
 
@@ -22,6 +23,7 @@ function cardToRow(c) {
     item_type: c.itemType, grader: c.grader, grade: c.grade, cert_number: c.certNumber,
     sold: c.sold, source_url: c.sourceUrl, location: c.location,
     last_updated: new Date(c.lastUpdated).toISOString(),
+    pos_synced: !!c.posSynced, tcgplayer_synced: !!c.tcgplayerSynced, collectr_synced: !!c.collectrSynced,
   };
 }
 
@@ -29,7 +31,7 @@ export function rowToTicket(r) {
   return {
     id: r.id, sku: r.sku, name: r.name, set: r.set_name, condition: r.condition, printing: r.printing,
     price: r.price, qtySold: r.qty_sold, timestamp: new Date(r.ts).getTime(),
-    cumulusDone: r.cumulus_done, sortswiftDone: r.sortswift_done,
+    posDone: r.pos_done, tcgplayerDone: r.tcgplayer_done, collectrDone: r.collectr_done,
   };
 }
 
@@ -37,7 +39,7 @@ function ticketToRow(t) {
   return {
     id: t.id, sku: t.sku, name: t.name, set_name: t.set, condition: t.condition, printing: t.printing,
     price: t.price, qty_sold: t.qtySold, ts: new Date(t.timestamp).toISOString(),
-    cumulus_done: t.cumulusDone, sortswift_done: t.sortswiftDone,
+    pos_done: t.posDone, tcgplayer_done: t.tcgplayerDone, collectr_done: t.collectrDone,
   };
 }
 
@@ -94,9 +96,19 @@ export async function dbInsertTickets(tickets, toast) {
   if (error) toast('Sync tickets failed: ' + error.message, true);
 }
 
+const TICKET_STAMP_COLUMNS = { posDone: 'pos_done', tcgplayerDone: 'tcgplayer_done', collectrDone: 'collectr_done' };
+
 export async function dbUpdateTicketStamp(id, field, value, toast) {
-  const col = field === 'cumulusDone' ? 'cumulus_done' : 'sortswift_done';
+  const col = TICKET_STAMP_COLUMNS[field];
   const { error } = await supabaseClient.from('sync_queue').update({ [col]: value }).eq('id', id);
+  if (error) toast('Update failed: ' + error.message, true);
+}
+
+const PLATFORM_STATUS_COLUMNS = { posSynced: 'pos_synced', tcgplayerSynced: 'tcgplayer_synced', collectrSynced: 'collectr_synced' };
+
+export async function dbUpdatePlatformStatus(sku, field, value, toast) {
+  const col = PLATFORM_STATUS_COLUMNS[field];
+  const { error } = await supabaseClient.from('catalog').update({ [col]: value }).eq('sku', sku);
   if (error) toast('Update failed: ' + error.message, true);
 }
 

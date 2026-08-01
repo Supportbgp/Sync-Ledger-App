@@ -66,7 +66,23 @@ export function normalizeCard(c) {
     imageData: c.imageData || "",
     sold: (c.sold === true || c.sold === "true" || c.sold === "TRUE" || c.sold === "1" || (typeof c.sold === "string" && /^\s*sold\s*$/i.test(c.sold))),
     lastUpdated: c.lastUpdated || Date.now(),
+    // Reminder checkboxes for whether this item's listing is up to date on
+    // each platform — reset to false whenever a relevant field changes (see
+    // the reset logic in App.jsx), not here, since this function also runs on
+    // every read from the database and shouldn't wipe stored true values.
+    posSynced: !!c.posSynced,
+    tcgplayerSynced: !!c.tcgplayerSynced,
+    collectrSynced: !!c.collectrSynced,
   };
+}
+
+// Fields that, when changed, mean a listing may now be wrong on every
+// platform — used to decide when to reset the three status checkboxes above.
+export const PLATFORM_RESET_FIELDS = ['price', 'qty', 'condition', 'sold'];
+
+export function needsPlatformStatusReset(existing, next) {
+  if (!existing) return true; // brand new item
+  return PLATFORM_RESET_FIELDS.some(f => existing[f] !== next[f]);
 }
 
 export function timeAgo(ts) {
