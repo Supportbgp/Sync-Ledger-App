@@ -24,12 +24,33 @@ export function detectGrading(rawName) {
   return { name: cleanedName || name, itemType: "slab", grader: grader, grade: grade };
 }
 
+const GAME_ALIASES = {
+  magic: "Magic", mtg: "Magic", "magic: the gathering": "Magic", "magic the gathering": "Magic",
+  pokemon: "Pokemon", "pokémon": "Pokemon", pkmn: "Pokemon",
+  yugioh: "Yugioh", "yu-gi-oh": "Yugioh", "yu-gi-oh!": "Yugioh", ygo: "Yugioh",
+  lorcana: "Lorcana", "disney lorcana": "Lorcana",
+  "one piece": "One Piece",
+  sports: "Sports Singles", "sports singles": "Sports Singles",
+  swu: "SWU", "star wars unlimited": "SWU", "star wars": "SWU",
+  riftbound: "Riftbound",
+};
+
+// Imported spreadsheets rarely spell a game exactly like the Add/Edit form's
+// dropdown does ("MTG" instead of "Magic", etc.) — coerce known variants onto
+// the canonical string so the dropdown and the image-search game check (which
+// compares against that exact string) both work on imported data.
+function canonicalizeGame(raw) {
+  const g = (raw || "").toString().trim();
+  if (!g) return "Other";
+  return GAME_ALIASES[g.toLowerCase()] || g;
+}
+
 export function normalizeCard(c) {
   return {
     sku: c.sku || "",
     name: c.name || "Unnamed",
     set: c.set || "",
-    game: c.game || "Other",
+    game: canonicalizeGame(c.game),
     condition: c.condition || "",
     printing: c.printing || "",
     qty: Number(c.qty) || 0,
