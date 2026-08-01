@@ -8,6 +8,14 @@ export async function searchScryfall(name) {
   })).filter(r => r.url);
 }
 
+// pokemontcg.io's `q=` is a Lucene/Elasticsearch query string, not plain
+// text — these characters are operators and break the query (400/500) if
+// a raw card name happens to contain them (parentheses, set-number slashes,
+// stray dashes, etc. are common in names pulled from spreadsheet imports).
+function escapeLucene(s) {
+  return s.replace(/([+\-!(){}[\]^"~*?:\\/])/g, '\\$1');
+}
+
 async function pokemonQuery(q) {
   const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=10`);
   if (!res.ok) return [];
@@ -23,13 +31,15 @@ export async function searchPokemon(name) {
   // then just the first word — set/promo codes like "XY83" typed after the
   // name aren't part of the API's name field, so trailing words can sink an
   // otherwise-good search unless we fall back to something broader.
-  let results = await pokemonQuery('name:"' + name + '"');
+  const trimmed = name.trim();
+  const safe = escapeLucene(trimmed);
+  let results = await pokemonQuery('name:"' + safe + '"');
   if (results.length) return results;
-  results = await pokemonQuery('name:' + name);
+  results = await pokemonQuery('name:' + safe);
   if (results.length) return results;
-  const firstWord = name.split(/\s+/)[0];
-  if (firstWord && firstWord !== name) {
-    results = await pokemonQuery('name:' + firstWord + '*');
+  const firstWord = trimmed.split(/\s+/)[0];
+  if (firstWord && firstWord !== trimmed) {
+    results = await pokemonQuery('name:' + escapeLucene(firstWord) + '*');
   }
   return results;
 }
