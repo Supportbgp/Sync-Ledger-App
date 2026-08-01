@@ -9,6 +9,29 @@ const COLUMNS = [
   { key: 'updated', label: 'Updated' },
 ];
 
+const PLATFORM_CHIPS = [
+  { field: 'posSynced', label: 'P', title: 'POS' },
+  { field: 'tcgplayerSynced', label: 'T', title: 'TCG Player' },
+  { field: 'collectrSynced', label: 'C', title: 'Collectr' },
+];
+
+function PlatformStatus({ card, onToggle }) {
+  return (
+    <div className="platform-status">
+      {PLATFORM_CHIPS.map(chip => (
+        <span
+          key={chip.field}
+          className={`platform-chip${card[chip.field] ? ' done' : ''}`}
+          title={`${chip.title} — ${card[chip.field] ? 'up to date' : 'needs updating'}`}
+          onClick={(e) => { e.stopPropagation(); onToggle(card.sku, chip.field); }}
+        >
+          {chip.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function Thumb({ card, onZoom }) {
   if (card.imageUrl && card.imageUrl.startsWith('http')) {
     return (
@@ -30,7 +53,7 @@ function Thumb({ card, onZoom }) {
 export default function CatalogTable({
   catalogEmpty, rows, sortState, onSort,
   selectedSkus, onToggleSelected, onToggleSelectAll,
-  onEdit, onSell,
+  onEdit, onSell, onTogglePlatformStatus,
 }) {
   const { openLightbox } = useUI();
 
@@ -74,6 +97,7 @@ export default function CatalogTable({
                 {sortState.col === col.key ? (sortState.dir === 1 ? ' ▲' : ' ▼') : ''}
               </th>
             ))}
+            <th title="POS / TCG Player / Collectr — reminders to update each platform's listing">Status</th>
             <th></th>
           </tr>
         </thead>
@@ -111,6 +135,7 @@ export default function CatalogTable({
                 <td className={`mono ${qtyClass}`}>{c.qty}</td>
                 <td className="mono">{c.price !== null ? "$" + Number(c.price).toFixed(2) : "—"}</td>
                 <td className="mono" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>{timeAgo(c.lastUpdated)}</td>
+                <td><PlatformStatus card={c} onToggle={onTogglePlatformStatus} /></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button className="icon-btn" title="Edit" onClick={() => onEdit(c.sku)}>Edit</button>
                   <button className="btn small" disabled={c.qty <= 0 || isSold} onClick={() => onSell(c.sku)}>Sell</button>

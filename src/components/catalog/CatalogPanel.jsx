@@ -7,7 +7,7 @@ import EditModal from './EditModal.jsx';
 import SellModal from './SellModal.jsx';
 import { useUI } from '../../context/UIContext.jsx';
 
-export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSellCard, onBatchDelete, onBatchSell }) {
+export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSellCard, onBatchDelete, onBatchSell, onTogglePlatformStatus }) {
   const { showConfirm } = useUI();
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState("");
@@ -117,6 +117,7 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
           onToggleSelectAll={toggleSelectAll}
           onEdit={(sku) => setEditingSku(sku)}
           onSell={(sku) => setSellingSku(sku)}
+          onTogglePlatformStatus={onTogglePlatformStatus}
         />
       </div>
       {editingSku !== undefined && (

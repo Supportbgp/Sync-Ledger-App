@@ -149,6 +149,11 @@ export default function EditModal({ card, locations, onClose, onSave, onDelete }
       sold: form.sold,
       imageUrl, imageData,
       lastUpdated: Date.now(),
+      // Carried forward as-is; App.jsx's save handler is what decides whether
+      // a relevant field actually changed and resets these to false.
+      posSynced: card ? card.posSynced : false,
+      tcgplayerSynced: card ? card.tcgplayerSynced : false,
+      collectrSynced: card ? card.collectrSynced : false,
     });
 
     setSaving(true);
