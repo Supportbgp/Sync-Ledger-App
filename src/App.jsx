@@ -5,6 +5,7 @@ import {
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue,
 } from './lib/db.js';
 import { useUI } from './context/UIContext.jsx';
+import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
 import CatalogPanel from './components/catalog/CatalogPanel.jsx';
 import SyncQueueTab from './components/queue/SyncQueueTab.jsx';
@@ -36,6 +37,8 @@ export default function App() {
     dbLoadAll(toast).then(({ catalog: c, queue: q }) => { setCatalog(c); setQueue(q); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
+
+  useRealtimeSync({ enabled: signedIn, setCatalog, setQueue });
 
   const locations = useMemo(
     () => Array.from(new Set(catalog.map(c => c.location).filter(Boolean))).sort(),
