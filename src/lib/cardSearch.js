@@ -1,6 +1,8 @@
-// Repeatedly strips a trailing "(...)" group — collector numbers, frame
-// treatments ("Borderless", "Extended Art"), and similar print metadata that
-// import data sometimes appends to the name but isn't part of it.
+// Repeatedly strips a trailing "(...)" group. Used only to get down to the
+// literal card name for the base query — Scryfall's `name` field doesn't
+// include print-treatment text like "(Borderless)", even though that text is
+// real and meaningful (see parseTrailingCollectorNumber below for where it
+// actually needs to go).
 function stripTrailingParens(name) {
   let s = name;
   let next = s.replace(/\s*\([^()]*\)\s*$/, '').trim();
@@ -11,13 +13,25 @@ function stripTrailingParens(name) {
   return s;
 }
 
+// A trailing "(1234)" on an imported name is a collector number, not junk —
+// it's often the ONLY thing distinguishing multiple prints that otherwise
+// share a name and treatment (e.g. three different "Bruce Banner
+// (Borderless)" cards in the same set, numbered differently). Scryfall
+// exposes collector number as its own searchable field (`number:`), so pull
+// it out and use it to find the exact print instead of discarding it.
+function parseTrailingCollectorNumber(name) {
+  const m = name.match(/\((\d+)\)\s*$/);
+  if (!m) return { name, collectorNumber: null };
+  return { name: name.slice(0, m.index).trim(), collectorNumber: m[1] };
+}
+
 async function scryfallQuery(q) {
   const res = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}`);
   if (!res.ok) return [];
   const data = await res.json();
   return (data.data || []).slice(0, 6).map(c => ({
     url: (c.image_uris && c.image_uris.normal) || (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris && c.card_faces[0].image_uris.normal),
-    label: `${c.name} (${c.set_name})`
+    label: `${c.name} (${c.set_name}) #${c.collector_number}`
   })).filter(r => r.url);
 }
 
@@ -25,9 +39,27 @@ export async function searchScryfall(name) {
   const trimmed = name.trim();
   let results = await scryfallQuery(trimmed);
   if (results.length) return results;
-  const stripped = stripTrailingParens(trimmed);
-  if (stripped && stripped !== trimmed) {
-    results = await scryfallQuery(stripped);
+
+  const { name: withoutNumber, collectorNumber } = parseTrailingCollectorNumber(trimmed);
+  const cleanName = stripTrailingParens(withoutNumber);
+  if (!cleanName) return results;
+
+  if (collectorNumber) {
+    // Try the number as printed, then with leading zeros stripped — Scryfall
+    // stores it either way depending on the set.
+    results = await scryfallQuery(`!"${cleanName}" number:${collectorNumber}`);
+    if (results.length) return results;
+    const unpadded = collectorNumber.replace(/^0+/, '') || collectorNumber;
+    if (unpadded !== collectorNumber) {
+      results = await scryfallQuery(`!"${cleanName}" number:${unpadded}`);
+      if (results.length) return results;
+    }
+  }
+  if (cleanName !== trimmed) {
+    // No exact print match — surface every print of the base card (there may
+    // be several, which is exactly the case that got us here) so staff can
+    // pick the right one visually from the candidate grid.
+    results = await scryfallQuery(cleanName);
   }
   return results;
 }
