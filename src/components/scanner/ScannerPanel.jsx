@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { readFileAsDataUrl, scanBinderPage } from '../../lib/scanner.js';
+import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
 import { normalizeCard } from '../../lib/cardUtils.js';
 
@@ -48,9 +48,13 @@ export default function ScannerPanel({ locations, onImport }) {
 
   async function handlePhotoSelected(file) {
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    setPhoto(dataUrl);
-    setRows(null);
+    try {
+      const dataUrl = await readBinderPagePhoto(file);
+      setPhoto(dataUrl);
+      setRows(null);
+    } catch (err) {
+      toast(err.message, true);
+    }
   }
 
   async function handleScan() {
