@@ -11,11 +11,13 @@ import Login from './components/Login.jsx';
 import CatalogPanel from './components/catalog/CatalogPanel.jsx';
 import SyncQueueTab from './components/queue/SyncQueueTab.jsx';
 import ImportExportPanel from './components/importexport/ImportExportPanel.jsx';
+import ScannerPanel from './components/scanner/ScannerPanel.jsx';
 
 const TABS = [
   { key: 'catalog', label: 'Catalog' },
   { key: 'queue', label: 'Sync Queue' },
   { key: 'import', label: 'Import / Export' },
+  { key: 'scanner', label: 'Scan Binder' },
 ];
 
 export default function App() {
@@ -223,6 +225,9 @@ export default function App() {
           onImport={handleImport}
           onClearAll={handleClearAll}
         />
+      </div>
+      <div className={`panel${tab === 'scanner' ? ' active' : ''}`}>
+        <ScannerPanel locations={locations} onImport={handleImport} />
       </div>
 
       <div className="footnote">

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard } from '../../lib/cardUtils.js';
 import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
+import { resizeImageFile } from '../../lib/image.js';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
 const GAME_LABELS = {
@@ -85,27 +86,16 @@ export default function EditModal({ card, locations, onClose, onSave, onDelete }
     setImagePending(url);
   }
 
-  function handleUploadFile(e) {
+  async function handleUploadFile(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const image = new Image();
-      image.onload = () => {
-        const maxDim = 500;
-        let w = image.width, h = image.height;
-        if (w > h && w > maxDim) { h = h * maxDim / w; w = maxDim; }
-        else if (h > maxDim) { w = w * maxDim / h; h = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(image, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        setImagePending("__local__:" + dataUrl);
-        setImageStatus({ text: "Photo ready — click Save to store it.", kind: "ok" });
-      };
-      image.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrl = await resizeImageFile(file, 500, 0.82);
+      setImagePending("__local__:" + dataUrl);
+      setImageStatus({ text: "Photo ready — click Save to store it.", kind: "ok" });
+    } catch (err) {
+      setImageStatus({ text: err.message, kind: "err" });
+    }
   }
 
   function handleManualUrlChange(e) {
