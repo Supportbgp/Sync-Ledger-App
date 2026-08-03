@@ -116,3 +116,22 @@ export async function dbClearQueue(toast) {
   const { error } = await supabaseClient.from('sync_queue').delete().neq('id', '__never__');
   if (error) toast('Clear failed: ' + error.message, true);
 }
+
+// Public binder lookup (QR-code page) — reads from catalog_public_view, a
+// restricted view exposing only browsing-relevant columns for unauthenticated
+// access. No session/login involved; see supabase/migrations for the view
+// definition and its anon grant.
+export async function dbLoadPublicBinder(location) {
+  const { data, error } = await supabaseClient
+    .from('catalog_public_view')
+    .select('*')
+    .eq('location', location);
+  if (error) throw error;
+  return (data || []).map(r => ({
+    name: r.name, set: r.set_name, game: r.game, condition: r.condition, printing: r.printing,
+    itemType: r.item_type, grader: r.grader, grade: r.grade,
+    qty: r.qty, price: r.price,
+    imageUrl: r.image_data ? "local" : (r.image_url || ""),
+    imageData: r.image_data || "",
+  }));
+}

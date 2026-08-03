@@ -859,3 +859,76 @@
       background: var(--surface-alt);
       border-radius: 8px;
     }
+
+    .binder-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+    }
+
+    .binder-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+
+    .binder-card-img {
+      width: 100%;
+      aspect-ratio: 5 / 7;
+      object-fit: cover;
+      border-radius: 8px;
+      background: var(--surface-alt);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .binder-card-img-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-faint);
+    }
+
+    .binder-card-name {
+      font-weight: 600;
+      font-size: 13.5px;
+    }
+
+    .binder-card-sub {
+      font-size: 11.5px;
+      color: var(--ink-soft);
+      margin-top: 1px;
+    }
+
+    .binder-card-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 12.5px;
+    }
+
+    .qr-preview {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .qr-preview img {
+      width: 220px;
+      height: 220px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .qr-link {
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--ink-soft);
+      word-break: break-all;
+      text-align: center;
+    }

@@ -5,6 +5,7 @@ import {
   FIELD_TARGETS, guessHeader, parseCsvFile, readWorkbook, loadXlsxSheet,
 } from '../../lib/importParse.js';
 import ExportModal from './ExportModal.jsx';
+import BinderQrModal from './BinderQrModal.jsx';
 
 export default function ImportExportPanel({ catalog, queue, locations, onImport, onClearAll }) {
   const { showConfirm } = useUI();
@@ -12,6 +13,7 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState({ text: "", kind: "" });
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const [workbook, setWorkbook] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
@@ -225,6 +227,7 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
         <div className="section-label">Export</div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button className="btn secondary" onClick={() => setShowExportModal(true)}>Export…</button>
+          <button className="btn secondary" disabled={!locations.length} onClick={() => setShowQrModal(true)}>Binder QR code…</button>
           <button className="btn ghost" onClick={handleClearAll}>Reset all data</button>
         </div>
       </div>
@@ -234,6 +237,12 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
           queue={queue}
           locations={locations}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+      {showQrModal && (
+        <BinderQrModal
+          locations={locations}
+          onClose={() => setShowQrModal(false)}
         />
       )}
     </div>
