@@ -874,21 +874,43 @@
       padding: 12px;
     }
 
+    .binder-card-img-wrap {
+      position: relative;
+      margin-bottom: 8px;
+    }
+
     .binder-card-img {
       width: 100%;
       aspect-ratio: 5 / 7;
       object-fit: cover;
       border-radius: 8px;
       background: var(--surface-alt);
-      margin-bottom: 8px;
       display: block;
+    }
+
+    img.binder-card-img {
+      cursor: zoom-in;
     }
 
     .binder-card-img-empty {
       display: flex;
       align-items: center;
       justify-content: center;
+      text-align: center;
       color: var(--ink-faint);
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 10px;
+      border: 1px dashed var(--border);
+    }
+
+    .binder-card-slab-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      z-index: 1;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     }
 
     .binder-card-name {

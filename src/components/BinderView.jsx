@@ -1,15 +1,31 @@
 import { useEffect, useState } from 'react';
 import { dbLoadPublicBinder } from '../lib/db.js';
+import Lightbox from './Lightbox.jsx';
 
-function BinderCard({ item }) {
-  const src = item.imageUrl === 'local'
+function BinderCard({ item, onZoom }) {
+  const [broken, setBroken] = useState(false);
+  const rawSrc = item.imageUrl === 'local'
     ? item.imageData
     : (item.imageUrl && item.imageUrl.startsWith('http') ? item.imageUrl : null);
+  const src = broken ? null : rawSrc;
   const sub = [item.set, item.condition, item.printing].filter(Boolean).join(' · ') +
     (item.itemType === 'slab' && (item.grader || item.grade) ? ` · ${item.grader || ''} ${item.grade || ''}`.trim() : '');
+
   return (
     <div className="binder-card">
-      {src ? <img src={src} className="binder-card-img" /> : <div className="binder-card-img binder-card-img-empty">—</div>}
+      <div className="binder-card-img-wrap">
+        {item.itemType === 'slab' && <span className="badge slab binder-card-slab-badge">Slab</span>}
+        {src ? (
+          <img
+            src={src}
+            className="binder-card-img"
+            onClick={() => onZoom(src)}
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <div className="binder-card-img binder-card-img-empty">{item.game || "No image"}</div>
+        )}
+      </div>
       <div className="binder-card-name">{item.name}</div>
       <div className="binder-card-sub">{sub}</div>
       <div className="binder-card-row">
@@ -23,6 +39,7 @@ function BinderCard({ item }) {
 export default function BinderView({ location }) {
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
+  const [zoomUrl, setZoomUrl] = useState(null);
 
   useEffect(() => {
     dbLoadPublicBinder(location).then(setItems).catch((err) => setError(err.message));
@@ -51,9 +68,11 @@ export default function BinderView({ location }) {
       )}
       {!error && items && items.length > 0 && (
         <div className="binder-grid">
-          {items.map((it, i) => <BinderCard key={i} item={it} />)}
+          {items.map((it, i) => <BinderCard key={i} item={it} onZoom={setZoomUrl} />)}
         </div>
       )}
+
+      {zoomUrl && <Lightbox url={zoomUrl} onClose={() => setZoomUrl(null)} />}
 
       <div className="footnote">Live inventory lookup — updates automatically as stock changes.</div>
     </div>
