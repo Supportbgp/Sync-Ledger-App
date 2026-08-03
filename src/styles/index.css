@@ -709,6 +709,21 @@
       color: var(--rust);
     }
 
+    .badge.confidence-high {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .badge.confidence-medium {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .badge.confidence-low {
+      background: var(--rust-soft);
+      color: var(--rust);
+    }
+
     .badge.location {
       background: var(--blue-soft);
       color: var(--blue);
