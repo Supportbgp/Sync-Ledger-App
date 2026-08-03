@@ -21,19 +21,23 @@ function detectedToRow(card) {
     condition: '',
     imageUrl: '',
     imageStatus: 'searching', // 'searching' | 'found' | 'none'
+    imageCandidates: [],
+    showCandidates: false,
   };
 }
 
-async function findImageForRow(row) {
-  if (!row.name) return null;
+// Full candidate list, not just the top pick — reused both for the automatic
+// pre-fill right after a scan and for a manual re-search (e.g. after staff
+// corrects a name/game the scan got wrong).
+async function findImageCandidates(name, game) {
+  if (!name) return [];
   try {
-    let results = [];
-    if (row.game === 'Magic') results = await searchScryfall(row.name);
-    else if (row.game === 'Pokemon') results = await searchPokemon(row.name);
-    else if (row.game === 'Yugioh') results = await searchYugioh(row.name);
-    return results[0]?.url || null;
+    if (game === 'Magic') return await searchScryfall(name);
+    if (game === 'Pokemon') return await searchPokemon(name);
+    if (game === 'Yugioh') return await searchYugioh(name);
+    return [];
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -58,7 +62,7 @@ export default function ScannerPanel({ locations, onImport }) {
   }
 
   async function handleScan() {
-    if (!photo) return;
+    if (!photo || scanning) return; // guards a rapid double-tap firing this twice
     setScanning(true);
     try {
       const detected = await scanBinderPage(photo);
@@ -74,8 +78,10 @@ export default function ScannerPanel({ locations, onImport }) {
       // Pre-fill an image guess per row, independently, without blocking the
       // review queue from showing up immediately.
       newRows.forEach(async (row) => {
-        const url = await findImageForRow(row);
-        setRows(prev => prev && prev.map(r => r.id === row.id ? { ...r, imageUrl: url || '', imageStatus: url ? 'found' : 'none' } : r));
+        const results = await findImageCandidates(row.name, row.game);
+        setRows(prev => prev && prev.map(r => r.id === row.id
+          ? { ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results }
+          : r));
       });
     } catch (err) {
       toast("Scan failed: " + err.message, true);
@@ -87,12 +93,24 @@ export default function ScannerPanel({ locations, onImport }) {
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
   }
 
+  async function refreshImageForRow(id) {
+    const row = rows.find(r => r.id === id);
+    if (!row) return;
+    updateRow(id, { imageStatus: 'searching', showCandidates: true });
+    const results = await findImageCandidates(row.name, row.game);
+    updateRow(id, {
+      imageCandidates: results,
+      imageUrl: results[0]?.url || row.imageUrl,
+      imageStatus: results.length ? 'found' : 'none',
+    });
+  }
+
   function removeRow(id) {
     setRows(prev => prev.filter(r => r.id !== id));
   }
 
   function addBlankRow() {
-    setRows(prev => [...(prev || []), detectedToRow({ confidence: 'high' })].map(r => r.imageStatus === 'searching' ? { ...r, imageStatus: 'none' } : r));
+    setRows(prev => [...(prev || []), { ...detectedToRow({ confidence: 'high' }), imageStatus: 'none' }]);
   }
 
   async function handleConfirm() {
@@ -131,7 +149,7 @@ export default function ScannerPanel({ locations, onImport }) {
         </div>
         <div
           className="drop"
-          onClick={() => fileInputRef.current.click()}
+          onClick={() => { if (!scanning) fileInputRef.current.click(); }}
         >
           {photo ? (
             <img src={photo} style={{ maxWidth: '100%', maxHeight: '260px', borderRadius: '8px' }} />
@@ -144,6 +162,7 @@ export default function ScannerPanel({ locations, onImport }) {
         </div>
         <input
           type="file" ref={fileInputRef} accept="image/*" capture="environment" style={{ display: 'none' }}
+          disabled={scanning}
           onChange={(e) => handlePhotoSelected(e.target.files[0])}
         />
         {photo && !rows && (
@@ -151,6 +170,12 @@ export default function ScannerPanel({ locations, onImport }) {
             <button className="btn" disabled={scanning} onClick={handleScan}>
               {scanning ? 'Scanning…' : 'Scan this page'}
             </button>
+            {scanning && (
+              <div className="status-line" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="spinner" />
+                Reading the page — this can take several seconds…
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -171,7 +196,13 @@ export default function ScannerPanel({ locations, onImport }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {rows.map(row => (
-              <ScanRow key={row.id} row={row} onChange={(patch) => updateRow(row.id, patch)} onRemove={() => removeRow(row.id)} />
+              <ScanRow
+                key={row.id}
+                row={row}
+                onChange={(patch) => updateRow(row.id, patch)}
+                onRemove={() => removeRow(row.id)}
+                onFindImage={() => refreshImageForRow(row.id)}
+              />
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '14px', alignItems: 'center' }}>
@@ -190,30 +221,42 @@ export default function ScannerPanel({ locations, onImport }) {
   );
 }
 
-function ScanRow({ row, onChange, onRemove }) {
+function ScanRow({ row, onChange, onRemove, onFindImage }) {
   return (
-    <div className="card" style={{ padding: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-      <div style={{ width: '48px', height: '67px', flexShrink: 0, borderRadius: '6px', background: 'var(--surface-alt)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        {row.imageStatus === 'searching' && <span style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>…</span>}
-        {row.imageStatus === 'found' && row.imageUrl && <img src={row.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-        {row.imageStatus === 'none' && <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>}
+    <div className="scan-row">
+      <div className="scan-row-thumb-col">
+        <div className="scan-row-thumb">
+          {row.imageStatus === 'searching' && <span style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>…</span>}
+          {row.imageStatus === 'found' && row.imageUrl && <img src={row.imageUrl} />}
+          {row.imageStatus === 'none' && <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>}
+        </div>
+        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindImage}>Find image</button>
       </div>
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '8px' }}>
-        <input type="text" placeholder="Card name" value={row.name} onChange={(e) => onChange({ name: e.target.value })} />
-        <select value={row.game} onChange={(e) => onChange({ game: e.target.value })}>
-          {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
-        </select>
-        <input type="text" placeholder="Set" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
-        <input type="text" placeholder="Condition" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
-        <input type="number" placeholder="Price" step="0.01" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
+
+      <div className="scan-row-fields">
+        <div className="scan-row-line">
+          <input type="text" placeholder="Card name" style={{ flex: 2 }} value={row.name} onChange={(e) => onChange({ name: e.target.value })} />
+          <select style={{ flex: 1 }} value={row.game} onChange={(e) => onChange({ game: e.target.value })}>
+            {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <input type="text" placeholder="Set" style={{ flex: 1 }} value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
+        </div>
+        <div className="scan-row-line">
+          <input type="text" placeholder="Condition" style={{ flex: 1 }} value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
+          <input type="number" placeholder="Price" step="0.01" style={{ flex: 1 }} value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
+          <span className={`badge confidence-${row.confidence}`} title="How confident the scan was about this card" style={{ flex: '0 0 auto', alignSelf: 'center' }}>
+            {row.confidence}
+          </span>
+          <button className="icon-btn" title="Remove" style={{ flex: '0 0 auto' }} onClick={onRemove}>✕</button>
+        </div>
+        {row.showCandidates && row.imageCandidates.length > 0 && (
+          <div className="img-candidates">
+            {row.imageCandidates.map((c, i) => (
+              <img key={i} src={c.url} title={c.label} onClick={() => onChange({ imageUrl: c.url, imageStatus: 'found', showCandidates: false })} />
+            ))}
+          </div>
+        )}
       </div>
-      <span
-        className={`badge confidence-${row.confidence}`}
-        title="How confident the scan was about this card"
-      >
-        {row.confidence}
-      </span>
-      <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
     </div>
   );
 }
