@@ -80,12 +80,21 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 - No per-condition market pricing exists in any free card-data API — every
   one (Scryfall, pokemontcg.io, YGOPRODeck, Lorcast, etc.) exposes a single
   NM-level aggregate price. True per-condition pricing requires TCGPlayer's
-  own partner-gated Pricing API (new applications closed since late 2024;
-  existing seller API keys keep working) or a derived
-  NM-price-×-condition-multiplier approach. Scraping vendor sites (eBay,
-  CoolStuffInc, Star City Games, Troll and Toad) was evaluated and rejected —
-  no real per-condition data gain, and most explicitly ban scraping in their
-  ToS.
+  own partner-gated Pricing API. Scraping vendor sites (eBay, CoolStuffInc,
+  Star City Games, Troll and Toad) was evaluated and rejected — no real
+  per-condition data gain, and most explicitly ban scraping in their ToS.
+- **TCGPlayer Pricing API is frozen** (parked the same way as Phase 4/Cumulus
+  below) — new applications have been closed since late 2024, and while
+  existing seller API keys reportedly keep working, we don't yet know if
+  this shop has one. No further work on this path until/unless a real
+  credential surfaces. The Market Value feature (Sprint 5) instead derives
+  non-NM prices from one NM baseline price via a configurable
+  condition-multiplier table, defaulting to **NM 100% / LP 85% / MP 65% /
+  HP 45% / DMG 25%** — anchored to CrystalCommerce's confirmed 100%/50%
+  NM-to-Damaged default (the one concrete vendor-published anchor found;
+  TCGPlayer itself ships no fixed percentage table since it prices each
+  condition from real sales data) and centered on community-cited ranges.
+  Store-configurable, not hardcoded.
 - Phase 4 (a Cumulus POS SKU manager/import) is parked — needs the shop
   owner's go/no-go and a real Cumulus export/import file sample. Never guess
   Cumulus's file format.
