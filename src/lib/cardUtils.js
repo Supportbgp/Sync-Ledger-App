@@ -73,7 +73,38 @@ export function normalizeCard(c) {
     posSynced: !!c.posSynced,
     tcgplayerSynced: !!c.tcgplayerSynced,
     collectrSynced: !!c.collectrSynced,
+    // Which platforms this item is actually meant to be listed on — not
+    // every item lives everywhere (some are in-store only). Defaults to
+    // true so existing rows keep today's "assumed everywhere" behavior.
+    posChannel: c.posChannel !== false,
+    tcgplayerChannel: c.tcgplayerChannel !== false,
+    collectrChannel: c.collectrChannel !== false,
   };
+}
+
+// Best-guess channel defaults for a new item: match whatever the majority of
+// existing items already in this same binder/case use, since staff almost
+// always add several cards from the same case in a row and it's already
+// been decided where that case lives. Falls back to "everywhere" for a
+// brand-new location or when nothing else is known yet.
+export function channelDefaultsForLocation(catalog, location) {
+  const fallback = { posChannel: true, tcgplayerChannel: true, collectrChannel: true };
+  if (!location) return fallback;
+  const siblings = catalog.filter(c => c.location === location);
+  if (!siblings.length) return fallback;
+  const majority = (field) => siblings.filter(c => c[field]).length >= siblings.length / 2;
+  return {
+    posChannel: majority('posChannel'),
+    tcgplayerChannel: majority('tcgplayerChannel'),
+    collectrChannel: majority('collectrChannel'),
+  };
+}
+
+// A ticket only needs stamping on the platforms it was actually relevant to
+// at sale time — a channel the item wasn't listed on counts as trivially
+// satisfied so it doesn't block "complete" or show up as a stamp to make.
+export function isTicketComplete(t) {
+  return (!t.posChannel || t.posDone) && (!t.tcgplayerChannel || t.tcgplayerDone) && (!t.collectrChannel || t.collectrDone);
 }
 
 // Fields that, when changed, mean a listing may now be wrong on every

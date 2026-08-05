@@ -123,6 +123,7 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
       {editingSku !== undefined && (
         <EditModal
           card={editingCard}
+          catalog={catalog}
           locations={locations}
           onClose={() => setEditingSku(undefined)}
           onSave={async (record, prevSku) => { await onSaveCard(record, prevSku); setEditingSku(undefined); }}
