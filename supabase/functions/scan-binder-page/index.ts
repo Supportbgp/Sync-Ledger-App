@@ -10,10 +10,23 @@
 // Functions verify the caller's JWT by default, and supabaseClient.functions
 // .invoke() automatically attaches the current session's token.
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Scoped to an allowlist rather than "*" — this function requires a valid
+// session JWT, so a wildcard origin would let any site's JS call it on
+// behalf of a signed-in user's browser if a token ever leaked (e.g. via an
+// unrelated XSS elsewhere). localhost stays allowed for dev/preview testing
+// against the same deployed function.
+const ALLOWED_ORIGINS = [
+  "https://supportbgp.github.io",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+function corsHeaders(origin) {
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
 
 const CARD_GAMES = [
   "Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece",
@@ -54,24 +67,25 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "rather than skipping it. Do not guess condition or price — only identification.";
 
 Deno.serve(async (req) => {
+  const headers = corsHeaders(req.headers.get("origin") || "");
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers });
   }
 
   try {
     const { image } = await req.json();
     if (!image || typeof image !== "string") {
-      return json({ error: "Missing image" }, 400);
+      return json({ error: "Missing image" }, 400, headers);
     }
     const match = image.match(/^data:(image\/\w+);base64,(.+)$/);
     if (!match) {
-      return json({ error: "Expected a base64 data URL" }, 400);
+      return json({ error: "Expected a base64 data URL" }, 400, headers);
     }
     const [, mediaType, base64Data] = match;
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return json({ error: "Server not configured (missing ANTHROPIC_API_KEY secret)" }, 500);
+      return json({ error: "Server not configured (missing ANTHROPIC_API_KEY secret)" }, 500, headers);
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -100,22 +114,22 @@ Deno.serve(async (req) => {
 
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
-      return json({ error: `Anthropic API error: ${errText}` }, 502);
+      return json({ error: `Anthropic API error: ${errText}` }, 502, headers);
     }
 
     const data = await anthropicRes.json();
     const toolUse = (data.content || []).find((b) => b.type === "tool_use");
     const cards = toolUse?.input?.cards || [];
 
-    return json({ cards });
+    return json({ cards }, 200, headers);
   } catch (err) {
-    return json({ error: String(err) }, 500);
+    return json({ error: String(err) }, 500, headers);
   }
 });
 
-function json(body, status = 200) {
+function json(body, status, headers) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "content-type": "application/json" },
+    headers: { ...headers, "content-type": "application/json" },
   });
 }
