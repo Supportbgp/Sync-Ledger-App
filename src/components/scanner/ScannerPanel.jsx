@@ -3,6 +3,7 @@ import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
 let nextRowId = 1;
@@ -204,14 +205,7 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
           <div className="section-label">Review before adding ({rows.length})</div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Binder / case / collection for this page</label>
-            <input
-              type="text" list="scannerLocationDatalist"
-              placeholder="e.g. Black and red toploader binder (Pokemon)"
-              value={location} onChange={(e) => setLocation(e.target.value)}
-            />
-            <datalist id="scannerLocationDatalist">
-              {locations.map(l => <option key={l} value={l} />)}
-            </datalist>
+            <LocationPicker locations={locations} value={location} onChange={setLocation} />
           </div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Where do these live?</label>

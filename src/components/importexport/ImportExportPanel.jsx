@@ -6,6 +6,7 @@ import {
 } from '../../lib/importParse.js';
 import ExportModal from './ExportModal.jsx';
 import BinderQrModal from './BinderQrModal.jsx';
+import LocationPicker from '../LocationPicker.jsx';
 
 export default function ImportExportPanel({ catalog, queue, locations, onImport, onClearAll }) {
   const { showConfirm } = useUI();
@@ -200,14 +201,7 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
             </div>
             <div className="field-group" style={{ maxWidth: '420px' }}>
               <label>Binder / case / collection for this import</label>
-              <input
-                type="text" list="locationDatalistImport"
-                placeholder="e.g. Black and red toploader binder (Pokemon)"
-                value={importLocation} onChange={(e) => setImportLocation(e.target.value)}
-              />
-              <datalist id="locationDatalistImport">
-                {locations.map(l => <option key={l} value={l} />)}
-              </datalist>
+              <LocationPicker locations={locations} value={importLocation} onChange={setImportLocation} />
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
                 Applied to every row in this import. Type a new name to create a new binder/case, or pick an existing one.
               </div>

@@ -3,6 +3,7 @@ import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
 import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
+import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
 const GAME_LABELS = {
@@ -249,10 +250,7 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
           </div>
           <div className="field-group">
             <label>Binder / case / collection</label>
-            <input type="text" list="locationDatalist" placeholder="e.g. Black and red toploader binder (Pokemon)" value={form.location} onChange={(e) => set('location', e.target.value)} />
-            <datalist id="locationDatalist">
-              {locations.map(l => <option key={l} value={l} />)}
-            </datalist>
+            <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} />
           </div>
 
           <div className="field-group">
