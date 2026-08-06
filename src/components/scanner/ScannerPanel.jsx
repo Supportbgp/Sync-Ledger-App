@@ -107,13 +107,15 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       setScanning(false);
       // Pre-fill an image guess per row, independently, without blocking the
       // review queue from showing up immediately.
+      // Image only, for a quick visual sanity-check of the scan — deliberately
+      // NOT auto-capturing basePrice/listingUrl here. Market value is
+      // money-relevant, so it only gets set once staff explicitly confirm
+      // the right card via "Find market value" below, not silently from an
+      // unconfirmed top search result.
       newRows.forEach(async (row) => {
         const results = await findImageCandidates(row.name, row.game, row.set);
         setRows(prev => prev && prev.map(r => r.id === row.id
-          ? {
-            ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
-            basePrice: results[0]?.price ?? null, listingUrl: results[0]?.listingUrl || '',
-          }
+          ? { ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results }
           : r));
       });
     } catch (err) {
@@ -126,7 +128,12 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
   }
 
-  async function refreshImageForRow(id) {
+  // Named (and surfaced in the UI) around getting the market value, since
+  // that's the point of this action now — search using whatever name/set
+  // staff have already corrected, then require an explicit candidate click
+  // to actually confirm the right card before its price gets used. Also
+  // refreshes the image from the same search as a side effect.
+  async function findMarketValueForRow(id) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
@@ -136,6 +143,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       imageUrl: results[0]?.url || row.imageUrl,
       imageStatus: results.length ? 'found' : 'none',
     });
+    if (!results.length) toast(`No matches found for "${row.name || 'this card'}" — check the name/set.`, true);
   }
 
   function removeRow(id) {
@@ -253,7 +261,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
                 multipliers={multipliers}
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
-                onFindImage={() => refreshImageForRow(row.id)}
+                onFindMarketValue={() => findMarketValueForRow(row.id)}
               />
             ))}
           </div>
@@ -273,19 +281,26 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   );
 }
 
-function ScanRow({ row, multipliers, onChange, onRemove, onFindImage }) {
+function ScanRow({ row, multipliers, onChange, onRemove, onFindMarketValue }) {
+  const { openLightbox } = useUI();
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
   const marketValue = marketValueForCondition(row.basePrice, row.condition, multipliers);
+  const canZoom = row.imageStatus === 'found' && !!row.imageUrl;
   return (
     <div className="scan-row">
       <div className="scan-row-thumb-col">
-        <div className="scan-row-thumb">
+        <div
+          className="scan-row-thumb"
+          onClick={() => { if (canZoom) openLightbox(row.imageUrl); }}
+          style={{ cursor: canZoom ? 'pointer' : 'default' }}
+          title={canZoom ? 'Click to zoom' : ''}
+        >
           {row.imageStatus === 'searching' && <span style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>…</span>}
           {row.imageStatus === 'found' && row.imageUrl && <img src={row.imageUrl} />}
           {row.imageStatus === 'none' && <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>}
         </div>
-        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindImage}>Find image</button>
+        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindMarketValue}>Find market value</button>
       </div>
 
       <div className="scan-row-fields">
