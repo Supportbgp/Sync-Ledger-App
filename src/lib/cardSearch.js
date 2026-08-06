@@ -79,21 +79,36 @@ function sanitizeForPokemonQuery(s) {
 }
 
 async function pokemonQuery(q) {
-  const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=10`);
+  // Generous cap, not the API default — Pokemon reprints the same name
+  // across dozens of sets/rarities (see searchPokemon below), and a small
+  // cap just cuts off whichever prints happen to sort last.
+  const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=20`);
   if (!res.ok) return [];
   const data = await res.json();
   return (data.data || []).map(c => ({
     url: (c.images && (c.images.large || c.images.small)),
-    label: `${c.name} (${(c.set && c.set.name) || ""})`
+    // Collector number included — without it, two different prints of the
+    // same name+set (e.g. a regular and a secret-rare numbering) look
+    // identical in the candidate grid with no way to tell them apart.
+    label: `${c.name} (${(c.set && c.set.name) || ""}) #${c.number || ''}`
   })).filter(r => r.url);
 }
 
-export async function searchPokemon(name) {
+export async function searchPokemon(name, setHint) {
   // Exact phrase first (most precise), then a broader unquoted token match,
   // then just the first word — set/promo codes like "XY83" typed after the
   // name aren't part of the API's name field, so trailing words can sink an
   // otherwise-good search unless we fall back to something broader.
   const safe = sanitizeForPokemonQuery(name);
+  const safeSet = setHint ? sanitizeForPokemonQuery(setHint) : '';
+
+  // A card with many reprints (Charizard, etc.) can easily have more prints
+  // than fit in one page — narrowing by the item's own recorded set first
+  // is what actually finds the right one instead of an arbitrary handful.
+  if (safeSet) {
+    let results = await pokemonQuery(`name:"${safe}" set.name:"${safeSet}"`);
+    if (results.length) return results;
+  }
   let results = await pokemonQuery('name:"' + safe + '"');
   if (results.length) return results;
   results = await pokemonQuery('name:' + safe);
@@ -134,28 +149,33 @@ export async function searchYugioh(name) {
 // all (Riftbound, Gundam — via Egman's deckbuilder, used with his explicit
 // go-ahead). Routed through card-lookup-proxy (a Supabase Edge Function)
 // instead, which fetches server-side where CORS doesn't apply.
-async function proxyQuery(provider, query) {
+async function proxyQuery(provider, query, setHint) {
   const { data, error } = await supabaseClient.functions.invoke('card-lookup-proxy', {
-    body: { provider, query },
+    body: { provider, query, setHint: setHint || '' },
   });
   if (error) return [];
   return data?.results || [];
 }
 
-export async function searchOnePiece(name) {
-  return await proxyQuery('onepiece', name.trim());
+// setHint is the item's own `set` field — for these games it also ends up
+// holding whatever printed set/card code the binder scanner read off the
+// card (e.g. "EXBP-008"), which is exactly what disambiguates prints that
+// otherwise share an identical name (Gundam's base-set generics, alt art,
+// promos). See card-lookup-proxy for how it's used.
+export async function searchOnePiece(name, setHint) {
+  return await proxyQuery('onepiece', name.trim(), setHint);
 }
 
-export async function searchRiftbound(name) {
-  return await proxyQuery('riftbound', name.trim());
+export async function searchRiftbound(name, setHint) {
+  return await proxyQuery('riftbound', name.trim(), setHint);
 }
 
-export async function searchGundam(name) {
-  return await proxyQuery('gundam', name.trim());
+export async function searchGundam(name, setHint) {
+  return await proxyQuery('gundam', name.trim(), setHint);
 }
 
-export async function searchSwu(name) {
-  return await proxyQuery('swu', name.trim());
+export async function searchSwu(name, setHint) {
+  return await proxyQuery('swu', name.trim(), setHint);
 }
 
 // Lorcast (api.lorcast.com) — a free, no-key, Scryfall-modeled API for Disney

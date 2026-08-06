@@ -27,43 +27,74 @@ function corsHeaders(origin) {
 
 // Egman's deckbuilder (deckbuilder.egmanevents.com) exposes one JSON
 // endpoint per game returning that game's FULL card list — confirmed by a
-// real response sample for Riftbound and One Piece (card_code, name,
-// set_code/set_label, _defaultImagePath). There's no documented name-filter
-// param, so rather than guess one, we fetch the whole list and do the name
-// match ourselves — the endpoint already proved it works with no query
-// params at all, so this needs no further unverified assumptions.
-async function egmanQuery(gameSlug, query) {
+// real response sample for Riftbound, One Piece, and Gundam (card_code,
+// name, set_code/set_label, rarity, _defaultImagePath). There's no
+// documented name-filter param, so rather than guess one, we fetch the
+// whole list and do the matching ourselves — the endpoint already proved it
+// works with no query params at all, so this needs no further unverified
+// assumptions.
+//
+// A name-only match isn't enough: many of these games reuse the same name
+// across many separate prints (alt art, promos, base-set generics like
+// Gundam's "EX Base" cards, which share that literal name across dozens of
+// otherwise-unrelated cards distinguished only by card_code). setHint — the
+// item's own `set` field, which for these games doubles as wherever a
+// printed set/card code the vision scanner read off the card ends up — is
+// matched against card_code/set_code/set_label to narrow to the exact
+// print. If the hint doesn't match anything (typo, or genuinely no hint),
+// we fall back to the unnarrowed name matches rather than returning empty.
+async function egmanQuery(gameSlug, name, setHint) {
   const res = await fetch(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`);
   if (!res.ok) return [];
   const cards = await res.json();
-  const needle = query.toLowerCase();
-  return (Array.isArray(cards) ? cards : [])
-    .filter((c) => (c.name || "").toLowerCase().includes(needle))
-    .slice(0, 6)
+  const nameNeedle = name.toLowerCase();
+  let matches = (Array.isArray(cards) ? cards : [])
+    .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
+
+  if (setHint) {
+    const codeNeedle = setHint.toLowerCase();
+    const narrowed = matches.filter((c) =>
+      (c.card_code || "").toLowerCase().includes(codeNeedle) ||
+      (c.set_code || "").toLowerCase().includes(codeNeedle) ||
+      (c.set_label || "").toLowerCase().includes(codeNeedle)
+    );
+    if (narrowed.length) matches = narrowed;
+  }
+
+  // A generous cap, not 6 — these are just thumbnails in a picker grid, and
+  // a card with many prints (alt art, promos) needs enough of them visible
+  // to actually find the right one. card_code + rarity in the label is what
+  // makes otherwise-identical-looking same-name prints distinguishable.
+  return matches
+    .slice(0, 20)
     .map((c) => ({
       url: c._defaultImagePath ? `https://deckbuilder.egmanevents.com/api/images/${gameSlug}/${c._defaultImagePath}` : null,
-      label: `${c.name} (${c.set_label || c.set_code || ""})`,
+      label: `${c.name} (${c.card_code || c.set_code || ""}${c.rarity ? ' · ' + c.rarity : ''})`,
     }))
     .filter((r) => r.url);
 }
 
-// Each provider takes a search string and returns the normalized candidate
-// shape the client already expects from cardSearch.js: { url, label }[].
+// Each provider takes a search string (+ optional set/code hint) and
+// returns the normalized candidate shape the client already expects from
+// cardSearch.js: { url, label }[].
 const PROVIDERS = {
-  onepiece: (query) => egmanQuery('optcg', query),
-  riftbound: (query) => egmanQuery('riftbound', query),
-  gundam: (query) => egmanQuery('gundam', query),
+  onepiece: (query, setHint) => egmanQuery('optcg', query, setHint),
+  riftbound: (query, setHint) => egmanQuery('riftbound', query, setHint),
+  gundam: (query, setHint) => egmanQuery('gundam', query, setHint),
 
   // api.swu-db.com (not www. — that host 404s, the docs page and the API
   // itself live on different subdomains). Confirmed CORS-blocked and now
   // confirmed by a real response sample: array at data.data, fields
   // Name/FrontArt/Set, plus MarketPrice/LowPrice (unused here, but useful
-  // later for the Market Value feature).
-  swu: async (query) => {
+  // later for the Market Value feature). setHint isn't wired in yet — the
+  // docs only showed structured `q=` examples like `set:sor`/`c=3`, not a
+  // documented way to combine a name filter with a set filter, and guessing
+  // at that syntax risks breaking the name search that already works.
+  swu: async (query, _setHint) => {
     const res = await fetch(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.data || []).slice(0, 6).map((c) => ({
+    return (data.data || []).slice(0, 20).map((c) => ({
       url: c.FrontArt,
       label: `${c.Name} (${c.Set || ""})`,
     })).filter((r) => r.url);
@@ -77,14 +108,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { provider, query } = await req.json();
+    const { provider, query, setHint } = await req.json();
     if (!provider || !PROVIDERS[provider]) {
       return json({ error: `Unknown provider: ${provider}` }, 400, headers);
     }
     if (!query || typeof query !== "string") {
       return json({ error: "Missing query" }, 400, headers);
     }
-    const results = await PROVIDERS[provider](query);
+    const results = await PROVIDERS[provider](query, setHint || "");
     return json({ results }, 200, headers);
   } catch (err) {
     return json({ error: String(err) }, 500, headers);

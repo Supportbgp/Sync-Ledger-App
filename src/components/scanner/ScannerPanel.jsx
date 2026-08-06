@@ -30,17 +30,17 @@ function detectedToRow(card) {
 // Full candidate list, not just the top pick — reused both for the automatic
 // pre-fill right after a scan and for a manual re-search (e.g. after staff
 // corrects a name/game the scan got wrong).
-async function findImageCandidates(name, game) {
+async function findImageCandidates(name, game, set) {
   if (!name) return [];
   try {
     if (game === 'Magic') return await searchScryfall(name);
-    if (game === 'Pokemon') return await searchPokemon(name);
+    if (game === 'Pokemon') return await searchPokemon(name, set);
     if (game === 'Yugioh') return await searchYugioh(name);
     if (game === 'Lorcana') return await searchLorcana(name);
-    if (game === 'One Piece') return await searchOnePiece(name);
-    if (game === 'Riftbound') return await searchRiftbound(name);
-    if (game === 'Gundam') return await searchGundam(name);
-    if (game === 'SWU') return await searchSwu(name);
+    if (game === 'One Piece') return await searchOnePiece(name, set);
+    if (game === 'Riftbound') return await searchRiftbound(name, set);
+    if (game === 'Gundam') return await searchGundam(name, set);
+    if (game === 'SWU') return await searchSwu(name, set);
     return [];
   } catch {
     return [];
@@ -100,7 +100,7 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
       // Pre-fill an image guess per row, independently, without blocking the
       // review queue from showing up immediately.
       newRows.forEach(async (row) => {
-        const results = await findImageCandidates(row.name, row.game);
+        const results = await findImageCandidates(row.name, row.game, row.set);
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? { ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results }
           : r));
@@ -119,7 +119,7 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = await findImageCandidates(row.name, row.game);
+    const results = await findImageCandidates(row.name, row.game, row.set);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,

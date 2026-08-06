@@ -82,14 +82,15 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
     setSearching(true);
     try {
       let results = [];
+      const set = form.set.trim();
       if (form.game === "Magic") results = await searchScryfall(name);
-      else if (form.game === "Pokemon") results = await searchPokemon(name);
+      else if (form.game === "Pokemon") results = await searchPokemon(name, set);
       else if (form.game === "Yugioh") results = await searchYugioh(name);
       else if (form.game === "Lorcana") results = await searchLorcana(name);
-      else if (form.game === "One Piece") results = await searchOnePiece(name);
-      else if (form.game === "Riftbound") results = await searchRiftbound(name);
-      else if (form.game === "Gundam") results = await searchGundam(name);
-      else if (form.game === "SWU") results = await searchSwu(name);
+      else if (form.game === "One Piece") results = await searchOnePiece(name, set);
+      else if (form.game === "Riftbound") results = await searchRiftbound(name, set);
+      else if (form.game === "Gundam") results = await searchGundam(name, set);
+      else if (form.game === "SWU") results = await searchSwu(name, set);
       else {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
         setSearching(false);

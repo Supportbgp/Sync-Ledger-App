@@ -116,6 +116,22 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
     rejected as an image source — its image URLs live under a `/temporary/`
     path with what looks like a signed-upload hash, suggesting they expire
     and aren't safe to store/reuse long-term.
+- **Disambiguating same-name prints**: several games reuse a card's name
+  across many separate prints (alt art, promos, Gundam's base-set generics
+  like "EX Base" shared by dozens of unrelated cards) — a name-only search
+  can't tell them apart, and a small result cap just cuts off whichever
+  prints sort last. Every search function that supports it now takes an
+  optional `setHint` (the item's own `set` field, which for the Egman-backed
+  games doubles as wherever a printed set/card code the scanner read off the
+  card ends up) to narrow results, alongside a raised candidate cap (20, not
+  6) and labels that include the disambiguating info (card code + rarity for
+  Egman games, collector number for Pokemon) so same-name prints are at
+  least visually distinguishable even when the hint doesn't fully narrow it.
+  Falls back to the unnarrowed name match if the hint doesn't match anything
+  (typo, or no hint given) rather than returning empty. Scryfall/Yugioh/
+  Lorcana weren't touched — Magic already has its own number-based
+  disambiguation, and per-name collisions are much rarer for Yu-Gi-Oh/
+  Lorcana.
 - No per-condition market pricing exists in any free card-data API — every
   one (Scryfall, pokemontcg.io, YGOPRODeck, Lorcast, etc.) exposes a single
   NM-level aggregate price. True per-condition pricing requires TCGPlayer's
