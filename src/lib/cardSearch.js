@@ -128,14 +128,12 @@ export async function searchYugioh(name) {
   return results;
 }
 
-// Both One Piece and SWU's card databases block direct browser calls with no
-// CORS headers (confirmed by live-testing fetch() from this app before
-// building this) — routed through card-lookup-proxy (a Supabase Edge
-// Function) instead, which fetches server-side where CORS doesn't apply.
-// Not yet wired into the Edit modal/Scanner UI: the proxy's field-name
-// mapping for each provider is still an unconfirmed best guess pending a
-// real response sample, so exposing it now would silently show "no results"
-// for cards that actually exist rather than the honest "not set up yet".
+// One Piece, Riftbound, and SWU's card databases either block direct
+// browser calls with no CORS headers (One Piece, SWU — confirmed by
+// live-testing fetch() from this app) or aren't a documented public API at
+// all (Riftbound, via Egman's deckbuilder — used with his explicit
+// go-ahead). Routed through card-lookup-proxy (a Supabase Edge Function)
+// instead, which fetches server-side where CORS doesn't apply.
 async function proxyQuery(provider, query) {
   const { data, error } = await supabaseClient.functions.invoke('card-lookup-proxy', {
     body: { provider, query },
@@ -144,12 +142,20 @@ async function proxyQuery(provider, query) {
   return data?.results || [];
 }
 
-export async function searchSwu(name) {
-  return await proxyQuery('swu', name.trim());
-}
-
 export async function searchOnePiece(name) {
   return await proxyQuery('onepiece', name.trim());
+}
+
+export async function searchRiftbound(name) {
+  return await proxyQuery('riftbound', name.trim());
+}
+
+// SWU's response field names aren't confirmed by a real sample yet — not
+// wired into the Edit modal/Scanner UI until they are, since exposing it now
+// would silently show "no results" for cards that actually exist rather
+// than the honest "not set up yet".
+export async function searchSwu(name) {
+  return await proxyQuery('swu', name.trim());
 }
 
 // Lorcast (api.lorcast.com) — a free, no-key, Scryfall-modeled API for Disney

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
-import { searchScryfall, searchPokemon, searchYugioh, searchLorcana } from '../../lib/cardSearch.js';
+import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
@@ -86,6 +86,8 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
       else if (form.game === "Pokemon") results = await searchPokemon(name);
       else if (form.game === "Yugioh") results = await searchYugioh(name);
       else if (form.game === "Lorcana") results = await searchLorcana(name);
+      else if (form.game === "One Piece") results = await searchOnePiece(name);
+      else if (form.game === "Riftbound") results = await searchRiftbound(name);
       else {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
         setSearching(false);
