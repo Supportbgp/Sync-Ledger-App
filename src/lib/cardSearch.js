@@ -125,3 +125,20 @@ export async function searchYugioh(name) {
   }
   return results;
 }
+
+// Lorcast (api.lorcast.com) — a free, no-key, Scryfall-modeled API for Disney
+// Lorcana. Confirmed CORS-safe for direct browser calls (unlike several other
+// small TCG APIs checked for this feature — see CLAUDE.md).
+async function lorcastQuery(q) {
+  const res = await fetch(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.results || []).slice(0, 6).map(c => ({
+    url: c.image_uris && c.image_uris.digital && (c.image_uris.digital.normal || c.image_uris.digital.small),
+    label: `${c.name}${c.version ? ' - ' + c.version : ''} (${(c.set && c.set.name) || ''})`,
+  })).filter(r => r.url);
+}
+
+export async function searchLorcana(name) {
+  return await lorcastQuery(name.trim());
+}

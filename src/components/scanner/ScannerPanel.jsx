@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
+import { searchScryfall, searchPokemon, searchYugioh, searchLorcana } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
 import LocationPicker from '../LocationPicker.jsx';
 
@@ -36,6 +36,7 @@ async function findImageCandidates(name, game) {
     if (game === 'Magic') return await searchScryfall(name);
     if (game === 'Pokemon') return await searchPokemon(name);
     if (game === 'Yugioh') return await searchYugioh(name);
+    if (game === 'Lorcana') return await searchLorcana(name);
     return [];
   } catch {
     return [];

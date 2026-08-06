@@ -85,9 +85,24 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 - TCG Player and Collectr have no bulk-upload/bulk-create API available to
   this app (confirmed by research, not assumed) — the Export modal produces
   manual-entry-aid lists, not files either platform can ingest directly.
-- Card image/price search (`cardSearch.js`) only covers Magic, Pokemon, and
-  Yu-Gi-Oh today. Lorcana/One Piece/SWU/Riftbound/Sports Singles have no
-  lookup yet.
+- Card image/price search (`cardSearch.js`) covers Magic, Pokemon, Yu-Gi-Oh,
+  and (Sprint 4) Lorcana via Lorcast (`api.lorcast.com`, free/no-key,
+  confirmed CORS-safe for direct browser calls). One Piece, SWU, Riftbound,
+  and Sports Singles still have no lookup — findings from Sprint 4
+  investigation, live-tested from the browser console (not just docs
+  research, since CORS can't be verified any other way):
+  - **One Piece** (`optcgapi.com`) — real API, but confirmed **CORS-blocked**
+    (no `Access-Control-Allow-Origin` header). Needs a server-side proxy
+    (Edge Function, same pattern as the binder scanner) to use at all — a
+    real architecture decision, not just more integration work.
+  - **SWU** — real API at `www.swu-db.com/api` (the `www.` matters, a bare
+    `swu-db.com` doesn't resolve). CORS status not yet live-tested.
+  - **Riftbound** — no free, no-key, CORS-safe API found. The only
+    candidates (JustTCG, apitcg.com) require a server-side-only key by their
+    own docs, which a pure static SPA can't hold safely. Parked pending
+    either a public API appearing or committing to a proxy. Community
+    databases exist (Piltover Archive, RiftMana, Egman's deck builder) but
+    aren't confirmed to expose a usable underlying API yet.
 - No per-condition market pricing exists in any free card-data API — every
   one (Scryfall, pokemontcg.io, YGOPRODeck, Lorcast, etc.) exposes a single
   NM-level aggregate price. True per-condition pricing requires TCGPlayer's
