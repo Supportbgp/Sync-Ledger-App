@@ -110,6 +110,17 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   owner's go/no-go and a real Cumulus export/import file sample. Never guess
   Cumulus's file format.
 
+## Noted for later iterations
+
+- CSV/XLSX import (`ImportExportPanel.jsx`) has no "where does this live?"
+  channel picker — unlike the Edit modal and the Scanner's batch flow, an
+  import currently always defaults every row's item to all three channels.
+  Should get the same per-batch channel checkboxes those two already have.
+- CSV/XLSX import does no image search — it only detects a direct image URL
+  already present in the file (`isLikelyImageUrl` in `importParse.js`). Could
+  follow the Scanner's pattern (`findImageCandidates`) to auto-search each
+  imported row's card image via `cardSearch.js`.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
