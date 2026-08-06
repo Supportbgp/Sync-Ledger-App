@@ -93,10 +93,10 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   Market Value — a different kind of check (one compares inventory copies
   against each other, the other compares a price against the estimate).
   Neither blocks the save; deliberate pricing decisions are expected. One
-  Piece/Riftbound/Gundam (Egman-backed) don't have pricing yet — their
-  `/api/cards/<game>` endpoint has no price fields; pricing would need the
-  separate `/api/prices/<game>` endpoint, whose shape isn't verified yet.
-  The Scanner's per-row Market Value is revealed by an explicit "Find
+  Piece/Riftbound/Gundam (Egman-backed) now have pricing too — Egman's
+  `/api/prices/<game>` endpoint (confirmed by a real sample, joined to
+  `/api/cards/<game>` by `card_code`; see the `card-lookup-proxy` note
+  below). The Scanner's per-row Market Value is revealed by an explicit "Find
   market price" action, not fetched automatically — it reads whatever
   price/listing was already returned alongside the currently-selected
   image (auto-picked, or chosen via "Find another image"), so confirming
@@ -142,7 +142,12 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
     it, given it's his app's internal backend rather than a documented
     public data source). The endpoint returns each game's full card list
     with no filter param, so the proxy fetches once and does the name match
-    itself rather than guessing at an undocumented filter syntax.
+    itself rather than guessing at an undocumented filter syntax. Pricing
+    for these three comes from the same backend's `/api/prices/<game>`
+    endpoint (confirmed by a real sample: `market_price`, `low_price`
+    unused for now, and `tcgplayer_url` — a direct real-listing link, same
+    role as Scryfall's/pokemontcg.io's), joined back to the card list by
+    the `card_code` field both endpoints share.
     `optcgapi.com` (a real, documented One Piece API) was evaluated and
     rejected — confirmed CORS-blocked *and* has no search-by-name endpoint
     at all, only per-card-ID lookups.
