@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -205,6 +205,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   }
 
   const nameRequired = !form.name.trim();
+  const conditionTier = canonicalizeCondition(form.condition);
+  const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
   const marketValue = marketValueForCondition(form.basePrice, form.condition, multipliers);
 
   return (
@@ -322,27 +324,44 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
           </div>
           {form.basePrice != null && (
             <div className="field-group">
-              <label>Market value</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
-                  {marketValue != null ? `$${marketValue.toFixed(2)}` : `$${Number(form.basePrice).toFixed(2)} NM · set a condition to estimate`}
-                </span>
-                {marketValue != null && (
-                  <button type="button" className="btn ghost small" onClick={() => set('price', marketValue)}>Use this as Our Price</button>
-                )}
+              <label>Pricing</label>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>NM reference</div>
+                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${Number(form.basePrice).toFixed(2)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>
+                    Condition %{conditionTier ? ` (${conditionTier})` : ''}
+                  </div>
+                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                    {conditionPct != null ? `${conditionPct}%` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Market value</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                      {marketValue != null ? `$${marketValue.toFixed(2)}` : '— set a condition'}
+                    </span>
+                    {marketValue != null && (
+                      <button type="button" className="btn ghost small" onClick={() => set('price', marketValue)}>Use as Our Price</button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
-                Estimated from this card's NM price (${Number(form.basePrice).toFixed(2)}) at the condition above — informational only, Our Price is always yours to set.
-              </div>
+              {form.sourceUrl && (
+                <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
+                  <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
+                    Check live TCGPlayer listing ↗
+                  </span>
+                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
+                </div>
+              )}
               {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
                 <div className="status-line err" style={{ marginTop: '8px' }}>
-                  High-value card — this estimate is a flat percentage, not this card's real going rate, and can be off by real money at this price
-                  level.{' '}
-                  {form.sourceUrl ? (
-                    <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
-                      Check the real listing before pricing it ↗
-                    </span>
-                  ) : "Worth checking the real current listing before pricing it."}
+                  High-value card — this estimate can be off by real money at this price level.
+                  {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
                 </div>
               )}
             </div>

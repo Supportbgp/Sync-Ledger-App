@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -274,6 +274,8 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
 }
 
 function ScanRow({ row, multipliers, onChange, onRemove, onFindImage }) {
+  const conditionTier = canonicalizeCondition(row.condition);
+  const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
   const marketValue = marketValueForCondition(row.basePrice, row.condition, multipliers);
   return (
     <div className="scan-row">
@@ -304,22 +306,27 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindImage }) {
         </div>
         {row.basePrice != null && (
           <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>
-            {marketValue != null
-              ? `Market value: $${marketValue.toFixed(2)}`
-              : `NM price: $${Number(row.basePrice).toFixed(2)} — set a condition to estimate market value`}
-            {marketValue != null && (
-              <button type="button" className="btn ghost small" style={{ marginLeft: '8px' }} onClick={() => onChange({ price: marketValue })}>Use this</button>
+            NM ${Number(row.basePrice).toFixed(2)}
+            {' · '}
+            {conditionPct != null ? `${conditionTier} ${conditionPct}%` : 'set a condition'}
+            {' · '}
+            {marketValue != null ? (
+              <>
+                Market value ${marketValue.toFixed(2)}
+                <button type="button" className="btn ghost small" style={{ marginLeft: '8px' }} onClick={() => onChange({ price: marketValue })}>Use this</button>
+              </>
+            ) : 'market value —'}
+            {row.listingUrl && (
+              <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }} onClick={() => window.open(row.listingUrl, '_blank')}>
+                Check live TCGPlayer listing ↗
+              </span>
             )}
           </div>
         )}
         {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (
           <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--rust)' }}>
-            High-value card — this estimate is a flat percentage, not this card's real going rate.{' '}
-            {row.listingUrl ? (
-              <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600 }} onClick={() => window.open(row.listingUrl, '_blank')}>
-                Check the real listing before pricing it ↗
-              </span>
-            ) : "Worth checking the real current listing before pricing it, especially in a batch."}
+            High-value card — this estimate can be off by real money at this price level.
+            {!row.listingUrl && " Worth checking the real current listing before pricing it, especially in a batch."}
           </div>
         )}
         {row.showCandidates && row.imageCandidates.length > 0 && (
