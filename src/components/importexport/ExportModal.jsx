@@ -25,14 +25,19 @@ export default function ExportModal({ catalog, queue, locations, onClose }) {
   function handleExport() {
     let rows;
     if (formatDef.scoped) {
-      const items = scope === 'location' ? catalog.filter(c => c.location === location) : catalog;
+      let items = scope === 'location' ? catalog.filter(c => c.location === location) : catalog;
+      // Only items actually meant to be listed on that platform — an
+      // in-store-only card has no business on a TCG Player/Collectr list.
+      if (format === 'tcgplayer') items = items.filter(c => c.tcgplayerChannel);
+      else if (format === 'collectr') items = items.filter(c => c.collectrChannel);
       if (!items.length) { toast(scope === 'location' ? "No items in that binder/case" : "Catalog is empty", true); return; }
       if (format === 'fullCatalog') rows = buildFullCatalogRows(items);
       else if (format === 'tcgplayer') rows = buildTcgPlayerEntryRows(items);
       else rows = buildCollectrEntryRows(items);
     } else {
       if (!queue.length) { toast("No sync history yet", true); return; }
-      rows = format === 'pendingPos' ? buildPendingPosRows(queue) : buildSyncHistoryRows(queue);
+      const scopedQueue = format === 'pendingPos' ? queue.filter(t => t.posChannel) : queue;
+      rows = format === 'pendingPos' ? buildPendingPosRows(scopedQueue) : buildSyncHistoryRows(scopedQueue);
       if (format === 'pendingPos' && !rows.length) { toast("Nothing pending for POS", false); return; }
     }
     downloadCsv(FILENAMES[format], rows);

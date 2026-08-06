@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
+import { isTicketComplete } from '../../lib/cardUtils.js';
 
 const STAMPS = [
-  { field: 'posDone', letter: 'P', label: 'POS' },
-  { field: 'tcgplayerDone', letter: 'T', label: 'TCG Player' },
-  { field: 'collectrDone', letter: 'C', label: 'Collectr' },
+  { field: 'posDone', channel: 'posChannel', letter: 'P', label: 'POS' },
+  { field: 'tcgplayerDone', channel: 'tcgplayerChannel', letter: 'T', label: 'TCG Player' },
+  { field: 'collectrDone', channel: 'collectrChannel', letter: 'C', label: 'Collectr' },
 ];
 
 function Ticket({ t, onToggleStamp }) {
-  const complete = t.posDone && t.tcgplayerDone && t.collectrDone;
+  const complete = isTicketComplete(t);
+  const applicable = STAMPS.filter(s => t[s.channel]);
   const time = new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return (
     <div className={`ticket ${complete ? 'complete' : ''}`}>
@@ -17,7 +19,7 @@ function Ticket({ t, onToggleStamp }) {
       </div>
       <div className="ticket-time">{time}</div>
       <div className="stamps">
-        {STAMPS.map(s => (
+        {applicable.map(s => (
           <div key={s.field} className={`stamp ${t[s.field] ? 'done' : ''}`} onClick={() => onToggleStamp(t.id, s.field)}>
             <div className="stamp-circle">{s.letter}</div><div className="stamp-label">{s.label}</div>
           </div>
@@ -29,8 +31,8 @@ function Ticket({ t, onToggleStamp }) {
 
 export default function SyncQueueTab({ queue, onToggleStamp }) {
   const sorted = useMemo(() => [...queue].sort((a, b) => b.timestamp - a.timestamp), [queue]);
-  const pending = sorted.filter(t => !(t.posDone && t.tcgplayerDone && t.collectrDone));
-  const completed = sorted.filter(t => t.posDone && t.tcgplayerDone && t.collectrDone);
+  const pending = sorted.filter(t => !isTicketComplete(t));
+  const completed = sorted.filter(t => isTicketComplete(t));
 
   return (
     <div>

@@ -11,6 +11,7 @@ export function rowToCard(r) {
     sold: r.sold, sourceUrl: r.source_url, location: r.location,
     lastUpdated: r.last_updated ? new Date(r.last_updated).getTime() : Date.now(),
     posSynced: r.pos_synced, tcgplayerSynced: r.tcgplayer_synced, collectrSynced: r.collectr_synced,
+    posChannel: r.pos_channel, tcgplayerChannel: r.tcgplayer_channel, collectrChannel: r.collectr_channel,
   });
 }
 
@@ -24,6 +25,7 @@ function cardToRow(c) {
     sold: c.sold, source_url: c.sourceUrl, location: c.location,
     last_updated: new Date(c.lastUpdated).toISOString(),
     pos_synced: !!c.posSynced, tcgplayer_synced: !!c.tcgplayerSynced, collectr_synced: !!c.collectrSynced,
+    pos_channel: c.posChannel !== false, tcgplayer_channel: c.tcgplayerChannel !== false, collectr_channel: c.collectrChannel !== false,
   };
 }
 
@@ -32,6 +34,7 @@ export function rowToTicket(r) {
     id: r.id, sku: r.sku, name: r.name, set: r.set_name, condition: r.condition, printing: r.printing,
     price: r.price, qtySold: r.qty_sold, timestamp: new Date(r.ts).getTime(),
     posDone: r.pos_done, tcgplayerDone: r.tcgplayer_done, collectrDone: r.collectr_done,
+    posChannel: r.pos_channel, tcgplayerChannel: r.tcgplayer_channel, collectrChannel: r.collectr_channel,
   };
 }
 
@@ -40,6 +43,7 @@ function ticketToRow(t) {
     id: t.id, sku: t.sku, name: t.name, set_name: t.set, condition: t.condition, printing: t.printing,
     price: t.price, qty_sold: t.qtySold, ts: new Date(t.timestamp).toISOString(),
     pos_done: t.posDone, tcgplayer_done: t.tcgplayerDone, collectr_done: t.collectrDone,
+    pos_channel: t.posChannel !== false, tcgplayer_channel: t.tcgplayerChannel !== false, collectr_channel: t.collectrChannel !== false,
   };
 }
 

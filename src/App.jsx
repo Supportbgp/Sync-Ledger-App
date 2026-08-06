@@ -4,7 +4,7 @@ import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
 } from './lib/db.js';
-import { needsPlatformStatusReset } from './lib/cardUtils.js';
+import { needsPlatformStatusReset, isTicketComplete } from './lib/cardUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -48,7 +48,7 @@ export default function App() {
     [catalog]
   );
 
-  const pendingCount = queue.filter(t => !(t.posDone && t.tcgplayerDone && t.collectrDone)).length;
+  const pendingCount = queue.filter(t => !isTicketComplete(t)).length;
 
   async function handleSaveCard(record, prevSku) {
     const idx = catalog.findIndex(c => c.sku === prevSku);
@@ -92,6 +92,10 @@ export default function App() {
       sku: updated.sku, name: updated.name, set: updated.set, condition: updated.condition,
       printing: updated.printing, price: updated.price, qtySold: qty, timestamp: Date.now(),
       posDone: false, tcgplayerDone: false, collectrDone: false,
+      // Snapshot which platforms were relevant at sale time, same reasoning
+      // as the other snapshotted fields above — editing the item's channels
+      // later shouldn't retroactively change what this ticket requires.
+      posChannel: card.posChannel, tcgplayerChannel: card.tcgplayerChannel, collectrChannel: card.collectrChannel,
     };
     setCatalog(prev => prev.map(c => c.sku === card.sku ? updated : c));
     setQueue(prev => [...prev, ticket]);
@@ -123,6 +127,7 @@ export default function App() {
         id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
         sku: c.sku, name: c.name, set: c.set, condition: c.condition, printing: c.printing, price: c.price,
         qtySold, timestamp: Date.now(), posDone: false, tcgplayerDone: false, collectrDone: false,
+        posChannel: c.posChannel, tcgplayerChannel: c.tcgplayerChannel, collectrChannel: c.collectrChannel,
       });
       affected++;
       return updated;
@@ -141,7 +146,7 @@ export default function App() {
     setQueue(prev => prev.map(x => x.id === id ? { ...x, [field]: nextVal } : x));
     await dbUpdateTicketStamp(id, field, nextVal, toast);
     const merged = { ...t, [field]: nextVal };
-    if (merged.posDone && merged.tcgplayerDone && merged.collectrDone) {
+    if (isTicketComplete(merged)) {
       toast(`${t.name} synced`);
     }
   }
@@ -227,7 +232,7 @@ export default function App() {
         />
       </div>
       <div className={`panel${tab === 'scanner' ? ' active' : ''}`}>
-        <ScannerPanel locations={locations} onImport={handleImport} />
+        <ScannerPanel catalog={catalog} locations={locations} onImport={handleImport} />
       </div>
 
       <div className="footnote">

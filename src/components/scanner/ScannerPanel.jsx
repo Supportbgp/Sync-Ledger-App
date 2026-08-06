@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
-import { normalizeCard } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
 let nextRowId = 1;
@@ -41,7 +42,7 @@ async function findImageCandidates(name, game) {
   }
 }
 
-export default function ScannerPanel({ locations, onImport }) {
+export default function ScannerPanel({ catalog, locations, onImport }) {
   const { toast } = useUI();
   const fileInputRef = useRef(null);
   const [photo, setPhoto] = useState(null);
@@ -49,6 +50,22 @@ export default function ScannerPanel({ locations, onImport }) {
   const [rows, setRows] = useState(null);
   const [location, setLocation] = useState(locations[0] || '');
   const [saving, setSaving] = useState(false);
+  const [channels, setChannels] = useState({ posChannel: true, tcgplayerChannel: true, collectrChannel: true });
+  const [channelsTouched, setChannelsTouched] = useState(false);
+
+  // One scan is one binder page, i.e. one location for the whole batch — so
+  // just like the Edit modal, follow whatever channels that binder/case
+  // already uses until staff manually override it for this batch.
+  useEffect(() => {
+    if (channelsTouched) return;
+    setChannels(channelDefaultsForLocation(catalog, location.trim()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+
+  function setChannel(key, val) {
+    setChannelsTouched(true);
+    setChannels(c => ({ ...c, [key]: val }));
+  }
 
   async function handlePhotoSelected(file) {
     if (!file) return;
@@ -128,6 +145,9 @@ export default function ScannerPanel({ locations, onImport }) {
       location: batchLocation,
       imageUrl: r.imageUrl,
       lastUpdated: Date.now(),
+      posChannel: channels.posChannel,
+      tcgplayerChannel: channels.tcgplayerChannel,
+      collectrChannel: channels.collectrChannel,
     }));
     setSaving(true);
     await onImport(newCards, 'merge');
@@ -185,14 +205,27 @@ export default function ScannerPanel({ locations, onImport }) {
           <div className="section-label">Review before adding ({rows.length})</div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Binder / case / collection for this page</label>
-            <input
-              type="text" list="scannerLocationDatalist"
-              placeholder="e.g. Black and red toploader binder (Pokemon)"
-              value={location} onChange={(e) => setLocation(e.target.value)}
-            />
-            <datalist id="scannerLocationDatalist">
-              {locations.map(l => <option key={l} value={l} />)}
-            </datalist>
+            <LocationPicker locations={locations} value={location} onChange={setLocation} />
+          </div>
+          <div className="field-group" style={{ maxWidth: '420px' }}>
+            <label>Where do these live?</label>
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" id="s_posChannel" checked={channels.posChannel} onChange={(e) => setChannel('posChannel', e.target.checked)} />
+                <label htmlFor="s_posChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>In-store / POS</label>
+              </div>
+              <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" id="s_tcgplayerChannel" checked={channels.tcgplayerChannel} onChange={(e) => setChannel('tcgplayerChannel', e.target.checked)} />
+                <label htmlFor="s_tcgplayerChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>TCG Player</label>
+              </div>
+              <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" id="s_collectrChannel" checked={channels.collectrChannel} onChange={(e) => setChannel('collectrChannel', e.target.checked)} />
+                <label htmlFor="s_collectrChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Collectr</label>
+              </div>
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+              Applies to every card added from this page — edit an individual item afterward if one differs.
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {rows.map(row => (

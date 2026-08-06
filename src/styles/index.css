@@ -527,6 +527,12 @@
       color: var(--green);
     }
 
+    .platform-status-none {
+      font-size: 10.5px;
+      color: var(--ink-faint);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
     .ticket-time {
       font-size: 11px;
       color: var(--ink-faint);

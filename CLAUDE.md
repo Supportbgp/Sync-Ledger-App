@@ -55,6 +55,17 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   price/qty/condition/sold changes (see `needsPlatformStatusReset` in
   `cardUtils.js`) — the assumption is any of those changes invalidates
   whatever's currently listed elsewhere. Selling always resets all three.
+- Not every item lives on every platform (some are in-store only) — three
+  more per-item booleans, `posChannel`/`tcgplayerChannel`/`collectrChannel`
+  (Sprint 2), gate whether a given platform even applies. Default `true` on
+  every row so nothing pre-existing silently dropped out of tracking. The
+  Sync Queue/status chips only show and require the channels an item is
+  actually enrolled in (`isTicketComplete` in `cardUtils.js`), and Export
+  filters TCG Player/Collectr/pending-POS lists to matching-channel items
+  only. `sync_queue` tickets snapshot an item's channels at sale time, same
+  as its other snapshotted fields. New items default their channels to
+  whatever the majority of existing items in the same binder/case already
+  use (`channelDefaultsForLocation`), editable per item either way.
 - `game` values are canonicalized on read (`canonicalizeGame`/
   `GAME_ALIASES` in `cardUtils.js`) so imported data like "MTG" normalizes to
   "Magic" — several features (image search, scanner) do exact string checks

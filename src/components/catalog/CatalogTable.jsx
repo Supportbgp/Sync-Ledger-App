@@ -10,15 +10,19 @@ const COLUMNS = [
 ];
 
 const PLATFORM_CHIPS = [
-  { field: 'posSynced', label: 'P', title: 'POS' },
-  { field: 'tcgplayerSynced', label: 'T', title: 'TCG Player' },
-  { field: 'collectrSynced', label: 'C', title: 'Collectr' },
+  { field: 'posSynced', channel: 'posChannel', label: 'P', title: 'POS' },
+  { field: 'tcgplayerSynced', channel: 'tcgplayerChannel', label: 'T', title: 'TCG Player' },
+  { field: 'collectrSynced', channel: 'collectrChannel', label: 'C', title: 'Collectr' },
 ];
 
 function PlatformStatus({ card, onToggle }) {
+  const applicable = PLATFORM_CHIPS.filter(chip => card[chip.channel]);
+  if (!applicable.length) {
+    return <span className="platform-status-none">In-store only</span>;
+  }
   return (
     <div className="platform-status">
-      {PLATFORM_CHIPS.map(chip => (
+      {applicable.map(chip => (
         <span
           key={chip.field}
           className={`platform-chip${card[chip.field] ? ' done' : ''}`}

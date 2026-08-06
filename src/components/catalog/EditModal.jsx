@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
 import { searchScryfall, searchPokemon, searchYugioh } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
+import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
 const GAME_LABELS = {
@@ -29,12 +30,27 @@ function initForm(card) {
     notes: card?.notes || "",
     sold: !!card?.sold,
     sourceUrl: card?.sourceUrl || "",
+    posChannel: card ? card.posChannel !== false : true,
+    tcgplayerChannel: card ? card.tcgplayerChannel !== false : true,
+    collectrChannel: card ? card.collectrChannel !== false : true,
   };
 }
 
-export default function EditModal({ card, locations, onClose, onSave, onDelete }) {
+export default function EditModal({ card, catalog, locations, onClose, onSave, onDelete }) {
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
+  const [channelsTouched, setChannelsTouched] = useState(false);
+
+  // For a brand-new item, follow whatever channels the same binder/case
+  // already uses as the staff types the location in — until they manually
+  // touch a channel checkbox themselves, at which point their choice wins.
+  useEffect(() => {
+    if (card || channelsTouched) return;
+    const defaults = channelDefaultsForLocation(catalog, form.location.trim());
+    setForm(f => ({ ...f, ...defaults }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.location]);
+
   const [imagePending, setImagePending] = useState("");
   const [candidates, setCandidates] = useState([]);
   const [imageStatus, setImageStatus] = useState({ text: "", kind: "" });
@@ -43,6 +59,10 @@ export default function EditModal({ card, locations, onClose, onSave, onDelete }
   const [saving, setSaving] = useState(false);
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
+  function setChannel(key, val) {
+    setChannelsTouched(true);
+    set(key, val);
+  }
 
   function previewSrc() {
     if (imagePending === "__clear__") return null;
@@ -137,6 +157,9 @@ export default function EditModal({ card, locations, onClose, onSave, onDelete }
       sourceUrl: form.sourceUrl.trim(),
       location: form.location.trim(),
       sold: form.sold,
+      posChannel: form.posChannel,
+      tcgplayerChannel: form.tcgplayerChannel,
+      collectrChannel: form.collectrChannel,
       imageUrl, imageData,
       lastUpdated: Date.now(),
       // Carried forward as-is; App.jsx's save handler is what decides whether
@@ -227,10 +250,28 @@ export default function EditModal({ card, locations, onClose, onSave, onDelete }
           </div>
           <div className="field-group">
             <label>Binder / case / collection</label>
-            <input type="text" list="locationDatalist" placeholder="e.g. Black and red toploader binder (Pokemon)" value={form.location} onChange={(e) => set('location', e.target.value)} />
-            <datalist id="locationDatalist">
-              {locations.map(l => <option key={l} value={l} />)}
-            </datalist>
+            <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} />
+          </div>
+
+          <div className="field-group">
+            <label>Where does this item live?</label>
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" id="f_posChannel" checked={form.posChannel} onChange={(e) => setChannel('posChannel', e.target.checked)} />
+                <label htmlFor="f_posChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>In-store / POS</label>
+              </div>
+              <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" id="f_tcgplayerChannel" checked={form.tcgplayerChannel} onChange={(e) => setChannel('tcgplayerChannel', e.target.checked)} />
+                <label htmlFor="f_tcgplayerChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>TCG Player</label>
+              </div>
+              <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                <input type="checkbox" id="f_collectrChannel" checked={form.collectrChannel} onChange={(e) => setChannel('collectrChannel', e.target.checked)} />
+                <label htmlFor="f_collectrChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Collectr</label>
+              </div>
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+              Only checked platforms show up in the Sync Queue and Status column for this item.
+            </div>
           </div>
 
           <div className="checkbox-row">
