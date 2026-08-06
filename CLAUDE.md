@@ -85,9 +85,53 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 - TCG Player and Collectr have no bulk-upload/bulk-create API available to
   this app (confirmed by research, not assumed) — the Export modal produces
   manual-entry-aid lists, not files either platform can ingest directly.
-- Card image/price search (`cardSearch.js`) only covers Magic, Pokemon, and
-  Yu-Gi-Oh today. Lorcana/One Piece/SWU/Riftbound/Sports Singles have no
-  lookup yet.
+- Card image/price search (`cardSearch.js`) covers Magic, Pokemon, Yu-Gi-Oh,
+  Lorcana, One Piece, Riftbound, Gundam, and SWU. Only Sports Singles has no
+  lookup (no card database exists for it). Findings from Sprint 4,
+  live-tested from the browser console/Postman — not just docs research,
+  since CORS can't be verified any other way:
+  - **Lorcana** — Lorcast (`api.lorcast.com`), free/no-key, confirmed
+    CORS-safe for direct browser calls. Called directly from the client.
+  - **One Piece**, **Riftbound**, and **Gundam** — all go through
+    `card-lookup-proxy` (a Supabase Edge Function, same pattern as
+    `scan-binder-page`), routed to **Egman's deckbuilder**
+    (`deckbuilder.egmanevents.com/api/cards/<optcg|riftbound|gundam>`) — a
+    one-person hobby project with no published API/ToS, used with his
+    explicit go-ahead (asked via his X/Twitter account before building on
+    it, given it's his app's internal backend rather than a documented
+    public data source). The endpoint returns each game's full card list
+    with no filter param, so the proxy fetches once and does the name match
+    itself rather than guessing at an undocumented filter syntax.
+    `optcgapi.com` (a real, documented One Piece API) was evaluated and
+    rejected — confirmed CORS-blocked *and* has no search-by-name endpoint
+    at all, only per-card-ID lookups.
+  - **SWU** — real API at `api.swu-db.com` (note: `api.`, not `www.` — the
+    docs page lives at `www.swu-db.com/api` but the API itself is on a
+    different subdomain; `www.swu-db.com/cards/search` 404s). Confirmed
+    CORS-blocked, routed through the same proxy — response fields confirmed
+    by a real sample: array at `data.data`, fields `Name`/`FrontArt`/`Set`,
+    plus `MarketPrice`/`LowPrice` (unused for now, but relevant to the
+    Market Value feature later).
+  - Piltover Archive (a Riftbound-specific fan database) was evaluated and
+    rejected as an image source — its image URLs live under a `/temporary/`
+    path with what looks like a signed-upload hash, suggesting they expire
+    and aren't safe to store/reuse long-term.
+- **Disambiguating same-name prints**: several games reuse a card's name
+  across many separate prints (alt art, promos, Gundam's base-set generics
+  like "EX Base" shared by dozens of unrelated cards) — a name-only search
+  can't tell them apart, and a small result cap just cuts off whichever
+  prints sort last. Every search function that supports it now takes an
+  optional `setHint` (the item's own `set` field, which for the Egman-backed
+  games doubles as wherever a printed set/card code the scanner read off the
+  card ends up) to narrow results, alongside a raised candidate cap (20, not
+  6) and labels that include the disambiguating info (card code + rarity for
+  Egman games, collector number for Pokemon) so same-name prints are at
+  least visually distinguishable even when the hint doesn't fully narrow it.
+  Falls back to the unnarrowed name match if the hint doesn't match anything
+  (typo, or no hint given) rather than returning empty. Scryfall/Yugioh/
+  Lorcana weren't touched — Magic already has its own number-based
+  disambiguation, and per-name collisions are much rarer for Yu-Gi-Oh/
+  Lorcana.
 - No per-condition market pricing exists in any free card-data API — every
   one (Scryfall, pokemontcg.io, YGOPRODeck, Lorcast, etc.) exposes a single
   NM-level aggregate price. True per-condition pricing requires TCGPlayer's

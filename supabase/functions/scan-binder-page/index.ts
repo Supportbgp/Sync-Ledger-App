@@ -30,7 +30,7 @@ function corsHeaders(origin) {
 
 const CARD_GAMES = [
   "Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece",
-  "Sports Singles", "SWU", "Riftbound", "Other",
+  "Sports Singles", "SWU", "Riftbound", "Gundam", "Other",
 ];
 
 const DETECT_CARDS_TOOL = {
