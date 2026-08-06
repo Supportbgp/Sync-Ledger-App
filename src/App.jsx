@@ -5,7 +5,7 @@ import {
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
   dbLoadSettings, dbSaveSettings,
 } from './lib/db.js';
-import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition } from './lib/cardUtils.js';
+import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition } from './lib/cardUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -45,6 +45,25 @@ function priceOrderingWarning(catalog, record) {
     }
   }
   return null;
+}
+
+// A different kind of soft nudge than priceOrderingWarning above: this one
+// compares Our Price against THIS card's own computed Market Value, not
+// against another physical copy. The flat condition multiplier can be
+// materially wrong for a specific card (a real example landed ~18% off —
+// see CLAUDE.md), so a meaningful gap is worth a second look — but it's
+// still just a nudge; deliberate pricing decisions (the whole reason Our
+// Price is separate from Market Value) are expected and not an error.
+const MARKET_VALUE_DEVIATION_THRESHOLD = 0.15;
+
+function priceVsMarketValueWarning(record, multipliers) {
+  if (record.basePrice == null || record.price == null || !multipliers) return null;
+  const mv = marketValueForCondition(record.basePrice, record.condition, multipliers);
+  if (mv == null || mv <= 0) return null;
+  const diff = Math.abs(record.price - mv) / mv;
+  if (diff < MARKET_VALUE_DEVIATION_THRESHOLD) return null;
+  const dir = record.price < mv ? 'below' : 'above';
+  return `${record.name}'s price ($${record.price.toFixed(2)}) is ${dir} its estimated market value ($${mv.toFixed(2)}).`;
 }
 
 export default function App() {
@@ -109,9 +128,11 @@ export default function App() {
     }
     setCatalog(nextCatalog);
     await dbUpsertCard(record, toast);
-    toast(`Saved ${record.name}`);
-    const warning = priceOrderingWarning(nextCatalog, record);
-    if (warning) toast(warning, true);
+    // Toasts are single-slot, not a queue — combine into one call so a
+    // warning doesn't just silently overwrite an unseen "Saved" message.
+    const warnings = [priceOrderingWarning(nextCatalog, record), priceVsMarketValueWarning(record, multipliers)].filter(Boolean);
+    if (warnings.length) toast(warnings.join(' '), true);
+    else toast(`Saved ${record.name}`);
   }
 
   async function handleDeleteCard(sku) {

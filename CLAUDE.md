@@ -85,13 +85,23 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   via the "Pricing settings" link in the footer, defaulting to the
   NM100/LP85/MP65/HP45/DMG25 table decided earlier. The condition field
   stays free text; `canonicalizeCondition` fuzzy-matches it onto one of the
-  five tiers for multiplier lookup only. A soft, non-blocking toast warns at
-  save time if an item's price breaks condition ordering against another
-  copy of the same card in the same location (`priceOrderingWarning` in
-  App.jsx). One Piece/Riftbound/Gundam (Egman-backed) don't have pricing
-  yet — their `/api/cards/<game>` endpoint has no price fields; pricing
-  would need the separate `/api/prices/<game>` endpoint, whose shape isn't
-  verified yet.
+  five tiers for multiplier lookup only. Two independent soft, non-blocking
+  toasts warn at save time: `priceOrderingWarning` (App.jsx) if an item's
+  price breaks condition ordering against another *physical copy* of the
+  same card in the same location, and `priceVsMarketValueWarning` (App.jsx)
+  if Our Price diverges more than 15% from *this card's own* computed
+  Market Value — a different kind of check (one compares inventory copies
+  against each other, the other compares a price against the estimate).
+  Neither blocks the save; deliberate pricing decisions are expected. One
+  Piece/Riftbound/Gundam (Egman-backed) don't have pricing yet — their
+  `/api/cards/<game>` endpoint has no price fields; pricing would need the
+  separate `/api/prices/<game>` endpoint, whose shape isn't verified yet.
+  The Scanner's per-row Market Value is revealed by an explicit "Find
+  market price" action, not fetched automatically — it reads whatever
+  price/listing was already returned alongside the currently-selected
+  image (auto-picked, or chosen via "Find another image"), so confirming
+  the right card via the image is what gates seeing/trusting a price at
+  all, with no extra network call needed since that data's already there.
 - **The condition-multiplier estimate can be materially wrong for
   high-value cards** — a flat percentage is a population average, not any
   specific card's real going rate, and a real example (M Rayquaza EX,
