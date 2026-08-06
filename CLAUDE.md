@@ -75,6 +75,23 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   public binder page reads — a restricted view exposing browsing-safe
   columns only, for unsold/in-stock rows. It relies on view-ownership
   bypassing the base table's RLS, so `anon` never touches `catalog` directly.
+- **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
+  reference price captured from whichever search candidate staff actually
+  selected) is the only new column; Market Value itself is computed live in
+  the UI as `base_price × condition multiplier` (`marketValueForCondition`
+  in `cardUtils.js`), so it can't go stale if the condition changes later.
+  `price` keeps meaning what it already meant ("Our Price") — no rename.
+  Condition multipliers live in a `store_settings` singleton row, editable
+  via the "Pricing settings" link in the footer, defaulting to the
+  NM100/LP85/MP65/HP45/DMG25 table decided earlier. The condition field
+  stays free text; `canonicalizeCondition` fuzzy-matches it onto one of the
+  five tiers for multiplier lookup only. A soft, non-blocking toast warns at
+  save time if an item's price breaks condition ordering against another
+  copy of the same card in the same location (`priceOrderingWarning` in
+  App.jsx). One Piece/Riftbound/Gundam (Egman-backed) don't have pricing
+  yet — their `/api/cards/<game>` endpoint has no price fields; pricing
+  would need the separate `/api/prices/<game>` endpoint, whose shape isn't
+  verified yet.
 
 ## Known constraints / accepted risks
 

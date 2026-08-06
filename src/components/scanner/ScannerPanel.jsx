@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition } from '../../lib/cardUtils.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -19,6 +19,7 @@ function detectedToRow(card) {
     confidence: card.confidence || 'medium',
     qty: 1,
     price: '',
+    basePrice: null,
     condition: '',
     imageUrl: '',
     imageStatus: 'searching', // 'searching' | 'found' | 'none'
@@ -47,7 +48,7 @@ async function findImageCandidates(name, game, set) {
   }
 }
 
-export default function ScannerPanel({ catalog, locations, onImport }) {
+export default function ScannerPanel({ catalog, locations, onImport, multipliers }) {
   const { toast } = useUI();
   const fileInputRef = useRef(null);
   const [photo, setPhoto] = useState(null);
@@ -102,7 +103,10 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
       newRows.forEach(async (row) => {
         const results = await findImageCandidates(row.name, row.game, row.set);
         setRows(prev => prev && prev.map(r => r.id === row.id
-          ? { ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results }
+          ? {
+            ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
+            basePrice: results[0]?.price ?? null,
+          }
           : r));
       });
     } catch (err) {
@@ -147,6 +151,7 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
       printing: r.printing,
       qty: r.qty,
       price: r.price,
+      basePrice: r.basePrice,
       location: batchLocation,
       imageUrl: r.imageUrl,
       lastUpdated: Date.now(),
@@ -237,6 +242,7 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
               <ScanRow
                 key={row.id}
                 row={row}
+                multipliers={multipliers}
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
                 onFindImage={() => refreshImageForRow(row.id)}
@@ -259,7 +265,8 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
   );
 }
 
-function ScanRow({ row, onChange, onRemove, onFindImage }) {
+function ScanRow({ row, multipliers, onChange, onRemove, onFindImage }) {
+  const marketValue = marketValueForCondition(row.basePrice, row.condition, multipliers);
   return (
     <div className="scan-row">
       <div className="scan-row-thumb-col">
@@ -287,10 +294,20 @@ function ScanRow({ row, onChange, onRemove, onFindImage }) {
           </span>
           <button className="icon-btn" title="Remove" style={{ flex: '0 0 auto' }} onClick={onRemove}>✕</button>
         </div>
+        {row.basePrice != null && (
+          <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>
+            {marketValue != null
+              ? `Market value: $${marketValue.toFixed(2)}`
+              : `NM price: $${Number(row.basePrice).toFixed(2)} — set a condition to estimate market value`}
+            {marketValue != null && (
+              <button type="button" className="btn ghost small" style={{ marginLeft: '8px' }} onClick={() => onChange({ price: marketValue })}>Use this</button>
+            )}
+          </div>
+        )}
         {row.showCandidates && row.imageCandidates.length > 0 && (
           <div className="img-candidates">
             {row.imageCandidates.map((c, i) => (
-              <img key={i} src={c.url} title={c.label} onClick={() => onChange({ imageUrl: c.url, imageStatus: 'found', showCandidates: false })} />
+              <img key={i} src={c.url} title={c.label} onClick={() => onChange({ imageUrl: c.url, basePrice: c.price ?? null, imageStatus: 'found', showCandidates: false })} />
             ))}
           </div>
         )}

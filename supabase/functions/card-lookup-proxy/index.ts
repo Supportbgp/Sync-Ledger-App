@@ -97,6 +97,7 @@ const PROVIDERS = {
     return (data.data || []).slice(0, 20).map((c) => ({
       url: c.FrontArt,
       label: `${c.Name} (${c.Set || ""})`,
+      price: c.MarketPrice ? Number(c.MarketPrice) : null,
     })).filter((r) => r.url);
   },
 };

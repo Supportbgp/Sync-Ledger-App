@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition } from '../../lib/cardUtils.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -27,6 +27,7 @@ function initForm(card) {
     cert: card?.certNumber || "",
     qty: card ? card.qty : 1,
     price: (card && card.price) ?? "",
+    basePrice: (card && card.basePrice) ?? null,
     notes: card?.notes || "",
     sold: !!card?.sold,
     sourceUrl: card?.sourceUrl || "",
@@ -36,7 +37,7 @@ function initForm(card) {
   };
 }
 
-export default function EditModal({ card, catalog, locations, onClose, onSave, onDelete }) {
+export default function EditModal({ card, catalog, locations, multipliers, onClose, onSave, onDelete }) {
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
@@ -108,8 +109,12 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
     setSearching(false);
   }
 
-  function selectCandidate(url) {
+  function selectCandidate(url, price) {
     setImagePending(url);
+    // Capture the exact print's NM price as the Market Value baseline —
+    // only when the search result actually carried one, since not every
+    // provider has price data yet (Egman-backed games, for one).
+    if (price != null) set('basePrice', price);
   }
 
   async function handleUploadFile(e) {
@@ -155,6 +160,7 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
       printing: form.printing.trim(),
       qty: form.qty,
       price: form.price,
+      basePrice: form.basePrice,
       notes: form.notes,
       itemType: form.isSlab ? "slab" : "single",
       grader: form.grader.trim(),
@@ -187,6 +193,7 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
   }
 
   const nameRequired = !form.name.trim();
+  const marketValue = marketValueForCondition(form.basePrice, form.condition, multipliers);
 
   return (
     <div className="overlay show">
@@ -219,7 +226,7 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
           {candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
-                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url)} />
+                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price)} />
               ))}
             </div>
           )}
@@ -296,8 +303,27 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
 
           <div className="field-row2">
             <div className="field-group"><label>Quantity</label><input type="number" min="0" value={form.qty} onChange={(e) => set('qty', e.target.value)} /></div>
-            <div className="field-group"><label>Price ($)</label><input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} /></div>
+            <div className="field-group">
+              <label>Our price ($)</label>
+              <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} />
+            </div>
           </div>
+          {form.basePrice != null && (
+            <div className="field-group">
+              <label>Market value</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                  {marketValue != null ? `$${marketValue.toFixed(2)}` : `$${Number(form.basePrice).toFixed(2)} NM · set a condition to estimate`}
+                </span>
+                {marketValue != null && (
+                  <button type="button" className="btn ghost small" onClick={() => set('price', marketValue)}>Use this as Our Price</button>
+                )}
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                Estimated from this card's NM price (${Number(form.basePrice).toFixed(2)}) at the condition above — informational only, Our Price is always yours to set.
+              </div>
+            </div>
+          )}
           <div className="field-group">
             <label>Notes</label>
             <textarea rows="3" placeholder="Anything worth flagging — damage, provenance, buyer holds…" value={form.notes} onChange={(e) => set('notes', e.target.value)} />

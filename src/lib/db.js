@@ -1,5 +1,5 @@
 import { supabaseClient } from './supabase.js';
-import { normalizeCard } from './cardUtils.js';
+import { normalizeCard, DEFAULT_CONDITION_MULTIPLIERS } from './cardUtils.js';
 
 export function rowToCard(r) {
   return normalizeCard({
@@ -12,6 +12,7 @@ export function rowToCard(r) {
     lastUpdated: r.last_updated ? new Date(r.last_updated).getTime() : Date.now(),
     posSynced: r.pos_synced, tcgplayerSynced: r.tcgplayer_synced, collectrSynced: r.collectr_synced,
     posChannel: r.pos_channel, tcgplayerChannel: r.tcgplayer_channel, collectrChannel: r.collectr_channel,
+    basePrice: r.base_price,
   });
 }
 
@@ -26,6 +27,7 @@ function cardToRow(c) {
     last_updated: new Date(c.lastUpdated).toISOString(),
     pos_synced: !!c.posSynced, tcgplayer_synced: !!c.tcgplayerSynced, collectr_synced: !!c.collectrSynced,
     pos_channel: c.posChannel !== false, tcgplayer_channel: c.tcgplayerChannel !== false, collectr_channel: c.collectrChannel !== false,
+    base_price: c.basePrice ?? null,
   };
 }
 
@@ -119,6 +121,27 @@ export async function dbUpdatePlatformStatus(sku, field, value, toast) {
 export async function dbClearQueue(toast) {
   const { error } = await supabaseClient.from('sync_queue').delete().neq('id', '__never__');
   if (error) toast('Clear failed: ' + error.message, true);
+}
+
+// Condition-multiplier settings — a singleton row (id=1), created by the
+// migration. Falls back to the app's own defaults if the row is somehow
+// missing rather than failing the whole settings load.
+export async function dbLoadSettings(toast) {
+  const { data, error } = await supabaseClient.from('store_settings').select('*').eq('id', 1).maybeSingle();
+  if (error) {
+    toast('Failed to load settings: ' + error.message, true);
+    return { ...DEFAULT_CONDITION_MULTIPLIERS };
+  }
+  if (!data) return { ...DEFAULT_CONDITION_MULTIPLIERS };
+  return { LP: data.lp_pct, MP: data.mp_pct, HP: data.hp_pct, DMG: data.dmg_pct };
+}
+
+export async function dbSaveSettings(multipliers, toast) {
+  const { error } = await supabaseClient.from('store_settings').update({
+    lp_pct: multipliers.LP, mp_pct: multipliers.MP, hp_pct: multipliers.HP, dmg_pct: multipliers.DMG,
+    updated_at: new Date().toISOString(),
+  }).eq('id', 1);
+  if (error) toast('Failed to save settings: ' + error.message, true);
 }
 
 // Public binder lookup (QR-code page) — reads from catalog_public_view, a

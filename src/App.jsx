@@ -3,8 +3,9 @@ import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
+  dbLoadSettings, dbSaveSettings,
 } from './lib/db.js';
-import { needsPlatformStatusReset, isTicketComplete } from './lib/cardUtils.js';
+import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition } from './lib/cardUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -12,6 +13,7 @@ import CatalogPanel from './components/catalog/CatalogPanel.jsx';
 import SyncQueueTab from './components/queue/SyncQueueTab.jsx';
 import ImportExportPanel from './components/importexport/ImportExportPanel.jsx';
 import ScannerPanel from './components/scanner/ScannerPanel.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
 
 const TABS = [
   { key: 'catalog', label: 'Catalog' },
@@ -20,6 +22,31 @@ const TABS = [
   { key: 'scanner', label: 'Scan Binder' },
 ];
 
+const CONDITION_RANK = { NM: 0, LP: 1, MP: 2, HP: 3, DMG: 4 };
+
+// Soft nudge, not a hard rule — a worse-condition copy of the same card in
+// the same case shouldn't be priced above a better-condition copy. Flags it
+// so staff can double-check, doesn't block the save either way.
+function priceOrderingWarning(catalog, record) {
+  const tier = canonicalizeCondition(record.condition);
+  if (!tier || record.price == null) return null;
+  const siblings = catalog.filter(c =>
+    c.sku !== record.sku && c.name === record.name && c.game === record.game &&
+    c.location === record.location && c.price != null && !c.sold
+  );
+  for (const s of siblings) {
+    const sTier = canonicalizeCondition(s.condition);
+    if (!sTier) continue;
+    if (CONDITION_RANK[tier] < CONDITION_RANK[sTier] && record.price < s.price) {
+      return `${record.name} (${tier}) is priced below the ${sTier} copy in this case — worth double-checking.`;
+    }
+    if (CONDITION_RANK[tier] > CONDITION_RANK[sTier] && record.price > s.price) {
+      return `${record.name} (${tier}) is priced above the ${sTier} copy in this case — worth double-checking.`;
+    }
+  }
+  return null;
+}
+
 export default function App() {
   const { toast } = useUI();
   const [signedIn, setSignedIn] = useState(false);
@@ -27,6 +54,8 @@ export default function App() {
   const [tab, setTab] = useState('catalog');
   const [catalog, setCatalog] = useState([]);
   const [queue, setQueue] = useState([]);
+  const [multipliers, setMultipliers] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -38,8 +67,16 @@ export default function App() {
   useEffect(() => {
     if (!signedIn) return;
     dbLoadAll(toast).then(({ catalog: c, queue: q }) => { setCatalog(c); setQueue(q); });
+    dbLoadSettings(toast).then(setMultipliers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
+
+  async function handleSaveSettings(next) {
+    setMultipliers(next);
+    await dbSaveSettings(next, toast);
+    setShowSettings(false);
+    toast("Pricing settings saved");
+  }
 
   useRealtimeSync({ enabled: signedIn, setCatalog, setQueue });
 
@@ -73,6 +110,8 @@ export default function App() {
     setCatalog(nextCatalog);
     await dbUpsertCard(record, toast);
     toast(`Saved ${record.name}`);
+    const warning = priceOrderingWarning(nextCatalog, record);
+    if (warning) toast(warning, true);
   }
 
   async function handleDeleteCard(sku) {
@@ -217,6 +256,7 @@ export default function App() {
           onBatchDelete={handleBatchDelete}
           onBatchSell={handleBatchSell}
           onTogglePlatformStatus={handleTogglePlatformStatus}
+          multipliers={multipliers}
         />
       </div>
       <div className={`panel${tab === 'queue' ? ' active' : ''}`}>
@@ -232,13 +272,22 @@ export default function App() {
         />
       </div>
       <div className={`panel${tab === 'scanner' ? ' active' : ''}`}>
-        <ScannerPanel catalog={catalog} locations={locations} onImport={handleImport} />
+        <ScannerPanel catalog={catalog} locations={locations} onImport={handleImport} multipliers={multipliers} />
       </div>
 
       <div className="footnote">
         Shared store data, live in Supabase · not connected to POS, TCG Player, or Collectr APIs ·{' '}
+        <a href="#" onClick={(e) => { e.preventDefault(); setShowSettings(true); }} style={{ color: 'var(--ink-faint)' }}>Pricing settings</a>
+        {' · '}
         <a href="#" onClick={(e) => { e.preventDefault(); handleLogout(); }} style={{ color: 'var(--ink-faint)' }}>Sign out</a>
       </div>
+      {showSettings && multipliers && (
+        <SettingsModal
+          multipliers={multipliers}
+          onClose={() => setShowSettings(false)}
+          onSave={handleSaveSettings}
+        />
+      )}
     </div>
   );
 }

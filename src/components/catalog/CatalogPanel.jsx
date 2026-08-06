@@ -7,7 +7,7 @@ import EditModal from './EditModal.jsx';
 import SellModal from './SellModal.jsx';
 import { useUI } from '../../context/UIContext.jsx';
 
-export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSellCard, onBatchDelete, onBatchSell, onTogglePlatformStatus }) {
+export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSellCard, onBatchDelete, onBatchSell, onTogglePlatformStatus, multipliers }) {
   const { showConfirm } = useUI();
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState("");
@@ -125,6 +125,7 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
           card={editingCard}
           catalog={catalog}
           locations={locations}
+          multipliers={multipliers}
           onClose={() => setEditingSku(undefined)}
           onSave={async (record, prevSku) => { await onSaveCard(record, prevSku); setEditingSku(undefined); }}
           onDelete={async (sku) => { await onDeleteCard(sku); setEditingSku(undefined); }}
