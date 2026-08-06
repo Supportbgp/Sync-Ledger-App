@@ -1,3 +1,5 @@
+import { supabaseClient } from './supabase.js';
+
 // Repeatedly strips a trailing "(...)" group. Used only to get down to the
 // literal card name for the base query — Scryfall's `name` field doesn't
 // include print-treatment text like "(Borderless)", even though that text is
@@ -124,6 +126,30 @@ export async function searchYugioh(name) {
     results = await ygoQuery('fname', words.slice(0, -1).join(' '));
   }
   return results;
+}
+
+// Both One Piece and SWU's card databases block direct browser calls with no
+// CORS headers (confirmed by live-testing fetch() from this app before
+// building this) — routed through card-lookup-proxy (a Supabase Edge
+// Function) instead, which fetches server-side where CORS doesn't apply.
+// Not yet wired into the Edit modal/Scanner UI: the proxy's field-name
+// mapping for each provider is still an unconfirmed best guess pending a
+// real response sample, so exposing it now would silently show "no results"
+// for cards that actually exist rather than the honest "not set up yet".
+async function proxyQuery(provider, query) {
+  const { data, error } = await supabaseClient.functions.invoke('card-lookup-proxy', {
+    body: { provider, query },
+  });
+  if (error) return [];
+  return data?.results || [];
+}
+
+export async function searchSwu(name) {
+  return await proxyQuery('swu', name.trim());
+}
+
+export async function searchOnePiece(name) {
+  return await proxyQuery('onepiece', name.trim());
 }
 
 // Lorcast (api.lorcast.com) — a free, no-key, Scryfall-modeled API for Disney
