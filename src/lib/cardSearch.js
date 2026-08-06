@@ -38,6 +38,12 @@ async function scryfallQuery(q) {
     // generic name-based lookup, since it's the same card object the image
     // came from. Used as the Market Value feature's reference price.
     price: c.prices && c.prices.usd ? Number(c.prices.usd) : null,
+    // A direct link to this exact print's real TCGPlayer listing — the
+    // NM-price-times-multiplier estimate can be badly wrong for high-value
+    // outliers (a flat percentage is a population average, not this card's
+    // real going rate), so staff need a one-click way to check the actual
+    // current per-condition listings before pricing anything expensive.
+    listingUrl: c.purchase_uris && c.purchase_uris.tcgplayer,
   })).filter(r => r.url);
 }
 
@@ -111,6 +117,10 @@ async function pokemonQuery(q) {
     // identical in the candidate grid with no way to tell them apart.
     label: `${c.name} (${(c.set && c.set.name) || ""}) #${c.number || ''}`,
     price: pokemonTcgplayerPrice(c),
+    // See searchScryfall's listingUrl for why this matters — a direct link
+    // to this card's real TCGPlayer listing, for verifying actual current
+    // per-condition prices before trusting the NM-based estimate.
+    listingUrl: c.tcgplayer && c.tcgplayer.url,
   })).filter(r => r.url);
 }
 

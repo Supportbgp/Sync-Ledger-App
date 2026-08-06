@@ -6,6 +6,14 @@ import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
+
+// A flat condition percentage is a population average, not this specific
+// card's real going rate — the higher the NM price, the bigger the dollar
+// swing a bad guess costs (a $2 common being off by 20% is nothing; a
+// $130+ chase card being off by 20% is real money, especially in batches).
+// Above this, nudge staff to check the actual listing instead of trusting
+// the estimate blindly.
+const HIGH_VALUE_THRESHOLD = 25;
 const GAME_LABELS = {
   Magic: "Magic: The Gathering", Pokemon: "Pokémon", Yugioh: "Yu-Gi-Oh!", Lorcana: "Disney Lorcana",
   "One Piece": "One Piece", "Sports Singles": "Sports Singles", SWU: "Star Wars Unlimited",
@@ -109,12 +117,16 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setSearching(false);
   }
 
-  function selectCandidate(url, price) {
+  function selectCandidate(url, price, listingUrl) {
     setImagePending(url);
     // Capture the exact print's NM price as the Market Value baseline —
     // only when the search result actually carried one, since not every
     // provider has price data yet (Egman-backed games, for one).
     if (price != null) set('basePrice', price);
+    // A direct link to the real listing, auto-filled only if staff haven't
+    // already put something in Source URL themselves — never overwrite a
+    // manual entry.
+    if (listingUrl && !form.sourceUrl.trim()) set('sourceUrl', listingUrl);
   }
 
   async function handleUploadFile(e) {
@@ -226,7 +238,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
           {candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
-                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price)} />
+                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
               ))}
             </div>
           )}
@@ -322,6 +334,17 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
                 Estimated from this card's NM price (${Number(form.basePrice).toFixed(2)}) at the condition above — informational only, Our Price is always yours to set.
               </div>
+              {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
+                <div className="status-line err" style={{ marginTop: '8px' }}>
+                  High-value card — this estimate is a flat percentage, not this card's real going rate, and can be off by real money at this price
+                  level.{' '}
+                  {form.sourceUrl ? (
+                    <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
+                      Check the real listing before pricing it ↗
+                    </span>
+                  ) : "Worth checking the real current listing before pricing it."}
+                </div>
+              )}
             </div>
           )}
           <div className="field-group">

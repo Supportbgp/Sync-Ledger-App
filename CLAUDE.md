@@ -92,6 +92,20 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   yet — their `/api/cards/<game>` endpoint has no price fields; pricing
   would need the separate `/api/prices/<game>` endpoint, whose shape isn't
   verified yet.
+- **The condition-multiplier estimate can be materially wrong for
+  high-value cards** — a flat percentage is a population average, not any
+  specific card's real going rate, and a real example (M Rayquaza EX,
+  XY-Roaring Skies) showed the HP estimate ~$13 under the real TCGPlayer HP
+  price. True per-condition pricing still requires TCGPlayer's own
+  partner-gated API (see below) — until/unless that's available, the
+  mitigation is a direct link to the card's real TCGPlayer listing
+  (`purchase_uris.tcgplayer` on Scryfall, `tcgplayer.url` on pokemontcg.io —
+  both already returned by the same search call used for the image, no
+  extra fetch), auto-captured into `sourceUrl`, plus a visible warning in
+  the Edit modal/Scanner above a $25 base price nudging staff to check the
+  real listing before pricing anything expensive — especially in a batch,
+  where the same misestimate repeats across every copy. YGOPRODeck/Lorcast/
+  SWU don't carry an equivalent direct-listing link today.
 
 ## Known constraints / accepted risks
 

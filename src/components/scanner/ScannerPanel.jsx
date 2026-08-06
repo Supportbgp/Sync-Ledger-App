@@ -8,6 +8,12 @@ import LocationPicker from '../LocationPicker.jsx';
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 let nextRowId = 1;
 
+// Same reasoning as EditModal's HIGH_VALUE_THRESHOLD — a flat condition
+// percentage is a population average, not this specific card's real going
+// rate, and the dollar error grows with the card's price. Batches make this
+// worse, not better — the same misestimate repeats across every copy.
+const HIGH_VALUE_THRESHOLD = 25;
+
 function detectedToRow(card) {
   return {
     id: nextRowId++,
@@ -20,6 +26,7 @@ function detectedToRow(card) {
     qty: 1,
     price: '',
     basePrice: null,
+    listingUrl: '',
     condition: '',
     imageUrl: '',
     imageStatus: 'searching', // 'searching' | 'found' | 'none'
@@ -105,7 +112,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {
             ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
-            basePrice: results[0]?.price ?? null,
+            basePrice: results[0]?.price ?? null, listingUrl: results[0]?.listingUrl || '',
           }
           : r));
       });
@@ -152,6 +159,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       qty: r.qty,
       price: r.price,
       basePrice: r.basePrice,
+      sourceUrl: r.listingUrl,
       location: batchLocation,
       imageUrl: r.imageUrl,
       lastUpdated: Date.now(),
@@ -304,10 +312,23 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindImage }) {
             )}
           </div>
         )}
+        {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (
+          <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--rust)' }}>
+            High-value card — this estimate is a flat percentage, not this card's real going rate.{' '}
+            {row.listingUrl ? (
+              <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600 }} onClick={() => window.open(row.listingUrl, '_blank')}>
+                Check the real listing before pricing it ↗
+              </span>
+            ) : "Worth checking the real current listing before pricing it, especially in a batch."}
+          </div>
+        )}
         {row.showCandidates && row.imageCandidates.length > 0 && (
           <div className="img-candidates">
             {row.imageCandidates.map((c, i) => (
-              <img key={i} src={c.url} title={c.label} onClick={() => onChange({ imageUrl: c.url, basePrice: c.price ?? null, imageStatus: 'found', showCandidates: false })} />
+              <img
+                key={i} src={c.url} title={c.label}
+                onClick={() => onChange({ imageUrl: c.url, basePrice: c.price ?? null, listingUrl: c.listingUrl || '', imageStatus: 'found', showCandidates: false })}
+              />
             ))}
           </div>
         )}
