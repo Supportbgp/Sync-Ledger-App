@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound } from '../../lib/cardSearch.js';
+import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
 import LocationPicker from '../LocationPicker.jsx';
 
-const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
+const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 let nextRowId = 1;
 
 function detectedToRow(card) {
@@ -39,6 +39,8 @@ async function findImageCandidates(name, game) {
     if (game === 'Lorcana') return await searchLorcana(name);
     if (game === 'One Piece') return await searchOnePiece(name);
     if (game === 'Riftbound') return await searchRiftbound(name);
+    if (game === 'Gundam') return await searchGundam(name);
+    if (game === 'SWU') return await searchSwu(name);
     return [];
   } catch {
     return [];

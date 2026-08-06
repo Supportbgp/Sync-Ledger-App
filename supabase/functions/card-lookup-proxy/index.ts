@@ -52,21 +52,20 @@ async function egmanQuery(gameSlug, query) {
 const PROVIDERS = {
   onepiece: (query) => egmanQuery('optcg', query),
   riftbound: (query) => egmanQuery('riftbound', query),
+  gundam: (query) => egmanQuery('gundam', query),
 
-  // TODO: endpoint + domain are confirmed from swu-db.com's own docs
-  // (api.swu-db.com, not www. — that was the earlier 404's real cause), but
-  // the response field names below are still an unconfirmed best guess —
-  // no real response sample seen yet. Adjust once a real sample confirms
-  // the fields. Wrong field names just mean empty results, not a crash —
-  // every candidate without a resolved url is filtered out below.
+  // api.swu-db.com (not www. — that host 404s, the docs page and the API
+  // itself live on different subdomains). Confirmed CORS-blocked and now
+  // confirmed by a real response sample: array at data.data, fields
+  // Name/FrontArt/Set, plus MarketPrice/LowPrice (unused here, but useful
+  // later for the Market Value feature).
   swu: async (query) => {
     const res = await fetch(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
     if (!res.ok) return [];
     const data = await res.json();
-    const cards = data.data || data.cards || data.results || [];
-    return cards.slice(0, 6).map((c) => ({
-      url: c.FrontArt || c.frontArt || c.image,
-      label: `${c.Name || c.name} (${c.Set || c.set || ""})`,
+    return (data.data || []).slice(0, 6).map((c) => ({
+      url: c.FrontArt,
+      label: `${c.Name} (${c.Set || ""})`,
     })).filter((r) => r.url);
   },
 };

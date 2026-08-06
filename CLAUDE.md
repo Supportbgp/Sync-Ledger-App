@@ -86,30 +86,32 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   this app (confirmed by research, not assumed) — the Export modal produces
   manual-entry-aid lists, not files either platform can ingest directly.
 - Card image/price search (`cardSearch.js`) covers Magic, Pokemon, Yu-Gi-Oh,
-  Lorcana, One Piece, and Riftbound. Sports Singles and SWU still have no
-  working lookup. Findings from Sprint 4, live-tested from the browser
-  console — not just docs research, since CORS can't be verified any other
-  way:
+  Lorcana, One Piece, Riftbound, Gundam, and SWU. Only Sports Singles has no
+  lookup (no card database exists for it). Findings from Sprint 4,
+  live-tested from the browser console/Postman — not just docs research,
+  since CORS can't be verified any other way:
   - **Lorcana** — Lorcast (`api.lorcast.com`), free/no-key, confirmed
     CORS-safe for direct browser calls. Called directly from the client.
-  - **One Piece** and **Riftbound** — both go through `card-lookup-proxy`
-    (a Supabase Edge Function, same pattern as `scan-binder-page`), routed
-    to **Egman's deckbuilder** (`deckbuilder.egmanevents.com/api/cards/
-    <optcg|riftbound>`) — a one-person hobby project with no published API/
-    ToS, used with his explicit go-ahead (asked via his X/Twitter account
-    before building on it, given it's his app's internal backend rather
-    than a documented public data source). The endpoint returns each game's
-    full card list with no filter param, so the proxy fetches once and does
-    the name match itself rather than guessing at an undocumented filter
-    syntax. `optcgapi.com` (a real, documented One Piece API) was evaluated
-    and rejected — confirmed CORS-blocked *and* has no search-by-name
-    endpoint at all, only per-card-ID lookups.
+  - **One Piece**, **Riftbound**, and **Gundam** — all go through
+    `card-lookup-proxy` (a Supabase Edge Function, same pattern as
+    `scan-binder-page`), routed to **Egman's deckbuilder**
+    (`deckbuilder.egmanevents.com/api/cards/<optcg|riftbound|gundam>`) — a
+    one-person hobby project with no published API/ToS, used with his
+    explicit go-ahead (asked via his X/Twitter account before building on
+    it, given it's his app's internal backend rather than a documented
+    public data source). The endpoint returns each game's full card list
+    with no filter param, so the proxy fetches once and does the name match
+    itself rather than guessing at an undocumented filter syntax.
+    `optcgapi.com` (a real, documented One Piece API) was evaluated and
+    rejected — confirmed CORS-blocked *and* has no search-by-name endpoint
+    at all, only per-card-ID lookups.
   - **SWU** — real API at `api.swu-db.com` (note: `api.`, not `www.` — the
     docs page lives at `www.swu-db.com/api` but the API itself is on a
     different subdomain; `www.swu-db.com/cards/search` 404s). Confirmed
-    CORS-blocked, routed through the same proxy, but the response field
-    names are still an unconfirmed guess pending a real sample — not yet
-    wired into the Edit modal/Scanner UI.
+    CORS-blocked, routed through the same proxy — response fields confirmed
+    by a real sample: array at `data.data`, fields `Name`/`FrontArt`/`Set`,
+    plus `MarketPrice`/`LowPrice` (unused for now, but relevant to the
+    Market Value feature later).
   - Piltover Archive (a Riftbound-specific fan database) was evaluated and
     rejected as an image source — its image URLs live under a `/temporary/`
     path with what looks like a signed-upload hash, suggesting they expire

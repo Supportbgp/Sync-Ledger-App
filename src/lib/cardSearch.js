@@ -128,10 +128,10 @@ export async function searchYugioh(name) {
   return results;
 }
 
-// One Piece, Riftbound, and SWU's card databases either block direct
+// One Piece, Riftbound, Gundam, and SWU's card databases either block direct
 // browser calls with no CORS headers (One Piece, SWU — confirmed by
 // live-testing fetch() from this app) or aren't a documented public API at
-// all (Riftbound, via Egman's deckbuilder — used with his explicit
+// all (Riftbound, Gundam — via Egman's deckbuilder, used with his explicit
 // go-ahead). Routed through card-lookup-proxy (a Supabase Edge Function)
 // instead, which fetches server-side where CORS doesn't apply.
 async function proxyQuery(provider, query) {
@@ -150,10 +150,10 @@ export async function searchRiftbound(name) {
   return await proxyQuery('riftbound', name.trim());
 }
 
-// SWU's response field names aren't confirmed by a real sample yet — not
-// wired into the Edit modal/Scanner UI until they are, since exposing it now
-// would silently show "no results" for cards that actually exist rather
-// than the honest "not set up yet".
+export async function searchGundam(name) {
+  return await proxyQuery('gundam', name.trim());
+}
+
 export async function searchSwu(name) {
   return await proxyQuery('swu', name.trim());
 }

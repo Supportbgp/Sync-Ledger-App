@@ -33,6 +33,7 @@ const GAME_ALIASES = {
   sports: "Sports Singles", "sports singles": "Sports Singles",
   swu: "SWU", "star wars unlimited": "SWU", "star wars": "SWU",
   riftbound: "Riftbound",
+  gundam: "Gundam", "gundam card game": "Gundam", gcg: "Gundam",
 };
 
 // Imported spreadsheets rarely spell a game exactly like the Add/Edit form's

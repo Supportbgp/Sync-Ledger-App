@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
-import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound } from '../../lib/cardSearch.js';
+import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
-const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Other"];
+const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 const GAME_LABELS = {
   Magic: "Magic: The Gathering", Pokemon: "Pokémon", Yugioh: "Yu-Gi-Oh!", Lorcana: "Disney Lorcana",
   "One Piece": "One Piece", "Sports Singles": "Sports Singles", SWU: "Star Wars Unlimited",
-  Riftbound: "Riftbound", Other: "Other",
+  Riftbound: "Riftbound", Gundam: "Gundam Card Game", Other: "Other",
 };
 
 function initForm(card) {
@@ -88,6 +88,8 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
       else if (form.game === "Lorcana") results = await searchLorcana(name);
       else if (form.game === "One Piece") results = await searchOnePiece(name);
       else if (form.game === "Riftbound") results = await searchRiftbound(name);
+      else if (form.game === "Gundam") results = await searchGundam(name);
+      else if (form.game === "SWU") results = await searchSwu(name);
       else {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
         setSearching(false);
