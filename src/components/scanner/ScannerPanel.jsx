@@ -3,6 +3,7 @@ import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
+import { cropImageRegion } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -40,6 +41,12 @@ function detectedToRow(card) {
     imageStatus: 'searching', // 'searching' | 'found' | 'none'
     imageCandidates: [],
     showCandidates: false,
+    // The "real photo" slot — a crop of this exact card out of the full
+    // binder-page photo, made from the vision model's bbox for this card
+    // (see cropImageRegion). Stays blank for manually added rows, or if the
+    // model didn't return a usable bbox.
+    photoUrl: '',
+    photoData: '',
   };
 }
 
@@ -110,7 +117,21 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         setScanning(false);
         return;
       }
-      const newRows = detected.map(detectedToRow);
+      const newRows = await Promise.all(detected.map(async (card) => {
+        const row = detectedToRow(card);
+        // Crop this card's own real photo out of the full page image using
+        // the vision model's bounding box — no second upload needed. If the
+        // model omitted a usable bbox (or the crop math fails on a bad one),
+        // leave the photo slot blank; the stock image search below still
+        // gives the row something to show.
+        if (card.bbox) {
+          try {
+            row.photoData = await cropImageRegion(photo, card.bbox);
+            row.photoUrl = 'local';
+          } catch { /* leave photo slot blank */ }
+        }
+        return row;
+      }));
       setRows(newRows);
       setScanning(false);
       // Pre-fill an image guess per row, independently, without blocking the
@@ -196,6 +217,8 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       sourceUrl: r.listingUrl,
       location: batchLocation,
       imageUrl: r.imageUrl,
+      photoUrl: r.photoUrl,
+      photoData: r.photoData,
       lastUpdated: Date.now(),
       posChannel: channels.posChannel,
       tcgplayerChannel: channels.tcgplayerChannel,
@@ -313,20 +336,30 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
   const marketValue = marketValueForCondition(row.basePrice, row.condition, multipliers);
-  const canZoom = row.imageStatus === 'found' && !!row.imageUrl;
+  // Same default as resolveActiveImage in cardUtils.js — the real photo
+  // cropped from this page takes priority over the stock search result when
+  // both exist. This row has no toggle of its own; staff can switch it later
+  // in the Edit modal once the item's saved to the catalog.
+  const displaySrc = row.photoData || (row.imageStatus === 'found' ? row.imageUrl : null);
+  const canZoom = !!displaySrc;
   return (
     <div className="scan-row">
       <div className="scan-row-thumb-col">
         <div
           className="scan-row-thumb"
-          onClick={() => { if (canZoom) openLightbox(row.imageUrl); }}
+          onClick={() => { if (canZoom) openLightbox(displaySrc); }}
           style={{ cursor: canZoom ? 'pointer' : 'default' }}
           title={canZoom ? 'Click to zoom' : ''}
         >
-          {row.imageStatus === 'searching' && <span style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>…</span>}
-          {row.imageStatus === 'found' && row.imageUrl && <img src={row.imageUrl} />}
-          {row.imageStatus === 'none' && <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>}
+          {displaySrc ? (
+            <img src={displaySrc} />
+          ) : row.imageStatus === 'searching' ? (
+            <span style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>…</span>
+          ) : (
+            <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>
+          )}
         </div>
+        {row.photoData && <div style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>real photo</div>}
         <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindAnotherImage}>Find another image</button>
         {row.basePrice == null && (
           <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }} onClick={onFindMarketPrice}>Find market price</button>

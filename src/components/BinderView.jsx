@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { dbLoadPublicBinder } from '../lib/db.js';
+import { activeImageSrc } from '../lib/cardUtils.js';
 import Lightbox from './Lightbox.jsx';
 
 function BinderCard({ item, onZoom }) {
   const [broken, setBroken] = useState(false);
-  const rawSrc = item.imageUrl === 'local'
-    ? item.imageData
-    : (item.imageUrl && item.imageUrl.startsWith('http') ? item.imageUrl : null);
+  const rawSrc = activeImageSrc(item);
   const src = broken ? null : rawSrc;
   const sub = [item.set, item.condition, item.printing].filter(Boolean).join(' · ') +
     (item.itemType === 'slab' && (item.grader || item.grade) ? ` · ${item.grader || ''} ${item.grade || ''}`.trim() : '');

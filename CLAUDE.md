@@ -75,6 +75,70 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   public binder page reads — a restricted view exposing browsing-safe
   columns only, for unsold/in-stock rows. It relies on view-ownership
   bypassing the base table's RLS, so `anon` never touches `catalog` directly.
+  Column list is `create or replace view`d per migration (see
+  `phase6_dual_image.sql`) rather than tracked by hand elsewhere.
+- **Dual-image model (Sprint 6)**: every item can carry two independent
+  images — the existing "stock" reference (`image_url`/`image_data`, from
+  card search or a manual paste/upload) plus a new "photo" (`photo_url`/
+  `photo_data` — a real picture of this exact copy: a scanner crop or manual
+  upload). `active_image` (`'stock'|'photo'`, DB default `'photo'`) records
+  which one staff prefer displayed; `resolveActiveImage`/`activeImageSrc` in
+  `cardUtils.js` are the single source of truth for which one actually shows
+  — they honor that preference but fall back to whichever slot isn't blank,
+  so a card with only one image type never renders empty just because the
+  preferred slot is unset. Defaulting the column to `'photo'` (not `'stock'`)
+  means a real photo added later to an old stock-only item takes over
+  display automatically with no extra step, matching the original ask to
+  prefer the real photo when both exist — existing rows are unaffected since
+  their photo slot starts blank. `CatalogTable`'s `Thumb` and `BinderView`
+  both render through `activeImageSrc`, so staff and public views stay
+  consistent. In `EditModal.jsx`, "Find stock image" (search) and "Upload
+  real photo" write to separate pending slots and auto-switch the toggle to
+  show whatever was just changed; "Find market price" (Sprint 5) still
+  never touches either image slot. The toggle itself only renders when both
+  slots actually resolve to something. CSV/XLSX import and the Scanner's
+  auto-fill still only populate the stock slot — CSV/XLSX import detects an
+  existing image URL only (see the backlog item above), and the Scanner now
+  crops the "photo" slot too (below).
+- **Scanner per-card crop pipeline (Sprint 6)**: `scan-binder-page`'s
+  `DETECT_CARDS_TOOL` schema now requires a `bbox` (`x_min/y_min/x_max/y_max`,
+  each a 0.0-1.0 fraction of the full page photo's width/height) per
+  detected card, tightly bounding just that card's pocket — the prompt
+  explicitly warns the model not to bound a neighboring pocket instead.
+  `cropImageRegion` (`image.js`) is a Canvas crop-and-downscale (same
+  maxDim/quality pattern as `resizeImageFile`) that turns that bbox into an
+  actual cropped data URL. `ScannerPanel.handleScan` crops every detected
+  card immediately (no extra network call — it's the same page photo
+  already in memory) into that row's `photoData`/`photoUrl:'local'`,
+  independent of and parallel to the existing stock-image auto-search. A
+  crop failure (bad/missing bbox) just leaves that row's photo slot blank —
+  the stock search result is still there as a fallback. The scan review
+  row's thumbnail shows the crop over the stock search result when both
+  exist (same photo-first default as `resolveActiveImage`), with no
+  per-row toggle — that's available in the Edit modal once the item's
+  actually saved. **Requires redeploying `scan-binder-page`**
+  (`supabase functions deploy scan-binder-page`) before this takes effect —
+  the schema change is server-side.
+  - **Crop accuracy is hit-or-miss** — real-world testing showed the model's
+    bbox tends to hug the card too tightly and most often clips the *top*
+    edge (the bottom of a plastic pocket is a sharp, unambiguous line; the
+    top blends into the pocket/page above it). Two independent mitigations,
+    not one: the prompt now tells the model to anchor on the bottom edge
+    first and err toward a slightly larger box; separately, and regardless
+    of how good the model's box is, `cropImageRegion` always pads the box
+    outward before cropping — 10% of the box's own height on top, 2%
+    bottom, 3% left/right (`DEFAULT_CROP_PADDING`) — so a slightly-short box
+    still captures the whole card. Padding is relative to the detected
+    box's own size, not the full page, so it scales with card size rather
+    than being a fixed pixel margin.
+  - **Toggle/lightbox click bug (fixed)**: the stock/photo toggle buttons in
+    `EditModal.jsx` live inside the big-preview `div` that opens the
+    lightbox on click. Without `stopPropagation()`, clicking a toggle also
+    bubbled to that div's own `onClick`, which read the *pre-click* `src` —
+    so the lightbox opened showing the previously-active image, not the one
+    just switched to, even though the small preview itself updated
+    correctly on the next render. Both toggle buttons now call
+    `e.stopPropagation()`.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

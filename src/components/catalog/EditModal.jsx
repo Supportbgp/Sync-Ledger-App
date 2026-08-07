@@ -56,6 +56,7 @@ function initForm(card) {
     posChannel: card ? card.posChannel !== false : true,
     tcgplayerChannel: card ? card.tcgplayerChannel !== false : true,
     collectrChannel: card ? card.collectrChannel !== false : true,
+    activeImage: card && card.activeImage === "stock" ? "stock" : "photo",
   };
 }
 
@@ -74,16 +75,22 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.location]);
 
-  const [imagePending, setImagePending] = useState("");
+  // Two independent image slots (Sprint 6): "stock" is the clean reference
+  // image from card search/manual paste (imageUrl/imageData — unchanged from
+  // before); "photo" is a real-life picture of this exact copy (photoUrl/
+  // photoData — scanner crop or manual upload). Each has its own pending
+  // state so working on one never disturbs the other.
+  const [stockPending, setStockPending] = useState("");
+  const [photoPending, setPhotoPending] = useState("");
   const [candidates, setCandidates] = useState([]);
   const [imageStatus, setImageStatus] = useState({ text: "", kind: "" });
   const [manualUrl, setManualUrl] = useState("");
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   // Which action populated `candidates` — determines what clicking one does.
-  // "image": sets the image (and price, as a bonus, same as before). "price":
-  // for old cards that already have a correct image and just need Market
-  // Value backfilled — leaves the image alone entirely.
+  // "image": sets the stock image (and price, as a bonus, same as before).
+  // "price": for old cards that already have a correct image and just need
+  // Market Value backfilled — leaves both images alone entirely.
   const [candidateMode, setCandidateMode] = useState("image");
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
@@ -92,15 +99,20 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     set(key, val);
   }
 
-  function previewSrc() {
-    if (imagePending === "__clear__") return null;
-    if (imagePending.indexOf("__local__:") === 0) return imagePending.slice("__local__:".length);
-    if (imagePending) return imagePending;
-    if (card && card.imageUrl && card.imageUrl.startsWith('http')) return card.imageUrl;
-    if (card && card.imageUrl === 'local' && card.imageData) return card.imageData;
+  function pendingSrc(pending, existingUrl, existingData) {
+    if (pending === "__clear__") return null;
+    if (pending.indexOf("__local__:") === 0) return pending.slice("__local__:".length);
+    if (pending) return pending;
+    if (existingUrl && existingUrl.startsWith('http')) return existingUrl;
+    if (existingUrl === 'local' && existingData) return existingData;
     return null;
   }
-  const src = previewSrc();
+  const stockSrc = pendingSrc(stockPending, card && card.imageUrl, card && card.imageData);
+  const photoSrc = pendingSrc(photoPending, card && card.photoUrl, card && card.photoData);
+  // Preview follows the toggle, but falls back to whichever slot actually
+  // has something if the preferred one is blank — same rule as
+  // resolveActiveImage in cardUtils.js, just pending-state aware here.
+  const src = form.activeImage === 'stock' ? (stockSrc || photoSrc) : (photoSrc || stockSrc);
 
   async function handleFindImage() {
     const name = form.name.trim();
@@ -157,7 +169,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
 
   function selectCandidate(url, price, listingUrl) {
     if (candidateMode === "price") {
-      // Deliberately leaves the image alone — this path exists specifically
+      // Deliberately leaves both images alone — this path exists specifically
       // so backfilling Market Value on an old card doesn't disturb an
       // already-correct image.
       if (price != null) set('basePrice', price);
@@ -165,7 +177,11 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
       setCandidates([]);
       return;
     }
-    setImagePending(url);
+    setStockPending(url);
+    // Switch the toggle to show what was just picked — otherwise, if a real
+    // photo already exists and is the current preference, the newly found
+    // stock image would silently not appear anywhere.
+    set('activeImage', 'stock');
     // Capture the exact print's NM price as the Market Value baseline —
     // only when the search result actually carried one, since not every
     // provider has price data yet (Egman-backed games, for one).
@@ -181,7 +197,10 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     if (!file) return;
     try {
       const dataUrl = await resizeImageFile(file, 500, 0.82);
-      setImagePending("__local__:" + dataUrl);
+      setPhotoPending("__local__:" + dataUrl);
+      // Same reasoning as selectCandidate above — show the photo staff just
+      // uploaded, even if the toggle was previously set to "Stock image".
+      set('activeImage', 'photo');
       setImageStatus({ text: "Photo ready — click Save to store it.", kind: "ok" });
     } catch (err) {
       setImageStatus({ text: err.message, kind: "err" });
@@ -192,7 +211,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     const url = e.target.value.trim();
     setManualUrl(e.target.value);
     if (!url) return;
-    setImagePending(url);
+    setStockPending(url);
+    set('activeImage', 'stock');
   }
 
   async function handleSave() {
@@ -200,16 +220,21 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     let sku = form.sku.trim();
     if (!sku) sku = "sku-" + Date.now();
 
-    let imageUrl = (card && card.imageUrl) || "";
-    let imageData = (card && card.imageData) || "";
-    if (imagePending === "__clear__") {
-      imageUrl = ""; imageData = "";
-    } else if (imagePending.indexOf("__local__:") === 0) {
-      imageData = imagePending.slice("__local__:".length);
-      imageUrl = "local";
-    } else if (imagePending) {
-      imageUrl = imagePending; imageData = "";
+    function resolveSlot(pending, existingUrl, existingData) {
+      let url = existingUrl || "";
+      let data = existingData || "";
+      if (pending === "__clear__") {
+        url = ""; data = "";
+      } else if (pending.indexOf("__local__:") === 0) {
+        data = pending.slice("__local__:".length);
+        url = "local";
+      } else if (pending) {
+        url = pending; data = "";
+      }
+      return { url, data };
     }
+    const stock = resolveSlot(stockPending, card && card.imageUrl, card && card.imageData);
+    const photo = resolveSlot(photoPending, card && card.photoUrl, card && card.photoData);
 
     const record = normalizeCard({
       sku, name,
@@ -231,7 +256,9 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
       posChannel: form.posChannel,
       tcgplayerChannel: form.tcgplayerChannel,
       collectrChannel: form.collectrChannel,
-      imageUrl, imageData,
+      imageUrl: stock.url, imageData: stock.data,
+      photoUrl: photo.url, photoData: photo.data,
+      activeImage: form.activeImage,
       lastUpdated: Date.now(),
       // Carried forward as-is; App.jsx's save handler is what decides whether
       // a relevant field actually changed and resets these to false.
@@ -274,19 +301,29 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               ) : (
                 <div className="img-preview-empty">No image</div>
               )}
+              {stockSrc && photoSrc && (
+                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                  <button type="button" className={`btn small${form.activeImage === 'photo' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'photo'); }}>Real photo</button>
+                  <button type="button" className={`btn small${form.activeImage === 'stock' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'stock'); }}>Stock image</button>
+                </div>
+              )}
             </div>
             <div className="img-actions">
-              <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find image</button>
+              <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
               <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
-              <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload photo</button>
+              <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
               <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
-              <input type="url" placeholder="…or paste an image URL" value={manualUrl} onChange={handleManualUrlChange} />
-              <button className="btn ghost small" onClick={() => setImagePending("__clear__")}>Remove image</button>
+              <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {stockSrc && <button className="btn ghost small" onClick={() => setStockPending("__clear__")}>Remove stock</button>}
+                {photoSrc && <button className="btn ghost small" onClick={() => setPhotoPending("__clear__")}>Remove photo</button>}
+              </div>
             </div>
             <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
-              "Find market price" is for backfilling Market Value on a card that already has the right photo — it searches
-              by name/set/game, but picking a result below only sets the price reference, it will not replace the photo above.
-              To change the photo itself, use "Find image" instead.
+              "Find stock image" searches a clean reference picture online; "Upload real photo" attaches an actual photo of
+              this exact copy. If both exist, use the toggle above the preview to pick which one shows in the catalog —
+              it defaults to the real photo. "Find market price" is separate: it backfills Market Value on a card that
+              already has the right image, and picking a result there never touches either photo.
             </div>
           </div>
           {imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}

@@ -13,6 +13,9 @@ export function rowToCard(r) {
     posSynced: r.pos_synced, tcgplayerSynced: r.tcgplayer_synced, collectrSynced: r.collectr_synced,
     posChannel: r.pos_channel, tcgplayerChannel: r.tcgplayer_channel, collectrChannel: r.collectr_channel,
     basePrice: r.base_price,
+    photoUrl: r.photo_data ? "local" : (r.photo_url || ""),
+    photoData: r.photo_data || "",
+    activeImage: r.active_image,
   });
 }
 
@@ -28,6 +31,9 @@ function cardToRow(c) {
     pos_synced: !!c.posSynced, tcgplayer_synced: !!c.tcgplayerSynced, collectr_synced: !!c.collectrSynced,
     pos_channel: c.posChannel !== false, tcgplayer_channel: c.tcgplayerChannel !== false, collectr_channel: c.collectrChannel !== false,
     base_price: c.basePrice ?? null,
+    photo_url: (c.photoUrl && c.photoUrl.startsWith('http')) ? c.photoUrl : '',
+    photo_data: c.photoUrl === 'local' ? (c.photoData || '') : '',
+    active_image: c.activeImage === 'stock' ? 'stock' : 'photo',
   };
 }
 
@@ -160,5 +166,8 @@ export async function dbLoadPublicBinder(location) {
     qty: r.qty, price: r.price,
     imageUrl: r.image_data ? "local" : (r.image_url || ""),
     imageData: r.image_data || "",
+    photoUrl: r.photo_data ? "local" : (r.photo_url || ""),
+    photoData: r.photo_data || "",
+    activeImage: r.active_image,
   }));
 }
