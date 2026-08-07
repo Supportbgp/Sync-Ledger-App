@@ -22,13 +22,17 @@ alter table catalog
 -- column list to the anon role for the public binder page — it needs the
 -- same three new columns so a real photo can show there too, not just in
 -- the authenticated catalog table. create or replace view preserves the
--- existing anon GRANT (grants are on the view object, not its definition).
+-- existing anon GRANT (grants are on the view object, not its definition),
+-- but Postgres only allows CREATE OR REPLACE VIEW to *append* new columns —
+-- it errors if an existing column's position shifts. So the three new
+-- columns go after `location` (the previous last column), not interleaved
+-- with the image columns they're conceptually next to.
 create or replace view catalog_public_view as
 select
   name, set_name, game, condition, printing,
   item_type, grader, grade,
   qty, price, image_url, image_data,
-  photo_url, photo_data, active_image,
-  location
+  location,
+  photo_url, photo_data, active_image
 from catalog
 where sold = false and qty > 0;
