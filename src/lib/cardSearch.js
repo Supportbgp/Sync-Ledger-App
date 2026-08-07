@@ -229,3 +229,21 @@ async function lorcastQuery(q) {
 export async function searchLorcana(name) {
   return await lorcastQuery(name.trim());
 }
+
+// Single dispatch table for "search a card image by game" — shared by every
+// entry point that needs it (EditModal's Find image/Find market price,
+// ScannerPanel's auto-fill, CSV/XLSX import's auto-fill) so adding a new
+// game's search function only means editing this one list, not three
+// near-identical copies of the same if-chain.
+export async function searchCardImage(game, name, setHint) {
+  if (!name) return [];
+  if (game === "Magic") return await searchScryfall(name);
+  if (game === "Pokemon") return await searchPokemon(name, setHint);
+  if (game === "Yugioh") return await searchYugioh(name);
+  if (game === "Lorcana") return await searchLorcana(name);
+  if (game === "One Piece") return await searchOnePiece(name, setHint);
+  if (game === "Riftbound") return await searchRiftbound(name, setHint);
+  if (game === "Gundam") return await searchGundam(name, setHint);
+  if (game === "SWU") return await searchSwu(name, setHint);
+  return null; // null (not []) signals "not set up for this game" vs. a real empty result
+}

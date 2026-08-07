@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
-import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
+import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
@@ -20,19 +20,6 @@ const GAME_LABELS = {
   Riftbound: "Riftbound", Gundam: "Gundam Card Game", Other: "Other",
 };
 
-// Shared by "Find image" and "Find market price" — same lookup either way,
-// they just differ in what a candidate click does with the result.
-async function searchByGame(game, name, setHint) {
-  if (game === "Magic") return await searchScryfall(name);
-  if (game === "Pokemon") return await searchPokemon(name, setHint);
-  if (game === "Yugioh") return await searchYugioh(name);
-  if (game === "Lorcana") return await searchLorcana(name);
-  if (game === "One Piece") return await searchOnePiece(name, setHint);
-  if (game === "Riftbound") return await searchRiftbound(name, setHint);
-  if (game === "Gundam") return await searchGundam(name, setHint);
-  if (game === "SWU") return await searchSwu(name, setHint);
-  return null; // null (not []) signals "not set up for this game" vs. a real empty result
-}
 
 function initForm(card) {
   return {

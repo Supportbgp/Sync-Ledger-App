@@ -40,6 +40,22 @@ export function isLikelyImageUrl(url) {
   return /\.(jpg|jpeg|png|webp|gif)(\?|$)/.test(u) || u.indexOf('tcgplayer-cdn.tcgplayer.com') !== -1;
 }
 
+// Runs `worker` over every item with at most `limit` in flight at once —
+// used for the import flow's per-row image search, since firing one request
+// per row unbounded (fine for a ~9-card scanner batch) could mean hundreds
+// of simultaneous calls against Scryfall/pokemontcg.io/the card-lookup-proxy
+// Edge Function for a large spreadsheet import.
+export async function runWithConcurrency(items, limit, worker) {
+  let next = 0;
+  async function runOne() {
+    while (next < items.length) {
+      const i = next++;
+      await worker(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runOne));
+}
+
 export function looksNumeric(s) {
   if (!s) return false;
   const cleaned = s.replace(/[$,]/g, '').trim();

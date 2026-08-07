@@ -107,6 +107,21 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   as its other snapshotted fields. New items default their channels to
   whatever the majority of existing items in the same binder/case already
   use (`channelDefaultsForLocation`), editable per item either way.
+- **CSV/XLSX import channel picker + image auto-fill**: `ImportExportPanel`
+  now has the same per-batch channel checkboxes as the Edit modal/Scanner
+  (`channelDefaultsForLocation` keyed off the import's binder/case field,
+  same "follow the majority until staff touches a checkbox" behavior).
+  Import also auto-searches an image for any row that doesn't already have
+  one (no Image URL column mapped, or that cell was blank for that row) —
+  same lookup Scanner/EditModal use, now shared as `searchCardImage` in
+  `cardSearch.js` instead of three near-identical copies of the same
+  by-game dispatch table. Unlike Scanner/EditModal there's no per-row
+  review step or price/listing backfill: the top result fills the image
+  slot directly, matching how little review any other imported column
+  already gets. Runs with limited concurrency (`runWithConcurrency` in
+  `importParse.js`, cap of 4) rather than firing one request per row
+  unbounded — a large spreadsheet import can be hundreds of rows, unlike a
+  ~9-card scanner batch.
 - `game` values are canonicalized on read (`canonicalizeGame`/
   `GAME_ALIASES` in `cardUtils.js`) so imported data like "MTG" normalizes to
   "Magic" — several features (image search, scanner) do exact string checks
@@ -304,17 +319,6 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 - Phase 4 (a Cumulus POS SKU manager/import) is parked — needs the shop
   owner's go/no-go and a real Cumulus export/import file sample. Never guess
   Cumulus's file format.
-
-## Noted for later iterations
-
-- CSV/XLSX import (`ImportExportPanel.jsx`) has no "where does this live?"
-  channel picker — unlike the Edit modal and the Scanner's batch flow, an
-  import currently always defaults every row's item to all three channels.
-  Should get the same per-batch channel checkboxes those two already have.
-- CSV/XLSX import does no image search — it only detects a direct image URL
-  already present in the file (`isLikelyImageUrl` in `importParse.js`). Could
-  follow the Scanner's pattern (`findImageCandidates`) to auto-search each
-  imported row's card image via `cardSearch.js`.
 
 ## Workflow conventions
 

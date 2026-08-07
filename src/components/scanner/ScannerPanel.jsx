@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
+import { searchCardImage } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -56,15 +56,7 @@ function detectedToRow(card) {
 async function findImageCandidates(name, game, set) {
   if (!name) return [];
   try {
-    if (game === 'Magic') return await searchScryfall(name);
-    if (game === 'Pokemon') return await searchPokemon(name, set);
-    if (game === 'Yugioh') return await searchYugioh(name);
-    if (game === 'Lorcana') return await searchLorcana(name);
-    if (game === 'One Piece') return await searchOnePiece(name, set);
-    if (game === 'Riftbound') return await searchRiftbound(name, set);
-    if (game === 'Gundam') return await searchGundam(name, set);
-    if (game === 'SWU') return await searchSwu(name, set);
-    return [];
+    return (await searchCardImage(game, name, set)) || [];
   } catch {
     return [];
   }
