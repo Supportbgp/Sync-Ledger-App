@@ -1,12 +1,16 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { detectGrading, normalizeCard } from '../../lib/cardUtils.js';
+import { detectGrading, normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import { searchCardImage } from '../../lib/cardSearch.js';
 import {
-  FIELD_TARGETS, guessHeader, parseCsvFile, readWorkbook, loadXlsxSheet,
+  FIELD_TARGETS, guessHeader, parseCsvFile, readWorkbook, loadXlsxSheet, runWithConcurrency,
 } from '../../lib/importParse.js';
 import ExportModal from './ExportModal.jsx';
 import BinderQrModal from './BinderQrModal.jsx';
 import LocationPicker from '../LocationPicker.jsx';
+
+// How many rows to search for an image at once — see runWithConcurrency.
+const IMAGE_SEARCH_CONCURRENCY = 4;
 
 export default function ImportExportPanel({ catalog, queue, locations, onImport, onClearAll }) {
   const { showConfirm } = useUI();
@@ -28,6 +32,22 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
   const [importLocation, setImportLocation] = useState("");
   const [importMode, setImportMode] = useState("merge");
   const [showMapSection, setShowMapSection] = useState(false);
+  const [channels, setChannels] = useState({ posChannel: true, tcgplayerChannel: true, collectrChannel: true });
+  const [channelsTouched, setChannelsTouched] = useState(false);
+
+  // Same reasoning as the Edit modal and Scanner — one import is one batch
+  // for one binder/case, so follow whatever channels that location already
+  // uses until staff manually override it for this batch.
+  useEffect(() => {
+    if (channelsTouched) return;
+    setChannels(channelDefaultsForLocation(catalog, importLocation.trim()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importLocation]);
+
+  function setChannel(key, val) {
+    setChannelsTouched(true);
+    setChannels(c => ({ ...c, [key]: val }));
+  }
 
   function applyParsed(newRows, newHeaders, newLocationDefault) {
     setRows(newRows);
@@ -123,6 +143,9 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
         grade: mapping.grade ? r[mapping.grade] : detected.grade,
         certNumber: mapping.certNumber ? r[mapping.certNumber] : "",
         sold: mapping.sold ? r[mapping.sold] : false,
+        posChannel: channels.posChannel,
+        tcgplayerChannel: channels.tcgplayerChannel,
+        collectrChannel: channels.collectrChannel,
         lastUpdated: (() => {
           if (!mapping.lastUpdated) return Date.now();
           const parsed = Date.parse(r[mapping.lastUpdated]);
@@ -131,11 +154,36 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
       });
     });
 
+    // Rows with no image already (no mapped column, or that column was
+    // blank for this row) get an auto-search, same lookup the Scanner and
+    // Edit modal use — this is the only thing the backlog asked for here,
+    // so unlike those two, there's no price/listing backfill and no per-row
+    // review step: the top result just fills the image slot directly,
+    // matching how little review any other imported field gets today.
+    const needsImage = newRows.filter(c => !c.imageUrl);
+    let foundCount = 0;
+    if (needsImage.length) {
+      setStatus({ text: `Searching for card images for ${needsImage.length} row(s) without one…`, kind: "" });
+      await runWithConcurrency(needsImage, IMAGE_SEARCH_CONCURRENCY, async (card) => {
+        try {
+          const results = await searchCardImage(card.game, card.name, card.set);
+          if (results && results.length) {
+            card.imageUrl = results[0].url;
+            foundCount++;
+          }
+        } catch {
+          // leave blank — staff can still search/upload manually in the Edit modal
+        }
+      });
+    }
+
     setStatus({ text: "Saving to database…", kind: "" });
     await onImport(newRows, importMode);
     const slabCount = newRows.filter(r => r.itemType === "slab").length;
     setStatus({
-      text: `Imported ${newRows.length} rows.` + (autoGrade ? ` Auto-detected ${slabCount} slab(s) from grading text in the name.` : ""),
+      text: `Imported ${newRows.length} rows.`
+        + (autoGrade ? ` Auto-detected ${slabCount} slab(s) from grading text in the name.` : "")
+        + (needsImage.length ? ` Found images for ${foundCount} of ${needsImage.length} row(s) that didn't already have one.` : ""),
       kind: "ok",
     });
     setShowMapSection(false);
@@ -205,6 +253,31 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
                 Applied to every row in this import. Type a new name to create a new binder/case, or pick an existing one.
               </div>
+            </div>
+            <div className="field-group" style={{ maxWidth: '420px' }}>
+              <label>Where do these live?</label>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                  <input type="checkbox" id="imp_posChannel" checked={channels.posChannel} onChange={(e) => setChannel('posChannel', e.target.checked)} />
+                  <label htmlFor="imp_posChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>In-store / POS</label>
+                </div>
+                <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                  <input type="checkbox" id="imp_tcgplayerChannel" checked={channels.tcgplayerChannel} onChange={(e) => setChannel('tcgplayerChannel', e.target.checked)} />
+                  <label htmlFor="imp_tcgplayerChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>TCG Player</label>
+                </div>
+                <div className="checkbox-row" style={{ marginBottom: 0 }}>
+                  <input type="checkbox" id="imp_collectrChannel" checked={channels.collectrChannel} onChange={(e) => setChannel('collectrChannel', e.target.checked)} />
+                  <label htmlFor="imp_collectrChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Collectr</label>
+                </div>
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                Applies to every row in this import — edit an individual item afterward if one differs.
+              </div>
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginBottom: '8px' }}>
+              Rows with no Image URL mapped (or blank for that row) get an automatic image search by name/game/set before
+              saving — same lookup as the binder scanner. This can take a moment for a large import; a wrong or missing
+              result can always be fixed afterward from the catalog table.
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button className="btn" onClick={handleConfirmImport}>Import rows</button>
