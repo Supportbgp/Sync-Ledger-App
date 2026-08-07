@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabaseClient, SHARED_LOGIN_EMAIL } from '../lib/supabase.js';
+import logoIcon from '../assets/logo-icon.png';
 
 export default function Login({ onSignedIn }) {
   const [password, setPassword] = useState("");
@@ -22,7 +23,8 @@ export default function Login({ onSignedIn }) {
   return (
     <div className="overlay show">
       <div className="modal">
-        <div className="modal-head">
+        <div className="modal-head" style={{ textAlign: 'center' }}>
+          <img src={logoIcon} alt="" style={{ width: '56px', height: '56px', display: 'block', margin: '0 auto 10px' }} />
           <div className="name">Ledger sign-in</div>
           <div className="meta">Enter the shared store password to continue.</div>
         </div>

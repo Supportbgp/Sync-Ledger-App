@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { dbLoadPublicBinder } from '../lib/db.js';
 import { activeImageSrc } from '../lib/cardUtils.js';
 import Lightbox from './Lightbox.jsx';
+import logoIcon from '../assets/logo-icon.png';
 
 function BinderCard({ item, onZoom }) {
   const [broken, setBroken] = useState(false);
@@ -48,6 +49,7 @@ export default function BinderView({ location }) {
     <div className="app">
       <div className="topbar">
         <div className="brand">
+          <img src={logoIcon} alt="" className="brand-logo" />
           <span className="mark">Ledger</span>
           <span className="sub">{location}</span>
         </div>

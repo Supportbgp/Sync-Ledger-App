@@ -20,6 +20,47 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   handlers down; `UIContext.jsx` covers cross-cutting UI concerns (toasts,
   confirm dialogs, lightbox).
 
+## Branding
+
+- **Logo assets**: `src/assets/logo-icon.png` (square, transparent, used
+  inline via `<img>` in `App.jsx`'s topbar, `Login.jsx`, and
+  `BinderView.jsx`'s public topbar) plus `public/favicon.ico`,
+  `public/favicon.png` (32×32), and `public/apple-touch-icon.png` (180×180,
+  flattened onto white — iOS doesn't render transparent touch icons well),
+  all referenced from `index.html`. All four are the same crop: just the
+  palm/sun/meeple/wave emblem from the real Board Game Paradise logo, with
+  the "BOARD GAME PARADISE" wordmark cropped out — favicon/topbar space is
+  too small for a wordmark to read, and the emblem alone is distinctive
+  enough. The wordmark and emblem sit almost flush against each other in
+  the source logo (near-zero gap), so the crop's right edge cuts a couple
+  px into the wave's outer curl rather than risk including a sliver of the
+  "B" — imperceptible at icon size, and the only way to guarantee zero text
+  bleed given how tight the source composition is.
+- **Color palette** (`src/styles/index.css` `:root`): every existing
+  variable (`--amber`, `--green`, `--rust`, `--purple`, `--blue`, `--bg`,
+  `--surface-alt`, `--ink*`, `--border`) was recolored to a palette sampled
+  directly from the logo's actual pixels (palm/grass green, sun gold,
+  meeple red, wave teal, trunk brown), then deepened only as much as needed
+  to clear ~4.5:1 WCAG contrast against white for text/filled-button use —
+  computed with the real contrast formula per color, not eyeballed; several
+  new values (e.g. green, blue) land *above* the original muted palette's
+  own contrast levels. Variable **names and semantic roles are unchanged**
+  (amber=pending/warning, green=success, rust=danger/sold, purple=slab,
+  blue=informational/links) so no component needed touching — only the
+  hex values moved. `--teal`/`--teal-soft` are new tokens (the logo's wave
+  color has no prior UI equivalent) and now drive the primary button fill
+  and the active-tab underline, so the brand color shows up on the app's
+  actual primary actions, not just decoratively. A couple of hardcoded
+  hex colors that bypassed the variable system entirely (`.pending-badge`'s
+  border, `.binder-card-slab-badge`'s background) were found and moved
+  onto the same token system / matching hues so they don't silently clash
+  with the new palette.
+- **To swap in a different/updated logo later**: replace
+  `src/assets/logo-icon.png` and regenerate the three `public/` favicon
+  files from the same source crop (square, transparent background) — there
+  is no build step that derives them automatically, they're committed as
+  static files.
+
 ## Directory map
 
 - `src/lib/` — all non-React logic. `db.js` (Supabase reads/writes + row↔card

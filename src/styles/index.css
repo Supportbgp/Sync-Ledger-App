@@ -1,23 +1,32 @@
+    /* Palette sourced from the Board Game Paradise logo (palm/grass green,
+       sun gold, meeple red, wave teal), each deepened just enough from its
+       literal logo hue to clear ~4.5:1 contrast against white/var(--bg) for
+       text and filled-button use — verified against the WCAG contrast
+       formula, not eyeballed. --teal is new (the logo has no prior UI
+       equivalent); every other name keeps its original role (amber/green/
+       rust/purple/blue) so no existing usage needs to change, only its color. */
     :root {
-      --bg: #EEF1EE;
+      --bg: #F1F7F6;
       --surface: #FFFFFF;
-      --surface-alt: #E2E7E2;
-      --ink: #161F1B;
-      --ink-soft: #57635C;
-      --ink-faint: #8A968E;
-      --border: #D2D9D1;
-      --amber: #C17A2B;
-      --amber-soft: #F2E2C9;
-      --green: #2E7D5B;
-      --green-soft: #D9EBE0;
-      --rust: #AE3B2E;
-      --rust-soft: #F3DCD8;
-      --purple: #6B5CA5;
-      --purple-soft: #E6E1F2;
-      --blue: #2E6B9E;
-      --blue-soft: #DCE9F3;
+      --surface-alt: #E4EFEE;
+      --ink: #16262A;
+      --ink-soft: #52666A;
+      --ink-faint: #86999B;
+      --border: #D7E4E2;
+      --amber: #A66B10;
+      --amber-soft: #F6E7C9;
+      --green: #227A3A;
+      --green-soft: #DFF3E4;
+      --rust: #C23B32;
+      --rust-soft: #FBE1DE;
+      --purple: #7A5CA3;
+      --purple-soft: #EFE7F7;
+      --blue: #23648F;
+      --blue-soft: #DCEBF5;
+      --teal: #0C7C9E;
+      --teal-soft: #DCEFF3;
       --radius: 10px;
-      --shadow: 0 1px 2px rgba(20, 28, 20, 0.06), 0 4px 14px rgba(20, 28, 20, 0.05);
+      --shadow: 0 1px 2px rgba(20, 34, 38, 0.07), 0 4px 14px rgba(20, 34, 38, 0.06);
     }
 
     * {
@@ -49,8 +58,15 @@
 
     .brand {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 10px;
+    }
+
+    .brand-logo {
+      width: 30px;
+      height: 30px;
+      object-fit: contain;
+      flex-shrink: 0;
     }
 
     .brand .mark {
@@ -72,7 +88,7 @@
       gap: 6px;
       background: var(--amber-soft);
       color: var(--amber);
-      border: 1px solid #E0BC85;
+      border: 1px solid #E3C070;
       border-radius: 999px;
       padding: 5px 12px;
       font-family: 'IBM Plex Mono', monospace;
@@ -83,7 +99,7 @@
     .pending-badge.zero {
       background: var(--green-soft);
       color: var(--green);
-      border-color: #9FCBAE;
+      border-color: #A8D9B8;
     }
 
     .pending-dot {
@@ -116,7 +132,7 @@
 
     .tab.active {
       color: var(--ink);
-      border-bottom-color: var(--ink);
+      border-bottom-color: var(--teal);
     }
 
     .tab .count {
@@ -254,8 +270,8 @@
       font-family: 'Inter', sans-serif;
       font-weight: 600;
       font-size: 13px;
-      border: 1px solid var(--ink);
-      background: var(--ink);
+      border: 1px solid var(--teal);
+      background: var(--teal);
       color: var(--surface);
       padding: 7px 13px;
       border-radius: 7px;
@@ -931,7 +947,7 @@
       top: 6px;
       right: 6px;
       z-index: 1;
-      background: #f1671a;
+      background: var(--purple);
       color: #fff;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     }

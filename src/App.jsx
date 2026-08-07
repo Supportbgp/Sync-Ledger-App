@@ -9,6 +9,7 @@ import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, mark
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
+import logoIcon from './assets/logo-icon.png';
 import CatalogPanel from './components/catalog/CatalogPanel.jsx';
 import SyncQueueTab from './components/queue/SyncQueueTab.jsx';
 import ImportExportPanel from './components/importexport/ImportExportPanel.jsx';
@@ -249,6 +250,7 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <div className="brand">
+          <img src={logoIcon} alt="" className="brand-logo" />
           <span className="mark">Ledger</span>
           <span className="sub">singles &amp; slabs · source of truth</span>
         </div>
