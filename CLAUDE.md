@@ -119,6 +119,26 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   actually saved. **Requires redeploying `scan-binder-page`**
   (`supabase functions deploy scan-binder-page`) before this takes effect —
   the schema change is server-side.
+  - **Crop accuracy is hit-or-miss** — real-world testing showed the model's
+    bbox tends to hug the card too tightly and most often clips the *top*
+    edge (the bottom of a plastic pocket is a sharp, unambiguous line; the
+    top blends into the pocket/page above it). Two independent mitigations,
+    not one: the prompt now tells the model to anchor on the bottom edge
+    first and err toward a slightly larger box; separately, and regardless
+    of how good the model's box is, `cropImageRegion` always pads the box
+    outward before cropping — 10% of the box's own height on top, 2%
+    bottom, 3% left/right (`DEFAULT_CROP_PADDING`) — so a slightly-short box
+    still captures the whole card. Padding is relative to the detected
+    box's own size, not the full page, so it scales with card size rather
+    than being a fixed pixel margin.
+  - **Toggle/lightbox click bug (fixed)**: the stock/photo toggle buttons in
+    `EditModal.jsx` live inside the big-preview `div` that opens the
+    lightbox on click. Without `stopPropagation()`, clicking a toggle also
+    bubbled to that div's own `onClick`, which read the *pre-click* `src` —
+    so the lightbox opened showing the previously-active image, not the one
+    just switched to, even though the small preview itself updated
+    correctly on the next render. Both toggle buttons now call
+    `e.stopPropagation()`.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

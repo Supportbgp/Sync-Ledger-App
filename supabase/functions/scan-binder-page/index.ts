@@ -52,12 +52,12 @@ const DETECT_CARDS_TOOL = {
             confidence: { type: "string", enum: ["high", "medium", "low"] },
             bbox: {
               type: "object",
-              description: "Bounding box of just this one card's pocket within the full photo, as fractions (0.0 to 1.0) of the photo's total width/height — used to crop this exact card out of the page photo as its own real-photo reference.",
+              description: "Bounding box of just this one card's pocket within the full photo, as fractions (0.0 to 1.0) of the photo's total width/height — used to crop this exact card out of the page photo as its own real-photo reference. The bottom edge of a pocket is usually the clearest, most unambiguous line on the page — anchor there first, then find the top edge, which more often blends into the pocket/page above it. If you're unsure exactly where the card ends, err toward a slightly LARGER box rather than a tight one — a little extra background is much less of a problem than clipping part of the card.",
               properties: {
                 x_min: { type: "number", description: "Left edge, as a fraction of image width" },
-                y_min: { type: "number", description: "Top edge, as a fraction of image height" },
+                y_min: { type: "number", description: "Top edge, as a fraction of image height — the edge most likely to be underestimated (cut too low, clipping the card's top). When unsure, place this slightly higher (smaller value) than your best guess." },
                 x_max: { type: "number", description: "Right edge, as a fraction of image width" },
-                y_max: { type: "number", description: "Bottom edge, as a fraction of image height" },
+                y_max: { type: "number", description: "Bottom edge, as a fraction of image height — usually the clearest edge to locate; anchor this one first." },
               },
               required: ["x_min", "y_min", "x_max", "y_max"],
             },
@@ -76,9 +76,13 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "foil/holo, its rough grid position, and how confident you are. If you can't confidently " +
   "identify a specific card, still report it with your best guess and confidence \"low\" " +
   "rather than skipping it. Do not guess condition or price — only identification. Also give " +
-  "a bounding box tightly around just that one card's pocket (not the whole page), as " +
-  "fractions of the full photo's width/height — this is used to crop that exact card out of " +
-  "the page photo, so it needs to actually bound that card and not a neighboring one.";
+  "a bounding box around just that one card's pocket (not the whole page), as fractions of " +
+  "the full photo's width/height — this is used to crop that exact card out of the page " +
+  "photo, so it needs to actually bound that card and not a neighboring one. Anchor on the " +
+  "pocket's bottom edge first, since it's usually the clearest line on the page, then find " +
+  "the top edge — that one's more often underestimated because it blends into the pocket " +
+  "above. When uncertain, err toward a slightly larger box rather than a tight one: a little " +
+  "extra background in the crop is fine, clipping part of the card is not.";
 
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get("origin") || "");

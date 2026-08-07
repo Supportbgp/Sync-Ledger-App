@@ -303,8 +303,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               )}
               {stockSrc && photoSrc && (
                 <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-                  <button type="button" className={`btn small${form.activeImage === 'photo' ? '' : ' ghost'}`} onClick={() => set('activeImage', 'photo')}>Real photo</button>
-                  <button type="button" className={`btn small${form.activeImage === 'stock' ? '' : ' ghost'}`} onClick={() => set('activeImage', 'stock')}>Stock image</button>
+                  <button type="button" className={`btn small${form.activeImage === 'photo' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'photo'); }}>Real photo</button>
+                  <button type="button" className={`btn small${form.activeImage === 'stock' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'stock'); }}>Stock image</button>
                 </div>
               )}
             </div>
