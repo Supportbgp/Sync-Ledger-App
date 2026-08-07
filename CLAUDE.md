@@ -429,8 +429,69 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   documentation for shop staff (how to use each tab, the scanner workflow,
   what the platform-status chips mean, etc.) — not yet started, no format
   decided (in-app help page vs. a standalone doc).
-- Sprint 3 (a full regression pass across the whole app) remains deferred,
-  unscheduled.
+
+## Testing
+
+Sprint 3 turned into a real automated test suite (superseding the earlier,
+informal "manual regression pass" plan) so mobile changes can be verified
+without a physical phone every time.
+
+- **Unit/component — Vitest + `@testing-library/react`** (`vitest.config.js`,
+  jsdom environment). `npm test` (once) / `npm run test:watch`. Covers
+  `src/lib/*.js`'s business logic (`cardUtils`, `db`, `cardSearch`,
+  `importParse` — 96 tests across those four files) plus interactive
+  component behavior for `SellModal`/`CatalogTable`/`EditModal` (mobile vs.
+  desktop switch via a mocked `useIsMobile`, image-candidate selection,
+  per-location channel defaults) — 111 tests total.
+  - `src/test/setup.js` stubs `window.matchMedia` (jsdom doesn't implement
+    it) and explicitly wires up `@testing-library/react`'s `cleanup()` in an
+    `afterEach` — that auto-cleanup only self-registers under Vitest's
+    `globals: true`, which this project doesn't use (tests import
+    `describe`/`it`/`expect` explicitly), so without this every test's
+    rendered DOM would leak into the next test in the same file.
+  - Not covered: `loadXlsxSheet`/`loadBinderPageFormat`/`readWorkbook` in
+    `importParse.js` (need a real workbook fixture — exercised by manual
+    testing only, per the existing "Manual QA note" above).
+- **End-to-end — Playwright** (`playwright.config.js`, `e2e/*.spec.js`).
+  `npm run test:e2e`. Runs the *real* app (`main.jsx`/`App.jsx`/
+  `Login.jsx`/`BinderView.jsx`, completely unmodified) in a real Chromium
+  browser at both a desktop and a mobile (`Pixel 7`) viewport — this is what
+  actually verifies mobile CSS/layout, which jsdom component tests
+  structurally cannot (no real layout engine, no `matchMedia`-driven
+  reflow).
+  - **The mock-data harness**: `src/test/harness/mockSupabaseClient.js` is a
+    permanent, committed stand-in for `src/lib/supabase.js` — an in-memory
+    `.from(table)` query builder plus `auth`/`channel`/`functions.invoke`
+    stubs, keyed off `window.__HARNESS_SIGNED_IN__`/`window.__HARNESS_SEED__`
+    (set via Playwright's `page.addInitScript`, see `e2e/fixtures.js`).
+    `vite.config.js` only swaps it in under `vite --mode harness` — a mode
+    only `playwright.config.js`'s `webServer` ever passes — via exact-string
+    aliases (`./supabase.js`, `./lib/supabase.js`, `../lib/supabase.js`; one
+    entry per relative form actually used in the codebase, since
+    `@rollup/plugin-alias` matches the literal import specifier, not a
+    resolved path). A normal `npm run dev`/`npm run build` never sets that
+    mode, so production always gets the real Supabase client — confirmed by
+    grepping the built `dist/` bundle for the harness's marker string.
+    Deliberately *not* live-Supabase E2E, per an explicit decision: this
+    sandbox has no network path to the real project, and pointing CI at a
+    real backend would make the suite flaky/order-dependent and require
+    shared-login credentials in a CI secret.
+  - Covers: Catalog desktop-table vs. mobile-stacked-cards, add-item and
+    sell (single-copy confirmation) flows, the public `BinderView` page
+    (populated + empty states), and `Login` (form render, wrong-password
+    error, successful sign-in) — all against the mocked backend, so they're
+    deterministic and need no real credentials.
+  - **Local Chromium path caveat**: this dev sandbox ships one pre-installed
+    Chromium revision at a fixed path instead of one matching whatever
+    `@playwright/test` version is in `package.json` — `playwright.config.js`
+    only points `launchOptions.executablePath` at it when
+    `PLAYWRIGHT_BROWSERS_PATH === '/opt/pw-browsers'` is set, which a real
+    CI runner won't have, so CI downloads its own browser as normal via
+    `npx playwright install --with-deps chromium`.
+- **CI** (`.github/workflows/test.yml`): runs on every PR and push to
+  `main` — a `unit` job (`npm test` + `npm run build`) and a separate `e2e`
+  job (installs Chromium, `npm run test:e2e`), with the Playwright HTML
+  report uploaded as an artifact on failure.
 
 ## Workflow conventions
 
