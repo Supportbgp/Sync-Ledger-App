@@ -1,10 +1,12 @@
     /* Palette sourced from the Board Game Paradise logo (palm/grass green,
-       sun gold, meeple red, wave teal), each deepened just enough from its
-       literal logo hue to clear ~4.5:1 contrast against white/var(--bg) for
-       text and filled-button use — verified against the WCAG contrast
-       formula, not eyeballed. --teal is new (the logo has no prior UI
-       equivalent); every other name keeps its original role (amber/green/
-       rust/purple/blue) so no existing usage needs to change, only its color. */
+       sun gold, meeple red, wave teal). Each accent is boosted well past the
+       logo's literal saturation (staff asked for "more vibrant/colorful"
+       after seeing the first pass read as muted) while staying at or above
+       ~4.5:1 WCAG contrast against white for text/filled-button use —
+       recomputed with the real contrast formula after the saturation boost,
+       not eyeballed. --teal is new (the logo has no prior UI equivalent);
+       every other name keeps its original role (amber/green/rust/purple/
+       blue) so no existing usage needs to change, only its color. */
     :root {
       --bg: #F1F7F6;
       --surface: #FFFFFF;
@@ -13,18 +15,18 @@
       --ink-soft: #52666A;
       --ink-faint: #86999B;
       --border: #D7E4E2;
-      --amber: #A66B10;
-      --amber-soft: #F6E7C9;
-      --green: #227A3A;
-      --green-soft: #DFF3E4;
-      --rust: #C23B32;
-      --rust-soft: #FBE1DE;
-      --purple: #7A5CA3;
-      --purple-soft: #EFE7F7;
-      --blue: #23648F;
-      --blue-soft: #DCEBF5;
-      --teal: #0C7C9E;
-      --teal-soft: #DCEFF3;
+      --amber: #9C5F00;
+      --amber-soft: #FAE5BB;
+      --green: #0F792C;
+      --green-soft: #D4F4DC;
+      --rust: #DD2417;
+      --rust-soft: #FDD6D1;
+      --purple: #7640BF;
+      --purple-soft: #EADCF8;
+      --blue: #0F68A3;
+      --blue-soft: #D0E7F7;
+      --teal: #006F91;
+      --teal-soft: #D0EEF5;
       --radius: 10px;
       --shadow: 0 1px 2px rgba(20, 34, 38, 0.07), 0 4px 14px rgba(20, 34, 38, 0.06);
     }
@@ -88,7 +90,7 @@
       gap: 6px;
       background: var(--amber-soft);
       color: var(--amber);
-      border: 1px solid #E3C070;
+      border: 1px solid #D9B67A;
       border-radius: 999px;
       padding: 5px 12px;
       font-family: 'IBM Plex Mono', monospace;
@@ -99,7 +101,7 @@
     .pending-badge.zero {
       background: var(--green-soft);
       color: var(--green);
-      border-color: #A8D9B8;
+      border-color: #8FC99E;
     }
 
     .pending-dot {
@@ -207,6 +209,13 @@
     .search-input {
       flex: 1;
       min-width: 180px;
+    }
+
+    /* Lets the catalog table scroll horizontally on a tablet-width viewport
+       (below the CatalogTable card-view breakpoint but still narrower than
+       the table's natural width) instead of overflowing the page itself. */
+    .table-scroll {
+      overflow-x: auto;
     }
 
     table {
@@ -326,6 +335,13 @@
 
     .icon-btn:hover {
       background: var(--surface-alt);
+    }
+
+    /* Edit/Sell (and any other paired row actions) — a plain gap so two
+       small buttons never render stuck flush against each other. */
+    .row-actions {
+      display: flex;
+      gap: 6px;
     }
 
     .empty {
@@ -699,17 +715,95 @@
       color: var(--ink-faint);
     }
 
+    .thumb.thumb-sm,
+    .thumb-placeholder.thumb-sm {
+      width: 44px;
+      height: 44px;
+    }
+
     .name-cell .n-name {
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 6px;
+      flex-wrap: wrap;
     }
 
     .name-cell .n-sub {
       font-size: 11.5px;
       color: var(--ink-soft);
       margin-top: 1px;
+    }
+
+    /* Mobile stacked-card catalog view (CatalogTable, below the
+       useIsMobile breakpoint) — a compact summary row that expands on tap
+       instead of a wide table nobody can comfortably scroll sideways on a
+       phone. */
+    .catalog-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .catalog-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .catalog-card.sold-row {
+      opacity: 0.6;
+    }
+
+    .catalog-card.row-selected {
+      background: var(--blue-soft);
+      border-color: var(--blue);
+    }
+
+    .catalog-card-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+
+    .catalog-card-head input[type=checkbox] {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+    }
+
+    .catalog-card-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .catalog-card-row2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 3px;
+      font-size: 12.5px;
+    }
+
+    .catalog-card-chevron {
+      color: var(--ink-faint);
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .catalog-card-details {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .catalog-cards-selectall {
+      margin-top: 10px;
+      padding: 0 4px;
     }
 
     .badge {
@@ -751,9 +845,55 @@
       color: var(--blue);
     }
 
+    /* Per-game color tags — see GAME_TAG_CLASS in cardUtils.js */
+    .badge.tag-teal {
+      background: var(--teal-soft);
+      color: var(--teal);
+    }
+
+    .badge.tag-green {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .badge.tag-amber {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .badge.tag-rust {
+      background: var(--rust-soft);
+      color: var(--rust);
+    }
+
+    .badge.tag-purple {
+      background: var(--purple-soft);
+      color: var(--purple);
+    }
+
+    .badge.tag-blue {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .badge.tag-neutral {
+      background: var(--surface-alt);
+      color: var(--ink-soft);
+    }
+
     .notes-pin {
       font-size: 11px;
       cursor: help;
+    }
+
+    /* Boxed grouping for a long form (EditModal) — pairs with the existing
+       .section-label divider above each one, so a form reads as distinct
+       labeled groups rather than one long flat list of fields. */
+    .form-section {
+      background: var(--surface-alt);
+      border-radius: var(--radius);
+      padding: 14px 16px 2px;
+      margin-bottom: 4px;
     }
 
     .field-group {
@@ -871,7 +1011,7 @@
       align-items: center;
       gap: 10px;
       background: var(--blue-soft);
-      border: 1px solid #B7CFE2;
+      border: 1px solid #8CBBDA;
       border-radius: 8px;
       padding: 8px 14px;
       margin-bottom: 12px;
@@ -1062,4 +1202,78 @@
     .scan-row-line select {
       min-width: 0;
       width: 100%;
+    }
+
+    /* Flex-basis classes for scan-row-line's children — kept as real
+       classes (not inline styles) specifically so the mobile media query
+       below can override them. An inline style="" attribute would win
+       over any external stylesheet rule, breakpoint or not. */
+    .scan-row-line .sf-wide {
+      flex: 2;
+    }
+
+    .scan-row-line .sf {
+      flex: 1;
+    }
+
+    .scan-row-line .sf-auto {
+      flex: 0 0 auto;
+    }
+
+    /* Mobile responsiveness — one shared breakpoint (640px, the standard
+       "phone" cutoff) for every CSS-only stacking/spacing fix below.
+       CatalogTable's table→card swap uses its own JS breakpoint
+       (useIsMobile, 700px) since it's a structural markup change, not
+       just a style change, but everything else here just needs to stop
+       being a fixed-width row and start stacking. */
+    @media (max-width: 640px) {
+      .app {
+        padding: 14px 12px 40px;
+      }
+
+      /* Only the authenticated app's decorative tagline hides on mobile —
+         BinderView reuses .sub for the actual binder/location name, which
+         is real content a visitor needs, not decoration. */
+      .brand-tagline {
+        display: none;
+      }
+
+      .overlay {
+        padding: 10px;
+      }
+
+      .field-row2,
+      .map-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .img-preview-wrap {
+        flex-direction: column;
+      }
+
+      .img-preview-wrap .img-frame.large {
+        align-self: center;
+      }
+
+      .sheet-picker {
+        flex-wrap: wrap;
+      }
+
+      .scan-row {
+        flex-direction: column;
+      }
+
+      .scan-row-thumb-col {
+        align-self: flex-start;
+      }
+
+      .scan-row-line {
+        flex-wrap: wrap;
+      }
+
+      .scan-row-line .sf-wide,
+      .scan-row-line .sf {
+        flex: 1 1 120px;
+        width: auto;
+      }
     }

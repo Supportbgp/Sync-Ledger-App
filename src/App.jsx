@@ -252,7 +252,7 @@ export default function App() {
         <div className="brand">
           <img src={logoIcon} alt="" className="brand-logo" />
           <span className="mark">Ledger</span>
-          <span className="sub">singles &amp; slabs · source of truth</span>
+          <span className="sub brand-tagline">singles &amp; slabs · source of truth</span>
         </div>
         <div className={`pending-badge${pendingCount === 0 ? ' zero' : ''}`}>
           <span className="pending-dot"></span>
