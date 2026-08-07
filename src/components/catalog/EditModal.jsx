@@ -20,6 +20,20 @@ const GAME_LABELS = {
   Riftbound: "Riftbound", Gundam: "Gundam Card Game", Other: "Other",
 };
 
+// Shared by "Find image" and "Find market price" — same lookup either way,
+// they just differ in what a candidate click does with the result.
+async function searchByGame(game, name, setHint) {
+  if (game === "Magic") return await searchScryfall(name);
+  if (game === "Pokemon") return await searchPokemon(name, setHint);
+  if (game === "Yugioh") return await searchYugioh(name);
+  if (game === "Lorcana") return await searchLorcana(name);
+  if (game === "One Piece") return await searchOnePiece(name, setHint);
+  if (game === "Riftbound") return await searchRiftbound(name, setHint);
+  if (game === "Gundam") return await searchGundam(name, setHint);
+  if (game === "SWU") return await searchSwu(name, setHint);
+  return null; // null (not []) signals "not set up for this game" vs. a real empty result
+}
+
 function initForm(card) {
   return {
     name: card?.name || "",
@@ -66,6 +80,11 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const [manualUrl, setManualUrl] = useState("");
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Which action populated `candidates` — determines what clicking one does.
+  // "image": sets the image (and price, as a bonus, same as before). "price":
+  // for old cards that already have a correct image and just need Market
+  // Value backfilled — leaves the image alone entirely.
+  const [candidateMode, setCandidateMode] = useState("image");
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
   function setChannel(key, val) {
@@ -88,24 +107,13 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
     setImageStatus({ text: "Searching…", kind: "" });
     setCandidates([]);
+    setCandidateMode("image");
     setSearching(true);
     try {
-      let results = [];
-      const set = form.set.trim();
-      if (form.game === "Magic") results = await searchScryfall(name);
-      else if (form.game === "Pokemon") results = await searchPokemon(name, set);
-      else if (form.game === "Yugioh") results = await searchYugioh(name);
-      else if (form.game === "Lorcana") results = await searchLorcana(name);
-      else if (form.game === "One Piece") results = await searchOnePiece(name, set);
-      else if (form.game === "Riftbound") results = await searchRiftbound(name, set);
-      else if (form.game === "Gundam") results = await searchGundam(name, set);
-      else if (form.game === "SWU") results = await searchSwu(name, set);
-      else {
+      const results = await searchByGame(form.game, name, form.set.trim());
+      if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
-        setSearching(false);
-        return;
-      }
-      if (!results.length) {
+      } else if (!results.length) {
         setImageStatus({ text: "No matches found — try adjusting the name, or upload a photo.", kind: "err" });
       } else {
         setImageStatus({ text: `${results.length} result(s) — click one to use it.`, kind: "ok" });
@@ -117,7 +125,46 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setSearching(false);
   }
 
+  // For old cards that already have a correct image (basePrice didn't exist
+  // as a field when they were added) — same search as "Find image", but
+  // picking a candidate below only backfills Market Value, leaving the
+  // existing image and everything else untouched.
+  async function handleFindMarketPrice() {
+    const name = form.name.trim();
+    if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
+    setImageStatus({ text: "Searching…", kind: "" });
+    setCandidates([]);
+    setCandidateMode("price");
+    setSearching(true);
+    try {
+      const results = await searchByGame(form.game, name, form.set.trim());
+      if (results === null) {
+        setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
+      } else if (!results.length) {
+        setImageStatus({ text: "No matches found — try adjusting the name.", kind: "err" });
+      } else if (!results.some(r => r.price != null)) {
+        setImageStatus({ text: "Matches found, but none carry price data yet for this game.", kind: "err" });
+        setCandidates(results);
+      } else {
+        setImageStatus({ text: `${results.length} result(s) — click the right print to set its market price.`, kind: "ok" });
+        setCandidates(results);
+      }
+    } catch (e) {
+      setImageStatus({ text: "Couldn't reach the card price database (network/CORS).", kind: "err" });
+    }
+    setSearching(false);
+  }
+
   function selectCandidate(url, price, listingUrl) {
+    if (candidateMode === "price") {
+      // Deliberately leaves the image alone — this path exists specifically
+      // so backfilling Market Value on an old card doesn't disturb an
+      // already-correct image.
+      if (price != null) set('basePrice', price);
+      if (listingUrl && !form.sourceUrl.trim()) set('sourceUrl', listingUrl);
+      setCandidates([]);
+      return;
+    }
     setImagePending(url);
     // Capture the exact print's NM price as the Market Value baseline —
     // only when the search result actually carried one, since not every
@@ -230,6 +277,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
             <div className="img-actions">
               <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find image</button>
+              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
               <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload photo</button>
               <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
               <input type="url" placeholder="…or paste an image URL" value={manualUrl} onChange={handleManualUrlChange} />
