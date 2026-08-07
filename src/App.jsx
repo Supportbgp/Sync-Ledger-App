@@ -3,8 +3,9 @@ import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
+  dbLoadSettings, dbSaveSettings,
 } from './lib/db.js';
-import { needsPlatformStatusReset, isTicketComplete } from './lib/cardUtils.js';
+import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition } from './lib/cardUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -12,6 +13,7 @@ import CatalogPanel from './components/catalog/CatalogPanel.jsx';
 import SyncQueueTab from './components/queue/SyncQueueTab.jsx';
 import ImportExportPanel from './components/importexport/ImportExportPanel.jsx';
 import ScannerPanel from './components/scanner/ScannerPanel.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
 
 const TABS = [
   { key: 'catalog', label: 'Catalog' },
@@ -20,6 +22,50 @@ const TABS = [
   { key: 'scanner', label: 'Scan Binder' },
 ];
 
+const CONDITION_RANK = { NM: 0, LP: 1, MP: 2, HP: 3, DMG: 4 };
+
+// Soft nudge, not a hard rule — a worse-condition copy of the same card in
+// the same case shouldn't be priced above a better-condition copy. Flags it
+// so staff can double-check, doesn't block the save either way.
+function priceOrderingWarning(catalog, record) {
+  const tier = canonicalizeCondition(record.condition);
+  if (!tier || record.price == null) return null;
+  const siblings = catalog.filter(c =>
+    c.sku !== record.sku && c.name === record.name && c.game === record.game &&
+    c.location === record.location && c.price != null && !c.sold
+  );
+  for (const s of siblings) {
+    const sTier = canonicalizeCondition(s.condition);
+    if (!sTier) continue;
+    if (CONDITION_RANK[tier] < CONDITION_RANK[sTier] && record.price < s.price) {
+      return `${record.name} (${tier}) is priced below the ${sTier} copy in this case — worth double-checking.`;
+    }
+    if (CONDITION_RANK[tier] > CONDITION_RANK[sTier] && record.price > s.price) {
+      return `${record.name} (${tier}) is priced above the ${sTier} copy in this case — worth double-checking.`;
+    }
+  }
+  return null;
+}
+
+// A different kind of soft nudge than priceOrderingWarning above: this one
+// compares Our Price against THIS card's own computed Market Value, not
+// against another physical copy. The flat condition multiplier can be
+// materially wrong for a specific card (a real example landed ~18% off —
+// see CLAUDE.md), so a meaningful gap is worth a second look — but it's
+// still just a nudge; deliberate pricing decisions (the whole reason Our
+// Price is separate from Market Value) are expected and not an error.
+const MARKET_VALUE_DEVIATION_THRESHOLD = 0.15;
+
+function priceVsMarketValueWarning(record, multipliers) {
+  if (record.basePrice == null || record.price == null || !multipliers) return null;
+  const mv = marketValueForCondition(record.basePrice, record.condition, multipliers);
+  if (mv == null || mv <= 0) return null;
+  const diff = Math.abs(record.price - mv) / mv;
+  if (diff < MARKET_VALUE_DEVIATION_THRESHOLD) return null;
+  const dir = record.price < mv ? 'below' : 'above';
+  return `${record.name}'s price ($${record.price.toFixed(2)}) is ${dir} its estimated market value ($${mv.toFixed(2)}).`;
+}
+
 export default function App() {
   const { toast } = useUI();
   const [signedIn, setSignedIn] = useState(false);
@@ -27,6 +73,8 @@ export default function App() {
   const [tab, setTab] = useState('catalog');
   const [catalog, setCatalog] = useState([]);
   const [queue, setQueue] = useState([]);
+  const [multipliers, setMultipliers] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -38,8 +86,16 @@ export default function App() {
   useEffect(() => {
     if (!signedIn) return;
     dbLoadAll(toast).then(({ catalog: c, queue: q }) => { setCatalog(c); setQueue(q); });
+    dbLoadSettings(toast).then(setMultipliers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
+
+  async function handleSaveSettings(next) {
+    setMultipliers(next);
+    await dbSaveSettings(next, toast);
+    setShowSettings(false);
+    toast("Pricing settings saved");
+  }
 
   useRealtimeSync({ enabled: signedIn, setCatalog, setQueue });
 
@@ -72,7 +128,11 @@ export default function App() {
     }
     setCatalog(nextCatalog);
     await dbUpsertCard(record, toast);
-    toast(`Saved ${record.name}`);
+    // Toasts are single-slot, not a queue — combine into one call so a
+    // warning doesn't just silently overwrite an unseen "Saved" message.
+    const warnings = [priceOrderingWarning(nextCatalog, record), priceVsMarketValueWarning(record, multipliers)].filter(Boolean);
+    if (warnings.length) toast(warnings.join(' '), true);
+    else toast(`Saved ${record.name}`);
   }
 
   async function handleDeleteCard(sku) {
@@ -217,6 +277,7 @@ export default function App() {
           onBatchDelete={handleBatchDelete}
           onBatchSell={handleBatchSell}
           onTogglePlatformStatus={handleTogglePlatformStatus}
+          multipliers={multipliers}
         />
       </div>
       <div className={`panel${tab === 'queue' ? ' active' : ''}`}>
@@ -232,13 +293,22 @@ export default function App() {
         />
       </div>
       <div className={`panel${tab === 'scanner' ? ' active' : ''}`}>
-        <ScannerPanel catalog={catalog} locations={locations} onImport={handleImport} />
+        <ScannerPanel catalog={catalog} locations={locations} onImport={handleImport} multipliers={multipliers} />
       </div>
 
       <div className="footnote">
         Shared store data, live in Supabase · not connected to POS, TCG Player, or Collectr APIs ·{' '}
+        <a href="#" onClick={(e) => { e.preventDefault(); setShowSettings(true); }} style={{ color: 'var(--ink-faint)' }}>Pricing settings</a>
+        {' · '}
         <a href="#" onClick={(e) => { e.preventDefault(); handleLogout(); }} style={{ color: 'var(--ink-faint)' }}>Sign out</a>
       </div>
+      {showSettings && multipliers && (
+        <SettingsModal
+          multipliers={multipliers}
+          onClose={() => setShowSettings(false)}
+          onSave={handleSaveSettings}
+        />
+      )}
     </div>
   );
 }

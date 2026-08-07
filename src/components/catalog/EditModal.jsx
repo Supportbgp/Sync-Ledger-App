@@ -1,16 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
+
+// A flat condition percentage is a population average, not this specific
+// card's real going rate — the higher the NM price, the bigger the dollar
+// swing a bad guess costs (a $2 common being off by 20% is nothing; a
+// $130+ chase card being off by 20% is real money, especially in batches).
+// Above this, nudge staff to check the actual listing instead of trusting
+// the estimate blindly.
+const HIGH_VALUE_THRESHOLD = 25;
 const GAME_LABELS = {
   Magic: "Magic: The Gathering", Pokemon: "Pokémon", Yugioh: "Yu-Gi-Oh!", Lorcana: "Disney Lorcana",
   "One Piece": "One Piece", "Sports Singles": "Sports Singles", SWU: "Star Wars Unlimited",
   Riftbound: "Riftbound", Gundam: "Gundam Card Game", Other: "Other",
 };
+
+// Shared by "Find image" and "Find market price" — same lookup either way,
+// they just differ in what a candidate click does with the result.
+async function searchByGame(game, name, setHint) {
+  if (game === "Magic") return await searchScryfall(name);
+  if (game === "Pokemon") return await searchPokemon(name, setHint);
+  if (game === "Yugioh") return await searchYugioh(name);
+  if (game === "Lorcana") return await searchLorcana(name);
+  if (game === "One Piece") return await searchOnePiece(name, setHint);
+  if (game === "Riftbound") return await searchRiftbound(name, setHint);
+  if (game === "Gundam") return await searchGundam(name, setHint);
+  if (game === "SWU") return await searchSwu(name, setHint);
+  return null; // null (not []) signals "not set up for this game" vs. a real empty result
+}
 
 function initForm(card) {
   return {
@@ -27,6 +49,7 @@ function initForm(card) {
     cert: card?.certNumber || "",
     qty: card ? card.qty : 1,
     price: (card && card.price) ?? "",
+    basePrice: (card && card.basePrice) ?? null,
     notes: card?.notes || "",
     sold: !!card?.sold,
     sourceUrl: card?.sourceUrl || "",
@@ -36,7 +59,7 @@ function initForm(card) {
   };
 }
 
-export default function EditModal({ card, catalog, locations, onClose, onSave, onDelete }) {
+export default function EditModal({ card, catalog, locations, multipliers, onClose, onSave, onDelete }) {
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
@@ -57,6 +80,11 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
   const [manualUrl, setManualUrl] = useState("");
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Which action populated `candidates` — determines what clicking one does.
+  // "image": sets the image (and price, as a bonus, same as before). "price":
+  // for old cards that already have a correct image and just need Market
+  // Value backfilled — leaves the image alone entirely.
+  const [candidateMode, setCandidateMode] = useState("image");
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
   function setChannel(key, val) {
@@ -79,24 +107,13 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
     setImageStatus({ text: "Searching…", kind: "" });
     setCandidates([]);
+    setCandidateMode("image");
     setSearching(true);
     try {
-      let results = [];
-      const set = form.set.trim();
-      if (form.game === "Magic") results = await searchScryfall(name);
-      else if (form.game === "Pokemon") results = await searchPokemon(name, set);
-      else if (form.game === "Yugioh") results = await searchYugioh(name);
-      else if (form.game === "Lorcana") results = await searchLorcana(name);
-      else if (form.game === "One Piece") results = await searchOnePiece(name, set);
-      else if (form.game === "Riftbound") results = await searchRiftbound(name, set);
-      else if (form.game === "Gundam") results = await searchGundam(name, set);
-      else if (form.game === "SWU") results = await searchSwu(name, set);
-      else {
+      const results = await searchByGame(form.game, name, form.set.trim());
+      if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
-        setSearching(false);
-        return;
-      }
-      if (!results.length) {
+      } else if (!results.length) {
         setImageStatus({ text: "No matches found — try adjusting the name, or upload a photo.", kind: "err" });
       } else {
         setImageStatus({ text: `${results.length} result(s) — click one to use it.`, kind: "ok" });
@@ -108,8 +125,55 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
     setSearching(false);
   }
 
-  function selectCandidate(url) {
+  // For old cards that already have a correct image (basePrice didn't exist
+  // as a field when they were added) — same search as "Find image", but
+  // picking a candidate below only backfills Market Value, leaving the
+  // existing image and everything else untouched.
+  async function handleFindMarketPrice() {
+    const name = form.name.trim();
+    if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
+    setImageStatus({ text: "Searching…", kind: "" });
+    setCandidates([]);
+    setCandidateMode("price");
+    setSearching(true);
+    try {
+      const results = await searchByGame(form.game, name, form.set.trim());
+      if (results === null) {
+        setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
+      } else if (!results.length) {
+        setImageStatus({ text: "No matches found — try adjusting the name.", kind: "err" });
+      } else if (!results.some(r => r.price != null)) {
+        setImageStatus({ text: "Matches found, but none carry price data yet for this game.", kind: "err" });
+        setCandidates(results);
+      } else {
+        setImageStatus({ text: `${results.length} result(s) found.`, kind: "ok" });
+        setCandidates(results);
+      }
+    } catch (e) {
+      setImageStatus({ text: "Couldn't reach the card price database (network/CORS).", kind: "err" });
+    }
+    setSearching(false);
+  }
+
+  function selectCandidate(url, price, listingUrl) {
+    if (candidateMode === "price") {
+      // Deliberately leaves the image alone — this path exists specifically
+      // so backfilling Market Value on an old card doesn't disturb an
+      // already-correct image.
+      if (price != null) set('basePrice', price);
+      if (listingUrl && !form.sourceUrl.trim()) set('sourceUrl', listingUrl);
+      setCandidates([]);
+      return;
+    }
     setImagePending(url);
+    // Capture the exact print's NM price as the Market Value baseline —
+    // only when the search result actually carried one, since not every
+    // provider has price data yet (Egman-backed games, for one).
+    if (price != null) set('basePrice', price);
+    // A direct link to the real listing, auto-filled only if staff haven't
+    // already put something in Source URL themselves — never overwrite a
+    // manual entry.
+    if (listingUrl && !form.sourceUrl.trim()) set('sourceUrl', listingUrl);
   }
 
   async function handleUploadFile(e) {
@@ -155,6 +219,7 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
       printing: form.printing.trim(),
       qty: form.qty,
       price: form.price,
+      basePrice: form.basePrice,
       notes: form.notes,
       itemType: form.isSlab ? "slab" : "single",
       grader: form.grader.trim(),
@@ -187,6 +252,9 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
   }
 
   const nameRequired = !form.name.trim();
+  const conditionTier = canonicalizeCondition(form.condition);
+  const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
+  const marketValue = marketValueForCondition(form.basePrice, form.condition, multipliers);
 
   return (
     <div className="overlay show">
@@ -209,17 +277,30 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
             </div>
             <div className="img-actions">
               <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find image</button>
+              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
               <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload photo</button>
               <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
               <input type="url" placeholder="…or paste an image URL" value={manualUrl} onChange={handleManualUrlChange} />
               <button className="btn ghost small" onClick={() => setImagePending("__clear__")}>Remove image</button>
             </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+              "Find market price" is for backfilling Market Value on a card that already has the right photo — it searches
+              by name/set/game, but picking a result below only sets the price reference, it will not replace the photo above.
+              To change the photo itself, use "Find image" instead.
+            </div>
           </div>
           {imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {candidateMode === 'price' && candidates.length > 0 && (
+            <div className="status-line ok" style={{ fontWeight: 500 }}>
+              These are possible prints matching this card's name/set — click the one that matches your physical copy
+              exactly. We'll pull that specific print's real market price into the Pricing section below as this
+              item's Market Value reference. Nothing else on this item changes, including the photo above.
+            </div>
+          )}
           {candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
-                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url)} />
+                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
               ))}
             </div>
           )}
@@ -296,8 +377,55 @@ export default function EditModal({ card, catalog, locations, onClose, onSave, o
 
           <div className="field-row2">
             <div className="field-group"><label>Quantity</label><input type="number" min="0" value={form.qty} onChange={(e) => set('qty', e.target.value)} /></div>
-            <div className="field-group"><label>Price ($)</label><input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} /></div>
+            <div className="field-group">
+              <label>Our price ($)</label>
+              <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} />
+            </div>
           </div>
+          {form.basePrice != null && (
+            <div className="field-group">
+              <label>Pricing</label>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>NM reference</div>
+                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${Number(form.basePrice).toFixed(2)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>
+                    Condition %{conditionTier ? ` (${conditionTier})` : ''}
+                  </div>
+                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                    {conditionPct != null ? `${conditionPct}%` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Market value</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                      {marketValue != null ? `$${marketValue.toFixed(2)}` : '— set a condition'}
+                    </span>
+                    {marketValue != null && (
+                      <button type="button" className="btn ghost small" onClick={() => set('price', marketValue)}>Use as Our Price</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {form.sourceUrl && (
+                <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
+                  <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
+                    Check live TCGPlayer listing ↗
+                  </span>
+                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
+                </div>
+              )}
+              {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
+                <div className="status-line err" style={{ marginTop: '8px' }}>
+                  High-value card — this estimate can be off by real money at this price level.
+                  {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
+                </div>
+              )}
+            </div>
+          )}
           <div className="field-group">
             <label>Notes</label>
             <textarea rows="3" placeholder="Anything worth flagging — damage, provenance, buyer holds…" value={form.notes} onChange={(e) => set('notes', e.target.value)} />

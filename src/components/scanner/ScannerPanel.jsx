@@ -2,11 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchScryfall, searchPokemon, searchYugioh, searchLorcana, searchOnePiece, searchRiftbound, searchGundam, searchSwu } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 let nextRowId = 1;
+
+// Same reasoning as EditModal's HIGH_VALUE_THRESHOLD — a flat condition
+// percentage is a population average, not this specific card's real going
+// rate, and the dollar error grows with the card's price. Batches make this
+// worse, not better — the same misestimate repeats across every copy.
+const HIGH_VALUE_THRESHOLD = 25;
 
 function detectedToRow(card) {
   return {
@@ -19,6 +25,16 @@ function detectedToRow(card) {
     confidence: card.confidence || 'medium',
     qty: 1,
     price: '',
+    // basePrice/listingUrl are what the Pricing section actually reads —
+    // stay null until "Find market price" explicitly reveals them.
+    // pendingPrice/pendingListingUrl silently track whichever candidate is
+    // backing imageUrl right now (auto-picked or manually chosen), so
+    // "Find market price" can reveal them with no extra search — the data
+    // was already fetched alongside the image.
+    basePrice: null,
+    listingUrl: '',
+    pendingPrice: null,
+    pendingListingUrl: '',
     condition: '',
     imageUrl: '',
     imageStatus: 'searching', // 'searching' | 'found' | 'none'
@@ -47,7 +63,7 @@ async function findImageCandidates(name, game, set) {
   }
 }
 
-export default function ScannerPanel({ catalog, locations, onImport }) {
+export default function ScannerPanel({ catalog, locations, onImport, multipliers }) {
   const { toast } = useUI();
   const fileInputRef = useRef(null);
   const [photo, setPhoto] = useState(null);
@@ -98,11 +114,18 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
       setRows(newRows);
       setScanning(false);
       // Pre-fill an image guess per row, independently, without blocking the
-      // review queue from showing up immediately.
+      // review queue from showing up immediately. Auto-places the image
+      // (unchanged), and quietly remembers that candidate's price/listing
+      // as "pending" — Market Value stays hidden until "Find market price"
+      // explicitly reveals it, since that's money-relevant and shouldn't
+      // come from an unconfirmed top search result.
       newRows.forEach(async (row) => {
         const results = await findImageCandidates(row.name, row.game, row.set);
         setRows(prev => prev && prev.map(r => r.id === row.id
-          ? { ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results }
+          ? {
+            ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
+            pendingPrice: results[0]?.price ?? null, pendingListingUrl: results[0]?.listingUrl || '',
+          }
           : r));
       });
     } catch (err) {
@@ -115,7 +138,12 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
   }
 
-  async function refreshImageForRow(id) {
+  // Searches for alternative prints/art using whatever name/set/game staff
+  // have already corrected, and shows the candidate grid so they can pick a
+  // different one — image only. Picking a candidate updates the pending
+  // price/listing behind the scenes (see the click handler in ScanRow) but
+  // doesn't reveal it; that's "Find market price" below.
+  async function findAnotherImageForRow(id) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
@@ -124,7 +152,24 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
       imageStatus: results.length ? 'found' : 'none',
+      pendingPrice: results[0]?.price ?? row.pendingPrice,
+      pendingListingUrl: results[0]?.listingUrl || row.pendingListingUrl,
     });
+    if (!results.length) toast(`No matches found for "${row.name || 'this card'}" — check the name/set.`, true);
+  }
+
+  // No search — the price/listing for whatever's currently shown as the
+  // image was already fetched alongside it (auto-pick or a manual pick from
+  // "Find another image"). This just reveals it, on the explicit assumption
+  // staff have now looked at the image and confirmed it's the right card.
+  function findMarketPriceForRow(id) {
+    const row = rows.find(r => r.id === id);
+    if (!row) return;
+    if (row.pendingPrice == null) {
+      toast(`No market price available for "${row.name || 'this card'}" — this game/print may not have price data, or try Find another image first.`, true);
+      return;
+    }
+    updateRow(id, { basePrice: row.pendingPrice, listingUrl: row.pendingListingUrl });
   }
 
   function removeRow(id) {
@@ -147,6 +192,8 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
       printing: r.printing,
       qty: r.qty,
       price: r.price,
+      basePrice: r.basePrice,
+      sourceUrl: r.listingUrl,
       location: batchLocation,
       imageUrl: r.imageUrl,
       lastUpdated: Date.now(),
@@ -237,9 +284,11 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
               <ScanRow
                 key={row.id}
                 row={row}
+                multipliers={multipliers}
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
-                onFindImage={() => refreshImageForRow(row.id)}
+                onFindAnotherImage={() => findAnotherImageForRow(row.id)}
+                onFindMarketPrice={() => findMarketPriceForRow(row.id)}
               />
             ))}
           </div>
@@ -259,16 +308,29 @@ export default function ScannerPanel({ catalog, locations, onImport }) {
   );
 }
 
-function ScanRow({ row, onChange, onRemove, onFindImage }) {
+function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
+  const { openLightbox } = useUI();
+  const conditionTier = canonicalizeCondition(row.condition);
+  const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
+  const marketValue = marketValueForCondition(row.basePrice, row.condition, multipliers);
+  const canZoom = row.imageStatus === 'found' && !!row.imageUrl;
   return (
     <div className="scan-row">
       <div className="scan-row-thumb-col">
-        <div className="scan-row-thumb">
+        <div
+          className="scan-row-thumb"
+          onClick={() => { if (canZoom) openLightbox(row.imageUrl); }}
+          style={{ cursor: canZoom ? 'pointer' : 'default' }}
+          title={canZoom ? 'Click to zoom' : ''}
+        >
           {row.imageStatus === 'searching' && <span style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>…</span>}
           {row.imageStatus === 'found' && row.imageUrl && <img src={row.imageUrl} />}
           {row.imageStatus === 'none' && <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>}
         </div>
-        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindImage}>Find image</button>
+        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindAnotherImage}>Find another image</button>
+        {row.basePrice == null && (
+          <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }} onClick={onFindMarketPrice}>Find market price</button>
+        )}
       </div>
 
       <div className="scan-row-fields">
@@ -287,10 +349,45 @@ function ScanRow({ row, onChange, onRemove, onFindImage }) {
           </span>
           <button className="icon-btn" title="Remove" style={{ flex: '0 0 auto' }} onClick={onRemove}>✕</button>
         </div>
+        {row.basePrice != null && (
+          <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>
+            NM ${Number(row.basePrice).toFixed(2)}
+            {' · '}
+            {conditionPct != null ? `${conditionTier} ${conditionPct}%` : 'set a condition'}
+            {' · '}
+            {marketValue != null ? (
+              <>
+                Market value ${marketValue.toFixed(2)}
+                <button type="button" className="btn ghost small" style={{ marginLeft: '8px' }} onClick={() => onChange({ price: marketValue })}>Use this</button>
+              </>
+            ) : 'market value —'}
+            {row.listingUrl && (
+              <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }} onClick={() => window.open(row.listingUrl, '_blank')}>
+                Check live TCGPlayer listing ↗
+              </span>
+            )}
+          </div>
+        )}
+        {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (
+          <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--rust)' }}>
+            High-value card — this estimate can be off by real money at this price level.
+            {!row.listingUrl && " Worth checking the real current listing before pricing it, especially in a batch."}
+          </div>
+        )}
         {row.showCandidates && row.imageCandidates.length > 0 && (
           <div className="img-candidates">
             {row.imageCandidates.map((c, i) => (
-              <img key={i} src={c.url} title={c.label} onClick={() => onChange({ imageUrl: c.url, imageStatus: 'found', showCandidates: false })} />
+              <img
+                key={i} src={c.url} title={c.label}
+                onClick={() => onChange({
+                  imageUrl: c.url, imageStatus: 'found', showCandidates: false,
+                  pendingPrice: c.price ?? null, pendingListingUrl: c.listingUrl || '',
+                  // Clear any already-revealed price — it belonged to the
+                  // previous image and would be misleading attached to this
+                  // one. Find market price re-reveals it for the new pick.
+                  basePrice: null, listingUrl: '',
+                })}
+              />
             ))}
           </div>
         )}

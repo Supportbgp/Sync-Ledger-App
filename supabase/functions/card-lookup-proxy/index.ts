@@ -34,6 +34,13 @@ function corsHeaders(origin) {
 // works with no query params at all, so this needs no further unverified
 // assumptions.
 //
+// A separate /api/prices/<game> endpoint (same full-list-per-game shape)
+// carries real TCGPlayer-sourced pricing — confirmed by a real sample for
+// all three games: market_price, low_price (unused for now), and
+// tcgplayer_url (a direct link to the real listing, same role as Scryfall's
+// purchase_uris.tcgplayer / pokemontcg.io's tcgplayer.url). Joined back to
+// the card list by card_code, which both endpoints share.
+//
 // A name-only match isn't enough: many of these games reuse the same name
 // across many separate prints (alt art, promos, base-set generics like
 // Gundam's "EX Base" cards, which share that literal name across dozens of
@@ -44,9 +51,15 @@ function corsHeaders(origin) {
 // print. If the hint doesn't match anything (typo, or genuinely no hint),
 // we fall back to the unnarrowed name matches rather than returning empty.
 async function egmanQuery(gameSlug, name, setHint) {
-  const res = await fetch(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`);
-  if (!res.ok) return [];
-  const cards = await res.json();
+  const [cardsRes, pricesRes] = await Promise.all([
+    fetch(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`),
+    fetch(`https://deckbuilder.egmanevents.com/api/prices/${gameSlug}`),
+  ]);
+  if (!cardsRes.ok) return [];
+  const cards = await cardsRes.json();
+  const prices = pricesRes.ok ? await pricesRes.json() : [];
+  const priceByCode = new Map((Array.isArray(prices) ? prices : []).map((p) => [p.card_code, p]));
+
   const nameNeedle = name.toLowerCase();
   let matches = (Array.isArray(cards) ? cards : [])
     .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
@@ -67,10 +80,15 @@ async function egmanQuery(gameSlug, name, setHint) {
   // makes otherwise-identical-looking same-name prints distinguishable.
   return matches
     .slice(0, 20)
-    .map((c) => ({
-      url: c._defaultImagePath ? `https://deckbuilder.egmanevents.com/api/images/${gameSlug}/${c._defaultImagePath}` : null,
-      label: `${c.name} (${c.card_code || c.set_code || ""}${c.rarity ? ' · ' + c.rarity : ''})`,
-    }))
+    .map((c) => {
+      const priceEntry = priceByCode.get(c.card_code);
+      return {
+        url: c._defaultImagePath ? `https://deckbuilder.egmanevents.com/api/images/${gameSlug}/${c._defaultImagePath}` : null,
+        label: `${c.name} (${c.card_code || c.set_code || ""}${c.rarity ? ' · ' + c.rarity : ''})`,
+        price: priceEntry ? priceEntry.market_price : null,
+        listingUrl: priceEntry ? priceEntry.tcgplayer_url : null,
+      };
+    })
     .filter((r) => r.url);
 }
 
@@ -85,11 +103,11 @@ const PROVIDERS = {
   // api.swu-db.com (not www. — that host 404s, the docs page and the API
   // itself live on different subdomains). Confirmed CORS-blocked and now
   // confirmed by a real response sample: array at data.data, fields
-  // Name/FrontArt/Set, plus MarketPrice/LowPrice (unused here, but useful
-  // later for the Market Value feature). setHint isn't wired in yet — the
-  // docs only showed structured `q=` examples like `set:sor`/`c=3`, not a
-  // documented way to combine a name filter with a set filter, and guessing
-  // at that syntax risks breaking the name search that already works.
+  // Name/FrontArt/Set/MarketPrice/LowPrice (LowPrice unused for now).
+  // setHint isn't wired in yet — the docs only showed structured `q=`
+  // examples like `set:sor`/`c=3`, not a documented way to combine a name
+  // filter with a set filter, and guessing at that syntax risks breaking
+  // the name search that already works.
   swu: async (query, _setHint) => {
     const res = await fetch(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
     if (!res.ok) return [];
@@ -97,6 +115,7 @@ const PROVIDERS = {
     return (data.data || []).slice(0, 20).map((c) => ({
       url: c.FrontArt,
       label: `${c.Name} (${c.Set || ""})`,
+      price: c.MarketPrice ? Number(c.MarketPrice) : null,
     })).filter((r) => r.url);
   },
 };

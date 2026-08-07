@@ -80,6 +80,11 @@ export function normalizeCard(c) {
     posChannel: c.posChannel !== false,
     tcgplayerChannel: c.tcgplayerChannel !== false,
     collectrChannel: c.collectrChannel !== false,
+    // NM reference price captured from whichever card candidate staff
+    // actually selected in image search — the basis for the computed
+    // Market Value shown next to Our Price (`price`). Never guessed;
+    // stays null until a search result with a real price gets picked.
+    basePrice: parseMoney(c.basePrice),
   };
 }
 
@@ -125,6 +130,42 @@ export function timeAgo(ts) {
   if (days === 1) return "Yesterday";
   if (days < 7) return days + "d ago";
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+// Default condition-multiplier table (percent of NM) — anchored to
+// CrystalCommerce's confirmed 100%/50% NM-to-Damaged default, centered on
+// community-cited ranges (see CLAUDE.md). Store-configurable via
+// store_settings; this is only the fallback before that loads.
+export const DEFAULT_CONDITION_MULTIPLIERS = { NM: 100, LP: 85, MP: 65, HP: 45, DMG: 25 };
+
+const CONDITION_ALIASES = {
+  nm: "NM", "near mint": "NM", mint: "NM", m: "NM",
+  lp: "LP", "lightly played": "LP", "light play": "LP", "slightly played": "LP", sp: "LP",
+  mp: "MP", "moderately played": "MP", "moderate play": "MP",
+  hp: "HP", "heavily played": "HP", "heavy play": "HP",
+  dmg: "DMG", damaged: "DMG", poor: "DMG", d: "DMG",
+};
+
+// Condition stays free text in the form (staff write "NM", "Near Mint",
+// "nm" inconsistently) — this maps whatever's typed onto one of the five
+// multiplier tiers, or null if it doesn't recognize it at all (a genuinely
+// unrecognized condition shouldn't silently get treated as NM/100%).
+export function canonicalizeCondition(raw) {
+  const c = (raw || "").toString().trim().toLowerCase();
+  if (!c) return null;
+  return CONDITION_ALIASES[c] || null;
+}
+
+// basePrice is the NM reference price; multipliers is the store's
+// configured (or default) percent-of-NM table. Returns null rather than
+// guessing if either input is missing or the condition isn't recognized.
+export function marketValueForCondition(basePrice, condition, multipliers) {
+  if (basePrice == null) return null;
+  const tier = canonicalizeCondition(condition);
+  if (!tier) return null;
+  const pct = tier === "NM" ? 100 : (multipliers && multipliers[tier]);
+  if (pct == null) return null;
+  return Math.round(basePrice * pct) / 100;
 }
 
 export const SORT_COLUMNS = {

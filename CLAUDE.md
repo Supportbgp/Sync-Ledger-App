@@ -75,6 +75,47 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   public binder page reads — a restricted view exposing browsing-safe
   columns only, for unsold/in-stock rows. It relies on view-ownership
   bypassing the base table's RLS, so `anon` never touches `catalog` directly.
+- **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
+  reference price captured from whichever search candidate staff actually
+  selected) is the only new column; Market Value itself is computed live in
+  the UI as `base_price × condition multiplier` (`marketValueForCondition`
+  in `cardUtils.js`), so it can't go stale if the condition changes later.
+  `price` keeps meaning what it already meant ("Our Price") — no rename.
+  Condition multipliers live in a `store_settings` singleton row, editable
+  via the "Pricing settings" link in the footer, defaulting to the
+  NM100/LP85/MP65/HP45/DMG25 table decided earlier. The condition field
+  stays free text; `canonicalizeCondition` fuzzy-matches it onto one of the
+  five tiers for multiplier lookup only. Two independent soft, non-blocking
+  toasts warn at save time: `priceOrderingWarning` (App.jsx) if an item's
+  price breaks condition ordering against another *physical copy* of the
+  same card in the same location, and `priceVsMarketValueWarning` (App.jsx)
+  if Our Price diverges more than 15% from *this card's own* computed
+  Market Value — a different kind of check (one compares inventory copies
+  against each other, the other compares a price against the estimate).
+  Neither blocks the save; deliberate pricing decisions are expected. One
+  Piece/Riftbound/Gundam (Egman-backed) now have pricing too — Egman's
+  `/api/prices/<game>` endpoint (confirmed by a real sample, joined to
+  `/api/cards/<game>` by `card_code`; see the `card-lookup-proxy` note
+  below). The Scanner's per-row Market Value is revealed by an explicit "Find
+  market price" action, not fetched automatically — it reads whatever
+  price/listing was already returned alongside the currently-selected
+  image (auto-picked, or chosen via "Find another image"), so confirming
+  the right card via the image is what gates seeing/trusting a price at
+  all, with no extra network call needed since that data's already there.
+- **The condition-multiplier estimate can be materially wrong for
+  high-value cards** — a flat percentage is a population average, not any
+  specific card's real going rate, and a real example (M Rayquaza EX,
+  XY-Roaring Skies) showed the HP estimate ~$13 under the real TCGPlayer HP
+  price. True per-condition pricing still requires TCGPlayer's own
+  partner-gated API (see below) — until/unless that's available, the
+  mitigation is a direct link to the card's real TCGPlayer listing
+  (`purchase_uris.tcgplayer` on Scryfall, `tcgplayer.url` on pokemontcg.io —
+  both already returned by the same search call used for the image, no
+  extra fetch), auto-captured into `sourceUrl`, plus a visible warning in
+  the Edit modal/Scanner above a $25 base price nudging staff to check the
+  real listing before pricing anything expensive — especially in a batch,
+  where the same misestimate repeats across every copy. YGOPRODeck/Lorcast/
+  SWU don't carry an equivalent direct-listing link today.
 
 ## Known constraints / accepted risks
 
@@ -101,7 +142,12 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
     it, given it's his app's internal backend rather than a documented
     public data source). The endpoint returns each game's full card list
     with no filter param, so the proxy fetches once and does the name match
-    itself rather than guessing at an undocumented filter syntax.
+    itself rather than guessing at an undocumented filter syntax. Pricing
+    for these three comes from the same backend's `/api/prices/<game>`
+    endpoint (confirmed by a real sample: `market_price`, `low_price`
+    unused for now, and `tcgplayer_url` — a direct real-listing link, same
+    role as Scryfall's/pokemontcg.io's), joined back to the card list by
+    the `card_code` field both endpoints share.
     `optcgapi.com` (a real, documented One Piece API) was evaluated and
     rejected — confirmed CORS-blocked *and* has no search-by-name endpoint
     at all, only per-card-ID lookups.
