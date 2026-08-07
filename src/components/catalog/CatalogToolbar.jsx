@@ -31,7 +31,7 @@ export default function CatalogToolbar({
         <option value="available">Available</option>
         <option value="sold">Sold</option>
       </select>
-      <button className="btn secondary small" onClick={onAddItem}>+ Add item</button>
+      <button className="btn" onClick={onAddItem}>+ Add item</button>
     </div>
   );
 }

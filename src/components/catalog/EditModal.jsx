@@ -329,43 +329,60 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
           )}
 
-          <div className="field-group">
-            <label>
-              Source / product URL{' '}
-              {form.sourceUrl && (
-                <span
-                  style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }}
-                  onClick={() => window.open(form.sourceUrl, '_blank')}
-                >(open ↗)</span>
-              )}
-            </label>
-            <input type="url" placeholder="e.g. TCGplayer product page link" value={form.sourceUrl} onChange={(e) => set('sourceUrl', e.target.value)} />
-          </div>
-
-          <div className="field-row2">
-            <div className="field-group"><label>Card / item name</label><input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
+          <div className="section-label">Item details</div>
+          <div className="form-section">
             <div className="field-group">
-              <label>Game</label>
-              <select value={form.game} onChange={(e) => set('game', e.target.value)}>
-                {GAMES.map(g => <option key={g} value={g}>{GAME_LABELS[g]}</option>)}
-              </select>
+              <label>
+                Source / product URL{' '}
+                {form.sourceUrl && (
+                  <span
+                    style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }}
+                    onClick={() => window.open(form.sourceUrl, '_blank')}
+                  >(open ↗)</span>
+                )}
+              </label>
+              <input type="url" placeholder="e.g. TCGplayer product page link" value={form.sourceUrl} onChange={(e) => set('sourceUrl', e.target.value)} />
             </div>
-          </div>
-          <div className="field-row2">
-            <div className="field-group"><label>Set</label><input type="text" value={form.set} onChange={(e) => set('set', e.target.value)} /></div>
-            <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
-          </div>
-          <div className="field-row2">
-            <div className="field-group"><label>Printing / finish</label><input type="text" placeholder="e.g. Foil, Normal" value={form.printing} onChange={(e) => set('printing', e.target.value)} /></div>
-            <div className="field-group"><label>SKU / barcode</label><input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)} /></div>
-          </div>
-          <div className="field-group">
-            <label>Binder / case / collection</label>
-            <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} />
+
+            <div className="field-row2">
+              <div className="field-group"><label>Card / item name</label><input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
+              <div className="field-group">
+                <label>Game</label>
+                <select value={form.game} onChange={(e) => set('game', e.target.value)}>
+                  {GAMES.map(g => <option key={g} value={g}>{GAME_LABELS[g]}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="field-row2">
+              <div className="field-group"><label>Set</label><input type="text" value={form.set} onChange={(e) => set('set', e.target.value)} /></div>
+              <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
+            </div>
+            <div className="field-row2">
+              <div className="field-group"><label>Printing / finish</label><input type="text" placeholder="e.g. Foil, Normal" value={form.printing} onChange={(e) => set('printing', e.target.value)} /></div>
+              <div className="field-group"><label>SKU / barcode</label><input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)} /></div>
+            </div>
+            <div className="field-group">
+              <label>Binder / case / collection</label>
+              <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} />
+            </div>
+
+            <div className="checkbox-row">
+              <input type="checkbox" id="f_isSlab" checked={form.isSlab} onChange={(e) => set('isSlab', e.target.checked)} />
+              <label htmlFor="f_isSlab" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>This is a graded slab (unique item)</label>
+            </div>
+            {form.isSlab && (
+              <div className="slab-fields">
+                <div className="field-row2">
+                  <div className="field-group"><label>Grader</label><input type="text" placeholder="PSA, BGS, CGC…" value={form.grader} onChange={(e) => set('grader', e.target.value)} /></div>
+                  <div className="field-group"><label>Grade</label><input type="text" placeholder="10, 9.5…" value={form.grade} onChange={(e) => set('grade', e.target.value)} /></div>
+                </div>
+                <div className="field-group"><label>Cert / serial number</label><input type="text" value={form.cert} onChange={(e) => set('cert', e.target.value)} /></div>
+              </div>
+            )}
           </div>
 
-          <div className="field-group">
-            <label>Where does this item live?</label>
+          <div className="section-label">Channels</div>
+          <div className="form-section">
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               <div className="checkbox-row" style={{ marginBottom: 0 }}>
                 <input type="checkbox" id="f_posChannel" checked={form.posChannel} onChange={(e) => setChannel('posChannel', e.target.checked)} />
@@ -380,83 +397,76 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 <label htmlFor="f_collectrChannel" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Collectr</label>
               </div>
             </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', margin: '4px 0 14px' }}>
               Only checked platforms show up in the Sync Queue and Status column for this item.
             </div>
           </div>
 
-          <div className="checkbox-row">
-            <input type="checkbox" id="f_isSlab" checked={form.isSlab} onChange={(e) => set('isSlab', e.target.checked)} />
-            <label htmlFor="f_isSlab" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>This is a graded slab (unique item)</label>
-          </div>
-          {form.isSlab && (
-            <div className="slab-fields">
-              <div className="field-row2">
-                <div className="field-group"><label>Grader</label><input type="text" placeholder="PSA, BGS, CGC…" value={form.grader} onChange={(e) => set('grader', e.target.value)} /></div>
-                <div className="field-group"><label>Grade</label><input type="text" placeholder="10, 9.5…" value={form.grade} onChange={(e) => set('grade', e.target.value)} /></div>
+          <div className="section-label">Quantity &amp; pricing</div>
+          <div className="form-section">
+            <div className="field-row2">
+              <div className="field-group"><label>Quantity</label><input type="number" min="0" value={form.qty} onChange={(e) => set('qty', e.target.value)} /></div>
+              <div className="field-group">
+                <label>Our price ($)</label>
+                <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} />
               </div>
-              <div className="field-group"><label>Cert / serial number</label><input type="text" value={form.cert} onChange={(e) => set('cert', e.target.value)} /></div>
             </div>
-          )}
-
-          <div className="field-row2">
-            <div className="field-group"><label>Quantity</label><input type="number" min="0" value={form.qty} onChange={(e) => set('qty', e.target.value)} /></div>
-            <div className="field-group">
-              <label>Our price ($)</label>
-              <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} />
-            </div>
-          </div>
-          {form.basePrice != null && (
-            <div className="field-group">
-              <label>Pricing</label>
-              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>NM reference</div>
-                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${Number(form.basePrice).toFixed(2)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>
-                    Condition %{conditionTier ? ` (${conditionTier})` : ''}
+            {form.basePrice != null && (
+              <div className="field-group">
+                <label>Pricing</label>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>NM reference</div>
+                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${Number(form.basePrice).toFixed(2)}</div>
                   </div>
-                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
-                    {conditionPct != null ? `${conditionPct}%` : '—'}
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>
+                      Condition %{conditionTier ? ` (${conditionTier})` : ''}
+                    </div>
+                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                      {conditionPct != null ? `${conditionPct}%` : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Market value</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
+                        {marketValue != null ? `$${marketValue.toFixed(2)}` : '— set a condition'}
+                      </span>
+                      {marketValue != null && (
+                        <button type="button" className="btn ghost small" onClick={() => set('price', marketValue)}>Use as Our Price</button>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Market value</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>
-                      {marketValue != null ? `$${marketValue.toFixed(2)}` : '— set a condition'}
+                {form.sourceUrl && (
+                  <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
+                    <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
+                      Check live TCGPlayer listing ↗
                     </span>
-                    {marketValue != null && (
-                      <button type="button" className="btn ghost small" onClick={() => set('price', marketValue)}>Use as Our Price</button>
-                    )}
+                    {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
                   </div>
-                </div>
+                )}
+                {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
+                  <div className="status-line err" style={{ marginTop: '8px' }}>
+                    High-value card — this estimate can be off by real money at this price level.
+                    {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
+                  </div>
+                )}
               </div>
-              {form.sourceUrl && (
-                <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
-                  <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
-                    Check live TCGPlayer listing ↗
-                  </span>
-                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
-                </div>
-              )}
-              {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
-                <div className="status-line err" style={{ marginTop: '8px' }}>
-                  High-value card — this estimate can be off by real money at this price level.
-                  {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="field-group">
-            <label>Notes</label>
-            <textarea rows="3" placeholder="Anything worth flagging — damage, provenance, buyer holds…" value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+            )}
           </div>
-          <div className="checkbox-row">
-            <input type="checkbox" id="f_sold" checked={form.sold} onChange={(e) => set('sold', e.target.checked)} />
-            <label htmlFor="f_sold" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Mark as sold</label>
+
+          <div className="section-label">Notes &amp; status</div>
+          <div className="form-section">
+            <div className="field-group">
+              <label>Notes</label>
+              <textarea rows="3" placeholder="Anything worth flagging — damage, provenance, buyer holds…" value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+            </div>
+            <div className="checkbox-row">
+              <input type="checkbox" id="f_sold" checked={form.sold} onChange={(e) => set('sold', e.target.checked)} />
+              <label htmlFor="f_sold" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Mark as sold</label>
+            </div>
           </div>
           <div className="updated-note">
             {card && card.lastUpdated ? ("Last updated: " + new Date(card.lastUpdated).toLocaleString()) : "New item — not saved yet"}

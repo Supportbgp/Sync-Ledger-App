@@ -360,19 +360,19 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
 
       <div className="scan-row-fields">
         <div className="scan-row-line">
-          <input type="text" placeholder="Card name" style={{ flex: 2 }} value={row.name} onChange={(e) => onChange({ name: e.target.value })} />
-          <select style={{ flex: 1 }} value={row.game} onChange={(e) => onChange({ game: e.target.value })}>
+          <input type="text" placeholder="Card name" className="sf-wide" value={row.name} onChange={(e) => onChange({ name: e.target.value })} />
+          <select className="sf" value={row.game} onChange={(e) => onChange({ game: e.target.value })}>
             {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
-          <input type="text" placeholder="Set" style={{ flex: 1 }} value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
+          <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
         </div>
         <div className="scan-row-line">
-          <input type="text" placeholder="Condition" style={{ flex: 1 }} value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
-          <input type="number" placeholder="Price" step="0.01" style={{ flex: 1 }} value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
-          <span className={`badge confidence-${row.confidence}`} title="How confident the scan was about this card" style={{ flex: '0 0 auto', alignSelf: 'center' }}>
+          <input type="text" placeholder="Condition" className="sf" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
+          <input type="number" placeholder="Price" step="0.01" className="sf" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
+          <span className={`badge confidence-${row.confidence} sf-auto`} title="How confident the scan was about this card" style={{ alignSelf: 'center' }}>
             {row.confidence}
           </span>
-          <button className="icon-btn" title="Remove" style={{ flex: '0 0 auto' }} onClick={onRemove}>✕</button>
+          <button className="icon-btn sf-auto" title="Remove" onClick={onRemove}>✕</button>
         </div>
         {row.basePrice != null && (
           <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>

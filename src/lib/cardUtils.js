@@ -46,6 +46,25 @@ function canonicalizeGame(raw) {
   return GAME_ALIASES[g.toLowerCase()] || g;
 }
 
+// A small colored tag per game, shown next to the item name so a mixed-game
+// catalog (this shop carries 9+ lines) scans by color at a glance, not just
+// by reading text. Reuses the six existing accent tokens rather than adding
+// new ones — some repeat across games since there are more games than
+// tokens, chosen loosely by each game's own real-world brand color where one
+// exists (Magic's purple, Pokemon's yellow, One Piece's ocean blue, Gundam's
+// red) rather than a plain round-robin. "Other" gets no color at all.
+export const GAME_TAG_CLASS = {
+  Magic: "tag-purple",
+  Pokemon: "tag-amber",
+  Yugioh: "tag-rust",
+  Lorcana: "tag-teal",
+  "One Piece": "tag-blue",
+  "Sports Singles": "tag-green",
+  SWU: "tag-purple",
+  Riftbound: "tag-amber",
+  Gundam: "tag-rust",
+};
+
 export function normalizeCard(c) {
   return {
     sku: c.sku || "",

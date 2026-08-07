@@ -61,6 +61,89 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   is no build step that derives them automatically, they're committed as
   static files.
 
+## Polish & mobile responsiveness
+
+- **Priority surfaces**: staff explicitly need the public binder page
+  (`BinderView`), Catalog, Scanner, and Import/Export to be comfortably
+  usable from a phone, not just the register desktop — Sync Queue and the
+  Export/QR modals stay desktop-oriented for now (not asked for, not yet
+  touched beyond not being actively broken).
+- **One shared CSS breakpoint** (`@media (max-width: 640px)` in
+  `styles/index.css`) covers every plain style/stacking fix — two-column
+  grids (`.field-row2`, `.map-grid`) collapse to one column, `.img-preview-
+  wrap` and `.scan-row` switch to column layout, `.overlay`/`.app` padding
+  shrinks to give content more width. `CatalogTable`'s table-vs-cards swap
+  uses its own JS breakpoint instead (`useIsMobile`, `hooks/useIsMobile.js`,
+  700px via `matchMedia`) since that's a structural markup change, not a
+  style tweak — a media query alone can't conditionally mount different
+  JSX.
+  - **Inline `style={{flex: N}}` silently defeats a CSS media query** —
+    found this the hard way in `ScannerPanel`'s `ScanRow`: its inputs had
+    hardcoded `style={{flex: 2}}` etc., which as an inline style always
+    outranks any external stylesheet rule regardless of specificity or
+    media query. Fixed by moving those to real classes (`.sf-wide`, `.sf`,
+    `.sf-auto`) so the mobile breakpoint can actually override them. Worth
+    remembering for any future inline flex/width styling on a component
+    that might need a responsive override later.
+- **CatalogTable mobile view**: below the 700px breakpoint, the dense
+  table is replaced entirely (not just visually collapsed) by
+  `.catalog-cards` — one compact card per item (thumb, name, game tag,
+  qty, price) that expands on tap to reveal SKU/updated/location/notes/
+  platform-status/Edit+Sell, via per-row `expandedSkus` state in
+  `CatalogTable.jsx`. Batch-select checkboxes still work per-card plus a
+  "Select all visible" row at the bottom. `deriveRow()` computes the
+  qty/sold/subtitle/game-tag fields once, shared by both the desktop table
+  and mobile card rendering paths, so the two layouts can't quietly
+  disagree on what "sold" or the subtitle line means.
+- **Per-game color tags** (`GAME_TAG_CLASS` in `cardUtils.js`, `.badge.tag-*`
+  in CSS): a small colored badge next to each item's name showing its game,
+  reusing the six existing accent tokens (some repeat — there are more
+  games than tokens) chosen loosely by each game's real-world brand color
+  where one exists (Magic's purple, Pokemon's yellow, One Piece's ocean
+  blue, Gundam's red). Games with no obvious color default to a neutral
+  gray tag rather than no tag at all, so every row still shows its game.
+  Requested as part of "more vibrant/colorful" — adds a real scan-by-color
+  aid on a catalog that stocks 9+ separate game lines, not just decoration.
+- **Saturated palette v2**: every accent color (`--amber`/`--green`/`--rust`/
+  `--purple`/`--blue`/`--teal`) was pushed noticeably more saturated than
+  the first branding pass (which read as muted once actually deployed),
+  then re-darkened just enough to hold ≥4.5:1 contrast against white again
+  — recomputed with the real WCAG formula after each saturation bump, same
+  discipline as the original palette pass. The three hand-picked border
+  colors that sit between a token's `-soft` background and its saturated
+  foreground (`.pending-badge`, `.pending-badge.zero`, `.batch-bar`) were
+  recomputed to match (a 65%-soft/35%-fg blend) rather than left stale
+  against the new colors.
+- **EditModal reorganized into labeled boxed sections** (`.form-section` +
+  the existing `.section-label` divider style, already used elsewhere in
+  the app) — Item details / Channels / Quantity & pricing / Notes & status
+  — instead of one long flat list of fields. Purely a markup/CSS
+  reorganization; no field, handler, or validation logic changed.
+- **SellModal** skips the quantity stepper entirely for a single-copy item
+  (`card.qty === 1`) and shows a plain "Mark this item as sold?" yes/no
+  confirmation instead — asking for a quantity when there's only one
+  possible answer was pure friction for the common case. Multi-copy items
+  keep the existing stepper.
+- **Row actions**: Edit was a 28px icon-button with "Edit" as literal text
+  crammed into it (too small to read comfortably, and rendered flush
+  against Sell with no gap). Now a normal `.btn.secondary.small` with a
+  `.row-actions` flex gap between it and Sell, used identically by both the
+  desktop table and the mobile card's expanded view. "+ Add item" moved
+  from `.btn.secondary.small` to a plain `.btn` (full-size, teal-filled)
+  so it reads as the toolbar's primary action, not a peer of the filter
+  dropdowns.
+- **Manual QA note**: this sandbox has no network path to the real
+  Supabase project, so Catalog/Scanner/Import (all behind the shared
+  login) couldn't be screenshot-tested against live data. Verified instead
+  with a throwaway local harness (mock catalog data, real components,
+  deleted before committing — see git history for `devtest.html`/
+  `src/devtest.jsx` if this needs redoing) — actually exercised CSV
+  parsing (client-side, no network needed) and every modal (Add/Edit item,
+  Sell) at both a phone and desktop viewport width via Playwright
+  screenshots, which is what caught the inline-`flex`-style bug above.
+  BinderView and Login were checked directly against the built app instead
+  since they don't require a session.
+
 ## Directory map
 
 - `src/lib/` — all non-React logic. `db.js` (Supabase reads/writes + row↔card
