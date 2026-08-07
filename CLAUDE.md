@@ -75,6 +75,32 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   public binder page reads — a restricted view exposing browsing-safe
   columns only, for unsold/in-stock rows. It relies on view-ownership
   bypassing the base table's RLS, so `anon` never touches `catalog` directly.
+  Column list is `create or replace view`d per migration (see
+  `phase6_dual_image.sql`) rather than tracked by hand elsewhere.
+- **Dual-image model (Sprint 6)**: every item can carry two independent
+  images — the existing "stock" reference (`image_url`/`image_data`, from
+  card search or a manual paste/upload) plus a new "photo" (`photo_url`/
+  `photo_data` — a real picture of this exact copy: a scanner crop or manual
+  upload). `active_image` (`'stock'|'photo'`, DB default `'photo'`) records
+  which one staff prefer displayed; `resolveActiveImage`/`activeImageSrc` in
+  `cardUtils.js` are the single source of truth for which one actually shows
+  — they honor that preference but fall back to whichever slot isn't blank,
+  so a card with only one image type never renders empty just because the
+  preferred slot is unset. Defaulting the column to `'photo'` (not `'stock'`)
+  means a real photo added later to an old stock-only item takes over
+  display automatically with no extra step, matching the original ask to
+  prefer the real photo when both exist — existing rows are unaffected since
+  their photo slot starts blank. `CatalogTable`'s `Thumb` and `BinderView`
+  both render through `activeImageSrc`, so staff and public views stay
+  consistent. In `EditModal.jsx`, "Find stock image" (search) and "Upload
+  real photo" write to separate pending slots and auto-switch the toggle to
+  show whatever was just changed; "Find market price" (Sprint 5) still
+  never touches either image slot. The toggle itself only renders when both
+  slots actually resolve to something. CSV/XLSX import and the Scanner's
+  auto-fill still only populate the stock slot for now — the Scanner doesn't
+  yet crop real per-card photos out of the binder-page image (needs
+  vision-model bounding boxes, not yet added to `scan-binder-page`'s tool
+  schema; tracked as follow-up work).
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

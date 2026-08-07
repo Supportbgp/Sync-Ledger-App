@@ -1,5 +1,5 @@
 import { useUI } from '../../context/UIContext.jsx';
-import { timeAgo } from '../../lib/cardUtils.js';
+import { timeAgo, activeImageSrc } from '../../lib/cardUtils.js';
 
 const COLUMNS = [
   { key: 'name', label: 'Item' },
@@ -37,21 +37,13 @@ function PlatformStatus({ card, onToggle }) {
 }
 
 function Thumb({ card, onZoom }) {
-  if (card.imageUrl && card.imageUrl.startsWith('http')) {
-    return (
-      <div className="img-frame" onClick={(e) => { e.stopPropagation(); onZoom(e.currentTarget.querySelector('img').src); }}>
-        <img className="thumb" src={card.imageUrl} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-      </div>
-    );
-  }
-  if (card.imageUrl === 'local' && card.imageData) {
-    return (
-      <div className="img-frame" onClick={(e) => { e.stopPropagation(); onZoom(e.currentTarget.querySelector('img').src); }}>
-        <img className="thumb" src={card.imageData} />
-      </div>
-    );
-  }
-  return <div className="thumb-placeholder">—</div>;
+  const src = activeImageSrc(card);
+  if (!src) return <div className="thumb-placeholder">—</div>;
+  return (
+    <div className="img-frame" onClick={(e) => { e.stopPropagation(); onZoom(src); }}>
+      <img className="thumb" src={src} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+    </div>
+  );
 }
 
 export default function CatalogTable({

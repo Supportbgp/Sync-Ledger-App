@@ -85,6 +85,14 @@ export function normalizeCard(c) {
     // Market Value shown next to Our Price (`price`). Never guessed;
     // stays null until a search result with a real price gets picked.
     basePrice: parseMoney(c.basePrice),
+    // Dual-image model (Sprint 6): imageUrl/imageData above are the "stock"
+    // reference (card search/manual paste); photoUrl/photoData are a real
+    // photo (scanner crop or manual upload). activeImage records which one
+    // staff want shown — see resolveActiveImage, which falls back to
+    // whichever slot isn't blank if the preferred one is.
+    photoUrl: c.photoUrl || "",
+    photoData: c.photoData || "",
+    activeImage: c.activeImage === "stock" ? "stock" : "photo",
   };
 }
 
@@ -166,6 +174,35 @@ export function marketValueForCondition(basePrice, condition, multipliers) {
   const pct = tier === "NM" ? 100 : (multipliers && multipliers[tier]);
   if (pct == null) return null;
   return Math.round(basePrice * pct) / 100;
+}
+
+// A url/data pair follows the same convention throughout the app: url ===
+// 'local' means the real image lives in the data column (a client-resized
+// data: URI); otherwise url is used directly if it's a real http(s) link.
+// Returns null if neither is actually populated.
+function resolveSrc(url, data) {
+  if (url === "local" && data) return data;
+  if (url && url.startsWith("http")) return url;
+  return null;
+}
+
+// Which image slot ("stock" or "photo") should actually be displayed for
+// this item. Honors the stored preference (activeImage), but falls back to
+// whichever slot actually has something if the preferred one is blank —
+// "it defaults to any that is not blank."
+export function resolveActiveImage(card) {
+  const stockSrc = resolveSrc(card.imageUrl, card.imageData);
+  const photoSrc = resolveSrc(card.photoUrl, card.photoData);
+  const preferred = card.activeImage === "stock" ? "stock" : "photo";
+  if (preferred === "stock") return stockSrc ? "stock" : (photoSrc ? "photo" : "stock");
+  return photoSrc ? "photo" : (stockSrc ? "stock" : "photo");
+}
+
+// The actual src string (http URL or data: URI) to render for whichever
+// slot resolveActiveImage picks, or null if neither slot has anything.
+export function activeImageSrc(card) {
+  const which = resolveActiveImage(card);
+  return which === "stock" ? resolveSrc(card.imageUrl, card.imageData) : resolveSrc(card.photoUrl, card.photoData);
 }
 
 export const SORT_COLUMNS = {
