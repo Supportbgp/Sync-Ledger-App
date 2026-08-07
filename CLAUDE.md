@@ -443,6 +443,13 @@ without a physical phone every time.
   component behavior for `SellModal`/`CatalogTable`/`EditModal` (mobile vs.
   desktop switch via a mocked `useIsMobile`, image-candidate selection,
   per-location channel defaults) — 111 tests total.
+  - **`jsdom@30` requires Node ^22.22.2/^24.15.0/>=26** (its own
+    `package.json` `engines` field) — CI's `test.yml` pins `node-version:
+    22` for this reason. Node 20 fails with a cryptic `webidl.util.
+    markAsUncloneable is not a function` deep in jsdom's bundled `undici`,
+    and since this dev sandbox happens to run Node 22 already, that gap
+    only showed up once the workflow actually ran in CI — worth remembering
+    before dropping the pin back down.
   - `src/test/setup.js` stubs `window.matchMedia` (jsdom doesn't implement
     it) and explicitly wires up `@testing-library/react`'s `cleanup()` in an
     `afterEach` — that auto-cleanup only self-registers under Vitest's
