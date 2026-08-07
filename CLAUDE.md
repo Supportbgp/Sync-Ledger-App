@@ -322,16 +322,28 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 
 ## Known constraints / accepted risks
 
-- `xlsx@0.18.5` (used for XLSX export) has two known unpatched
-  vulnerabilities (prototype pollution, ReDoS). The fix is only distributed
-  via SheetJS's own CDN (`cdn.sheetjs.com`), not npm — upgrade from an
-  unrestricted network with `npm install https://cdn.sheetjs.com/xlsx-<latest>/xlsx-<latest>.tgz`.
-- TCG Player and Collectr have no bulk-upload/bulk-create API available to
-  this app (confirmed by research, not assumed) — the Export modal produces
-  manual-entry-aid lists, not files either platform can ingest directly.
+- **Fixed**: `xlsx@0.18.5`'s two known vulnerabilities (prototype pollution,
+  ReDoS) — `package.json` now points `xlsx` at SheetJS's own patched CDN
+  build (`https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`) instead of
+  the vulnerable npm release (PR #11). One lasting nuance, not a
+  vulnerability: `npm install`/`npm ci` needs outbound access to
+  `cdn.sheetjs.com` specifically to resolve this dependency — confirmed
+  working on GitHub Actions' runners (that's what the deploy workflow's
+  `npm ci` step does on every run), but it'll fail in any environment
+  without that egress (e.g. a network-restricted sandbox).
+- TCG Player's **draft catalog accepts a bulk .xlsx/.csv upload for new
+  products**, not just existing listings (confirmed by hands-on
+  investigation, not docs) — corrects the earlier assumption that Export
+  could only produce manual-entry-aid lists for TCG Player. Building the
+  actual upload-ready export format is next up — see "Next sprints" below.
+  Collectr still has no bulk-upload/bulk-create API found for this app;
+  that part of Export stays manual-entry-aid only until/unless that
+  changes.
 - Card image/price search (`cardSearch.js`) covers Magic, Pokemon, Yu-Gi-Oh,
-  Lorcana, One Piece, Riftbound, Gundam, and SWU. Only Sports Singles has no
-  lookup (no card database exists for it). Findings from Sprint 4,
+  Lorcana, One Piece, Riftbound, Gundam, and SWU. Sports Singles has no
+  lookup — an accepted **drawback**, not a risk: no card database exists
+  for it at all, so there's nothing to integrate against, not an
+  unmitigated danger. Findings from Sprint 4,
   live-tested from the browser console/Postman — not just docs research,
   since CORS can't be verified any other way:
   - **Lorcana** — Lorcast (`api.lorcast.com`), free/no-key, confirmed
@@ -402,6 +414,23 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 - Phase 4 (a Cumulus POS SKU manager/import) is parked — needs the shop
   owner's go/no-go and a real Cumulus export/import file sample. Never guess
   Cumulus's file format.
+
+## Next sprints
+
+- **TCG Player draft-catalog export**: TCG Player's draft catalog accepts a
+  bulk .xlsx/.csv upload for *new* products, not just updates to existing
+  listings — confirmed by hands-on investigation (see Known constraints
+  above), correcting the earlier "manual-entry-aid only" assumption Export
+  was built around. This sprint builds an actual upload-ready export format
+  for TCG Player specifically. Get the real required column layout/format
+  before building — same "never guess an external platform's file format"
+  discipline that's applied everywhere else in this project.
+- **Staff documentation page**: a final sprint to write end-user
+  documentation for shop staff (how to use each tab, the scanner workflow,
+  what the platform-status chips mean, etc.) — not yet started, no format
+  decided (in-app help page vs. a standalone doc).
+- Sprint 3 (a full regression pass across the whole app) remains deferred,
+  unscheduled.
 
 ## Workflow conventions
 
