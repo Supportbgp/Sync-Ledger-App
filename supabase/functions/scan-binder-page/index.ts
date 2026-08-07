@@ -50,8 +50,19 @@ const DETECT_CARDS_TOOL = {
             set: { type: "string", description: "Set/expansion name if identifiable, else an empty string" },
             foil: { type: "boolean", description: "Whether the card appears foil/holo" },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
+            bbox: {
+              type: "object",
+              description: "Bounding box of just this one card's pocket within the full photo, as fractions (0.0 to 1.0) of the photo's total width/height — used to crop this exact card out of the page photo as its own real-photo reference.",
+              properties: {
+                x_min: { type: "number", description: "Left edge, as a fraction of image width" },
+                y_min: { type: "number", description: "Top edge, as a fraction of image height" },
+                x_max: { type: "number", description: "Right edge, as a fraction of image width" },
+                y_max: { type: "number", description: "Bottom edge, as a fraction of image height" },
+              },
+              required: ["x_min", "y_min", "x_max", "y_max"],
+            },
           },
-          required: ["position", "name", "game", "confidence"],
+          required: ["position", "name", "game", "confidence", "bbox"],
         },
       },
     },
@@ -64,7 +75,10 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "as printed, the game it's from, the set/expansion if you can tell, whether it looks " +
   "foil/holo, its rough grid position, and how confident you are. If you can't confidently " +
   "identify a specific card, still report it with your best guess and confidence \"low\" " +
-  "rather than skipping it. Do not guess condition or price — only identification.";
+  "rather than skipping it. Do not guess condition or price — only identification. Also give " +
+  "a bounding box tightly around just that one card's pocket (not the whole page), as " +
+  "fractions of the full photo's width/height — this is used to crop that exact card out of " +
+  "the page photo, so it needs to actually bound that card and not a neighboring one.";
 
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get("origin") || "");

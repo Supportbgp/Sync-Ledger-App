@@ -97,10 +97,28 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   show whatever was just changed; "Find market price" (Sprint 5) still
   never touches either image slot. The toggle itself only renders when both
   slots actually resolve to something. CSV/XLSX import and the Scanner's
-  auto-fill still only populate the stock slot for now — the Scanner doesn't
-  yet crop real per-card photos out of the binder-page image (needs
-  vision-model bounding boxes, not yet added to `scan-binder-page`'s tool
-  schema; tracked as follow-up work).
+  auto-fill still only populate the stock slot — CSV/XLSX import detects an
+  existing image URL only (see the backlog item above), and the Scanner now
+  crops the "photo" slot too (below).
+- **Scanner per-card crop pipeline (Sprint 6)**: `scan-binder-page`'s
+  `DETECT_CARDS_TOOL` schema now requires a `bbox` (`x_min/y_min/x_max/y_max`,
+  each a 0.0-1.0 fraction of the full page photo's width/height) per
+  detected card, tightly bounding just that card's pocket — the prompt
+  explicitly warns the model not to bound a neighboring pocket instead.
+  `cropImageRegion` (`image.js`) is a Canvas crop-and-downscale (same
+  maxDim/quality pattern as `resizeImageFile`) that turns that bbox into an
+  actual cropped data URL. `ScannerPanel.handleScan` crops every detected
+  card immediately (no extra network call — it's the same page photo
+  already in memory) into that row's `photoData`/`photoUrl:'local'`,
+  independent of and parallel to the existing stock-image auto-search. A
+  crop failure (bad/missing bbox) just leaves that row's photo slot blank —
+  the stock search result is still there as a fallback. The scan review
+  row's thumbnail shows the crop over the stock search result when both
+  exist (same photo-first default as `resolveActiveImage`), with no
+  per-row toggle — that's available in the Edit modal once the item's
+  actually saved. **Requires redeploying `scan-binder-page`**
+  (`supabase functions deploy scan-binder-page`) before this takes effect —
+  the schema change is server-side.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
