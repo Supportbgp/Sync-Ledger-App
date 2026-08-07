@@ -146,7 +146,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
         setImageStatus({ text: "Matches found, but none carry price data yet for this game.", kind: "err" });
         setCandidates(results);
       } else {
-        setImageStatus({ text: `${results.length} result(s) — click the right print to set its market price.`, kind: "ok" });
+        setImageStatus({ text: `${results.length} result(s) found.`, kind: "ok" });
         setCandidates(results);
       }
     } catch (e) {
@@ -283,8 +283,20 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <input type="url" placeholder="…or paste an image URL" value={manualUrl} onChange={handleManualUrlChange} />
               <button className="btn ghost small" onClick={() => setImagePending("__clear__")}>Remove image</button>
             </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+              "Find market price" is for backfilling Market Value on a card that already has the right photo — it searches
+              by name/set/game, but picking a result below only sets the price reference, it will not replace the photo above.
+              To change the photo itself, use "Find image" instead.
+            </div>
           </div>
           {imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {candidateMode === 'price' && candidates.length > 0 && (
+            <div className="status-line ok" style={{ fontWeight: 500 }}>
+              These are possible prints matching this card's name/set — click the one that matches your physical copy
+              exactly. We'll pull that specific print's real market price into the Pricing section below as this
+              item's Market Value reference. Nothing else on this item changes, including the photo above.
+            </div>
+          )}
           {candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
