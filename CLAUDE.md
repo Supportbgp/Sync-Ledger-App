@@ -186,6 +186,23 @@ Everything else found:
   one back-press rather than just the topmost — no global modal stack
   exists to arbitrate that; still strictly better than leaving the app
   entirely, which is what happened before.
+  - **Bug found via real device testing: the Edit modal (and every other
+    modal) closed itself the instant it opened**, in dev mode only. Root
+    cause: `<React.StrictMode>` (`main.jsx`) double-invokes effects in
+    dev — mount, cleanup, mount again, all synchronously — to catch
+    missing-cleanup bugs. The hook's cleanup calls `history.back()`
+    (asynchronous); by the time that resolves into a real `popstate`
+    event, the *second* mount's listener is already attached instead of
+    the first mount's (already removed), so it fires immediately and
+    closes the modal that was never supposed to be affected. Fixed with a
+    100ms guard in the `popstate` handler — a real physical back
+    press/gesture can't land within 100ms of a modal even finishing its
+    first render, so anything faster than that is this artifact, not a
+    real user action. Confirmed by reproducing it in an isolated throwaway
+    harness (same pattern as the "Manual QA note" above) with and without
+    the guard before shipping the fix — StrictMode is dev-only, so this
+    never affected the production build, but `npm run dev` is exactly how
+    real-phone testing runs the app.
 - **Touch targets were sized for a mouse**: `.btn`/`.btn.small` get real
   min-heights (44px/40px) under the mobile breakpoint; `.modal-foot`
   buttons (Cancel/Delete/Save etc.) go full-width and stack

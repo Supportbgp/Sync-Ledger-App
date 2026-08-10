@@ -15,9 +15,19 @@ export function useModalBackClose(onClose) {
   const closingViaPopRef = useRef(false);
 
   useEffect(() => {
+    const mountedAt = Date.now();
     window.history.pushState({ modal: true }, '');
 
     function handlePopState() {
+      // React 18's <StrictMode> (main.jsx) double-invokes this effect in
+      // dev — mount, cleanup, mount again — all synchronously. The first
+      // mount's cleanup calls history.back() below, which is asynchronous;
+      // by the time that resolves into a real 'popstate' event, the SECOND
+      // mount's listener (this one) is already attached, so it fires here
+      // and closes the modal the instant it opens — a real physical back
+      // press can't land within 100ms of the modal even rendering, so
+      // treat anything that fast as this artifact rather than a real one.
+      if (Date.now() - mountedAt < 100) return;
       closingViaPopRef.current = true;
       onClose();
     }
