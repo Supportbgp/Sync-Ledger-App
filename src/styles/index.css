@@ -27,6 +27,19 @@
       --blue-soft: #D0E7F7;
       --teal: #006F91;
       --teal-soft: #D0EEF5;
+      /* Game-tag-only colors (not reused for buttons/links elsewhere) — see
+         GAME_TAG_CLASS in cardUtils.js for why these exist as their own
+         tokens instead of reusing the 6 above. Hues spaced ~30-40° apart
+         around the wheel from the existing tokens, each independently
+         verified at ≥4.5:1 contrast against white. */
+      --tag-gundam: #587A14;
+      --tag-gundam-soft: #EAF5D4;
+      --tag-riftbound: #177A6A;
+      --tag-riftbound-soft: #D5F4EF;
+      --tag-swu: #535DCD;
+      --tag-swu-soft: #D5D8F3;
+      --tag-lorcana: #C43193;
+      --tag-lorcana-soft: #F3D5E9;
       --radius: 10px;
       --shadow: 0 1px 2px rgba(20, 34, 38, 0.07), 0 4px 14px rgba(20, 34, 38, 0.06);
     }
@@ -41,6 +54,12 @@
       color: var(--ink);
       font-family: 'Inter', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
+      /* A safety net, not the fix for any one overflowing element (see
+         .map-row below for the actual culprit found on mobile) — nothing on
+         this page should ever force horizontal scroll/zoom-to-fit, since
+         that's also what silently pushes a viewport-centered modal off to
+         the side of what's actually visible on a phone. */
+      overflow-x: hidden;
     }
 
     .app {
@@ -366,7 +385,11 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 50;
+      /* Must categorically outrank everything else that can be on screen at
+         once, including the toast (was accidentally the other way around —
+         z-index 50 vs the toast's 60 — letting a still-fading toast sit on
+         top of an open modal). */
+      z-index: 1000;
       padding: 20px;
       overflow-y: auto;
     }
@@ -638,6 +661,15 @@
       color: var(--ink-soft);
       font-family: 'IBM Plex Mono', monospace;
       font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Flex items default to a content-based min-width, so a <select> with a
+       long option (a real column header) could otherwise force this row —
+       and the whole page — wider than the viewport instead of shrinking. */
+    .map-row select {
+      flex: 1;
+      min-width: 0;
     }
 
     .status-line {
@@ -665,7 +697,7 @@
       border-radius: 8px;
       font-size: 13.5px;
       box-shadow: var(--shadow);
-      z-index: 60;
+      z-index: 40;
       opacity: 0;
       transition: opacity .2s;
     }
@@ -700,6 +732,14 @@
 
     .img-frame.large {
       border-radius: 8px;
+      /* Overrides .img-frame's plain inline-block: when the stock/photo
+         toggle row renders below the image, it can be wider than the image
+         itself, which would otherwise left-align the (narrower) image inside
+         the now-wider box. Flex + center keeps every child — image,
+         "No image" placeholder, toggle row — centered on its own. */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     .thumb-placeholder {
@@ -802,7 +842,7 @@
     }
 
     .catalog-cards-selectall {
-      margin-top: 10px;
+      margin-bottom: 10px;
       padding: 0 4px;
     }
 
@@ -879,6 +919,26 @@
     .badge.tag-neutral {
       background: var(--surface-alt);
       color: var(--ink-soft);
+    }
+
+    .badge.tag-gundam {
+      background: var(--tag-gundam-soft);
+      color: var(--tag-gundam);
+    }
+
+    .badge.tag-riftbound {
+      background: var(--tag-riftbound-soft);
+      color: var(--tag-riftbound);
+    }
+
+    .badge.tag-swu {
+      background: var(--tag-swu-soft);
+      color: var(--tag-swu);
+    }
+
+    .badge.tag-lorcana {
+      background: var(--tag-lorcana-soft);
+      color: var(--tag-lorcana);
     }
 
     .notes-pin {
@@ -1035,6 +1095,18 @@
       padding: 10px;
       background: var(--surface-alt);
       border-radius: 8px;
+    }
+
+    .sheet-picker label {
+      flex-shrink: 0;
+    }
+
+    /* Same overflow bug as .map-row select — a flex item's content width is
+       otherwise a floor it won't shrink below, which could push this whole
+       picker wide enough to visually disappear off a phone screen. */
+    .sheet-picker select {
+      flex: 1;
+      min-width: 0;
     }
 
     .binder-grid {
@@ -1275,5 +1347,70 @@
       .scan-row-line .sf {
         flex: 1 1 120px;
         width: auto;
+      }
+
+      /* Real-phone testing found every button on mobile reading as too small
+         to comfortably tap — these paddings/sizes were tuned for a mouse
+         cursor's precision, not a fingertip. ~44px is the commonly-cited
+         minimum comfortable touch target (Apple HIG/Material both land
+         near there), so every button gets at least that on mobile, without
+         touching the tighter desktop sizing that wasn't the complaint. */
+      .btn {
+        min-height: 44px;
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+
+      .btn.small {
+        min-height: 40px;
+        padding: 8px 14px;
+        font-size: 13px;
+      }
+
+      .icon-btn {
+        width: 40px;
+        height: 40px;
+      }
+
+      /* Modal action buttons (Cancel/Delete/Save etc.) go full-width and
+         stack instead of squeezing 2-3 small buttons into a row that's easy
+         to mis-tap — the confirming action (last in each modal's markup)
+         ends up on top via column-reverse, keeping it the most prominent/
+         reachable one. */
+      .modal-foot {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+
+      .modal-foot .btn {
+        width: 100%;
+      }
+
+      .checkbox-row {
+        gap: 10px;
+        padding: 3px 0;
+      }
+
+      .checkbox-row input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+      }
+
+      /* The mobile catalog card's expanded view specifically — sync-status
+         chips and Edit/Sell were the two hardest-to-hit controls reported;
+         the desktop table's denser sizing is untouched. */
+      .catalog-card-details .platform-chip {
+        width: 34px;
+        height: 34px;
+        font-size: 12px;
+      }
+
+      .catalog-card-details .platform-status {
+        gap: 8px;
+      }
+
+      .catalog-card-details .row-actions .btn {
+        min-height: 42px;
+        padding: 9px 18px;
       }
     }

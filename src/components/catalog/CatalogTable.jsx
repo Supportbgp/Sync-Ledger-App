@@ -53,11 +53,19 @@ function Thumb({ card, onZoom, size }) {
 // list, so the two layouts can never quietly disagree on what "sold" or the
 // subtitle line means.
 function deriveRow(c) {
+  // Built as a list of only-truthy parts and joined once, rather than
+  // string-concatenating a separator onto whatever the first join produced —
+  // that concatenation left a stray leading " · " whenever set/condition/
+  // printing were ALL blank on a slab that only had grader/grade filled in.
+  const subParts = [c.set, c.condition, c.printing].filter(Boolean);
+  if (c.itemType === "slab") {
+    const gradeText = [c.grader, c.grade].filter(Boolean).join(" ");
+    if (gradeText) subParts.push(gradeText);
+  }
   return {
     qtyClass: c.qty <= 0 ? "qty-zero" : (c.qty <= 2 ? "qty-low" : ""),
     isSold: c.sold || c.qty <= 0,
-    sub: [c.set, c.condition, c.printing].filter(Boolean).join(" · ") +
-      (c.itemType === "slab" && (c.grader || c.grade) ? ` · ${[c.grader, c.grade].filter(Boolean).join(" ")}` : ""),
+    sub: subParts.join(" · "),
     tagClass: GAME_TAG_CLASS[c.game] || "tag-neutral",
   };
 }
@@ -112,6 +120,16 @@ export default function CatalogTable({
   if (isMobile) {
     return (
       <>
+        <div className="catalog-cards-selectall">
+          <label className="checkbox-row" style={{ marginBottom: 0 }}>
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={(e) => onToggleSelectAll(visibleSkus, e.target.checked)}
+            />
+            <span style={{ fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Select all visible</span>
+          </label>
+        </div>
         <div className="catalog-cards">
           {visibleRows.map(c => {
             const { qtyClass, isSold, sub, tagClass } = deriveRow(c);
@@ -166,16 +184,6 @@ export default function CatalogTable({
               </div>
             );
           })}
-        </div>
-        <div className="catalog-cards-selectall">
-          <label className="checkbox-row" style={{ marginBottom: 0 }}>
-            <input
-              type="checkbox"
-              checked={allVisibleSelected}
-              onChange={(e) => onToggleSelectAll(visibleSkus, e.target.checked)}
-            />
-            <span style={{ fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Select all visible</span>
-          </label>
         </div>
         {rows.length > 400 && (
           <div style={{ padding: '10px', fontSize: '12px', color: 'var(--ink-soft)' }}>

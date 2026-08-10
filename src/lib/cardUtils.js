@@ -48,21 +48,26 @@ function canonicalizeGame(raw) {
 
 // A small colored tag per game, shown next to the item name so a mixed-game
 // catalog (this shop carries 9+ lines) scans by color at a glance, not just
-// by reading text. Reuses the six existing accent tokens rather than adding
-// new ones — some repeat across games since there are more games than
-// tokens, chosen loosely by each game's own real-world brand color where one
-// exists (Magic's purple, Pokemon's yellow, One Piece's ocean blue, Gundam's
-// red) rather than a plain round-robin. "Other" gets no color at all.
+// by reading text. Originally reused the 6 shared UI accent tokens (some
+// games sharing a color), but real-phone testing found 3 exact repeats
+// (Magic/SWU, Pokemon/Riftbound, Yugioh/Gundam) plus Lorcana/One Piece sitting
+// only ~10° apart on the color wheel despite being different tokens — too
+// close to tell apart at badge size. Every game now gets its own dedicated
+// hue (`--tag-*` custom properties, `.badge.tag-*` in CSS), spaced ~30-40°
+// apart around the wheel — the minimum gap needed for them to read as
+// genuinely different colors rather than shades of each other — each still
+// individually verified at ≥4.5:1 contrast against white. "Other" gets no
+// color at all.
 export const GAME_TAG_CLASS = {
   Magic: "tag-purple",
   Pokemon: "tag-amber",
   Yugioh: "tag-rust",
-  Lorcana: "tag-teal",
+  Lorcana: "tag-lorcana",
   "One Piece": "tag-blue",
   "Sports Singles": "tag-green",
-  SWU: "tag-purple",
-  Riftbound: "tag-amber",
-  Gundam: "tag-rust",
+  SWU: "tag-swu",
+  Riftbound: "tag-riftbound",
+  Gundam: "tag-gundam",
 };
 
 export function normalizeCard(c) {

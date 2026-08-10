@@ -22,6 +22,11 @@ function detectedToRow(card) {
     name: card.name || '',
     game: GAMES.includes(card.game) ? card.game : 'Other',
     set: card.set || '',
+    // Best-guess only — the vision model isn't always right about it, same
+    // as name/game/set, which is why it's a plain editable field here too.
+    // Used purely to narrow the image search (see findImageCandidates);
+    // never saved to the catalog.
+    rarity: card.rarity || '',
     printing: card.foil ? 'Foil' : '',
     confidence: card.confidence || 'medium',
     qty: 1,
@@ -47,16 +52,24 @@ function detectedToRow(card) {
     // model didn't return a usable bbox.
     photoUrl: '',
     photoData: '',
+    // Same stock/photo preference toggle as EditModal's dual-image model —
+    // defaults to the crop (matches resolveActiveImage's default), but
+    // picking a stock candidate below switches it to 'stock' so the pick is
+    // actually visible instead of silently staying hidden behind the crop.
+    activeImage: 'photo',
   };
 }
 
 // Full candidate list, not just the top pick — reused both for the automatic
 // pre-fill right after a scan and for a manual re-search (e.g. after staff
-// corrects a name/game the scan got wrong).
-async function findImageCandidates(name, game, set) {
+// corrects a name/game the scan got wrong). rarityHint is best-effort only
+// (see searchCardImage) — it re-sorts matches that report their own rarity,
+// it never excludes anything, so a wrong/unrecognized guess can't zero out
+// the results.
+async function findImageCandidates(name, game, set, rarityHint) {
   if (!name) return [];
   try {
-    return (await searchCardImage(game, name, set)) || [];
+    return (await searchCardImage(game, name, set, rarityHint)) || [];
   } catch {
     return [];
   }
@@ -133,7 +146,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       // explicitly reveals it, since that's money-relevant and shouldn't
       // come from an unconfirmed top search result.
       newRows.forEach(async (row) => {
-        const results = await findImageCandidates(row.name, row.game, row.set);
+        const results = await findImageCandidates(row.name, row.game, row.set, row.rarity);
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {
             ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
@@ -160,13 +173,17 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = await findImageCandidates(row.name, row.game, row.set);
+    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
       imageStatus: results.length ? 'found' : 'none',
       pendingPrice: results[0]?.price ?? row.pendingPrice,
       pendingListingUrl: results[0]?.listingUrl || row.pendingListingUrl,
+      // Otherwise the top match here would silently never show if the row
+      // already had a photo crop — same reasoning as EditModal's
+      // selectCandidate switching the toggle when a stock pick is made.
+      activeImage: results.length ? 'stock' : row.activeImage,
     });
     if (!results.length) toast(`No matches found for "${row.name || 'this card'}" — check the name/set.`, true);
   }
@@ -211,6 +228,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       imageUrl: r.imageUrl,
       photoUrl: r.photoUrl,
       photoData: r.photoData,
+      activeImage: r.activeImage,
       lastUpdated: Date.now(),
       posChannel: channels.posChannel,
       tcgplayerChannel: channels.tcgplayerChannel,
@@ -248,7 +266,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
           )}
         </div>
         <input
-          type="file" ref={fileInputRef} accept="image/*" capture="environment" style={{ display: 'none' }}
+          type="file" ref={fileInputRef} accept="image/*" style={{ display: 'none' }}
           disabled={scanning}
           onChange={(e) => handlePhotoSelected(e.target.files[0])}
         />
@@ -328,11 +346,11 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
   const marketValue = marketValueForCondition(row.basePrice, row.condition, multipliers);
-  // Same default as resolveActiveImage in cardUtils.js — the real photo
-  // cropped from this page takes priority over the stock search result when
-  // both exist. This row has no toggle of its own; staff can switch it later
-  // in the Edit modal once the item's saved to the catalog.
-  const displaySrc = row.photoData || (row.imageStatus === 'found' ? row.imageUrl : null);
+  // Same dual-image model as EditModal — stock candidate vs. the crop of
+  // this exact copy — with the same fallback rule when only one exists.
+  const stockSrc = row.imageStatus === 'found' ? row.imageUrl : null;
+  const photoSrc = row.photoData || null;
+  const displaySrc = row.activeImage === 'stock' ? (stockSrc || photoSrc) : (photoSrc || stockSrc);
   const canZoom = !!displaySrc;
   return (
     <div className="scan-row">
@@ -351,7 +369,22 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
             <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{row.game}</span>
           )}
         </div>
-        {row.photoData && <div style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>real photo</div>}
+        {stockSrc && photoSrc ? (
+          <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
+            <button
+              type="button" className={`btn small${row.activeImage === 'photo' ? '' : ' ghost'}`}
+              style={{ fontSize: '10px', padding: '2px 5px' }}
+              onClick={(e) => { e.stopPropagation(); onChange({ activeImage: 'photo' }); }}
+            >Photo</button>
+            <button
+              type="button" className={`btn small${row.activeImage === 'stock' ? '' : ' ghost'}`}
+              style={{ fontSize: '10px', padding: '2px 5px' }}
+              onClick={(e) => { e.stopPropagation(); onChange({ activeImage: 'stock' }); }}
+            >Stock</button>
+          </div>
+        ) : photoSrc ? (
+          <div style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>real photo</div>
+        ) : null}
         <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindAnotherImage}>Find another image</button>
         {row.basePrice == null && (
           <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }} onClick={onFindMarketPrice}>Find market price</button>
@@ -365,6 +398,11 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
             {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
           <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
+          <input
+            type="text" placeholder="Rarity" className="sf" value={row.rarity}
+            title="Optional — narrows the image search, same as Set, for cards that reprint the same name/set at different rarities"
+            onChange={(e) => onChange({ rarity: e.target.value })}
+          />
         </div>
         <div className="scan-row-line">
           <input type="text" placeholder="Condition" className="sf" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
@@ -395,7 +433,8 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
         )}
         {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (
           <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--rust)' }}>
-            High-value card — this estimate can be off by real money at this price level.
+            Market value above is an estimate (NM price × a flat condition %), not real per-condition sales
+            data — on a ${HIGH_VALUE_THRESHOLD}+ card that gap can be real money.
             {!row.listingUrl && " Worth checking the real current listing before pricing it, especially in a batch."}
           </div>
         )}
@@ -411,6 +450,9 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
                   // previous image and would be misleading attached to this
                   // one. Find market price re-reveals it for the new pick.
                   basePrice: null, listingUrl: '',
+                  // See findAnotherImageForRow — otherwise this pick could
+                  // silently stay invisible behind an existing photo crop.
+                  activeImage: 'stock',
                 })}
               />
             ))}

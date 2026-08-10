@@ -50,7 +50,7 @@ function corsHeaders(origin) {
 // matched against card_code/set_code/set_label to narrow to the exact
 // print. If the hint doesn't match anything (typo, or genuinely no hint),
 // we fall back to the unnarrowed name matches rather than returning empty.
-async function egmanQuery(gameSlug, name, setHint) {
+async function egmanQuery(gameSlug, name, setHint, rarityHint) {
   const [cardsRes, pricesRes] = await Promise.all([
     fetch(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`),
     fetch(`https://deckbuilder.egmanevents.com/api/prices/${gameSlug}`),
@@ -74,6 +74,16 @@ async function egmanQuery(gameSlug, name, setHint) {
     if (narrowed.length) matches = narrowed;
   }
 
+  // Same narrow-if-it-helps, fall-back-if-not rule as setHint above — safe
+  // to filter on `rarity` directly (not just guessed at) since the same
+  // real response sample that confirmed card_code/set_code/set_label also
+  // confirmed this field.
+  if (rarityHint) {
+    const rarityNeedle = rarityHint.toLowerCase();
+    const narrowed = matches.filter((c) => (c.rarity || "").toLowerCase().includes(rarityNeedle));
+    if (narrowed.length) matches = narrowed;
+  }
+
   // A generous cap, not 6 — these are just thumbnails in a picker grid, and
   // a card with many prints (alt art, promos) needs enough of them visible
   // to actually find the right one. card_code + rarity in the label is what
@@ -87,6 +97,7 @@ async function egmanQuery(gameSlug, name, setHint) {
         label: `${c.name} (${c.card_code || c.set_code || ""}${c.rarity ? ' · ' + c.rarity : ''})`,
         price: priceEntry ? priceEntry.market_price : null,
         listingUrl: priceEntry ? priceEntry.tcgplayer_url : null,
+        rarity: c.rarity || '',
       };
     })
     .filter((r) => r.url);
@@ -96,19 +107,21 @@ async function egmanQuery(gameSlug, name, setHint) {
 // returns the normalized candidate shape the client already expects from
 // cardSearch.js: { url, label }[].
 const PROVIDERS = {
-  onepiece: (query, setHint) => egmanQuery('optcg', query, setHint),
-  riftbound: (query, setHint) => egmanQuery('riftbound', query, setHint),
-  gundam: (query, setHint) => egmanQuery('gundam', query, setHint),
+  onepiece: (query, setHint, rarityHint) => egmanQuery('optcg', query, setHint, rarityHint),
+  riftbound: (query, setHint, rarityHint) => egmanQuery('riftbound', query, setHint, rarityHint),
+  gundam: (query, setHint, rarityHint) => egmanQuery('gundam', query, setHint, rarityHint),
 
   // api.swu-db.com (not www. — that host 404s, the docs page and the API
   // itself live on different subdomains). Confirmed CORS-blocked and now
   // confirmed by a real response sample: array at data.data, fields
-  // Name/FrontArt/Set/MarketPrice/LowPrice (LowPrice unused for now).
+  // Name/FrontArt/Set/MarketPrice/LowPrice (LowPrice unused for now) — no
+  // confirmed rarity field, so rarityHint is deliberately not wired in here,
+  // same discipline as setHint below: no confirmed field/syntax, no guess.
   // setHint isn't wired in yet — the docs only showed structured `q=`
   // examples like `set:sor`/`c=3`, not a documented way to combine a name
   // filter with a set filter, and guessing at that syntax risks breaking
   // the name search that already works.
-  swu: async (query, _setHint) => {
+  swu: async (query, _setHint, _rarityHint) => {
     const res = await fetch(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
     if (!res.ok) return [];
     const data = await res.json();
@@ -127,14 +140,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { provider, query, setHint } = await req.json();
+    const { provider, query, setHint, rarityHint } = await req.json();
     if (!provider || !PROVIDERS[provider]) {
       return json({ error: `Unknown provider: ${provider}` }, 400, headers);
     }
     if (!query || typeof query !== "string") {
       return json({ error: "Missing query" }, 400, headers);
     }
-    const results = await PROVIDERS[provider](query, setHint || "");
+    const results = await PROVIDERS[provider](query, setHint || "", rarityHint || "");
     return json({ results }, 200, headers);
   } catch (err) {
     return json({ error: String(err) }, 500, headers);

@@ -48,6 +48,7 @@ const DETECT_CARDS_TOOL = {
             name: { type: "string", description: "Card name as printed" },
             game: { type: "string", enum: CARD_GAMES },
             set: { type: "string", description: "Set/expansion name if identifiable, else an empty string" },
+            rarity: { type: "string", description: "Rarity as printed or shown by a rarity symbol on the card (e.g. 'Common', 'Rare', 'Rare Holo', 'Secret Rare'), else an empty string — used only to narrow an image search among same-name/same-set prints that differ by rarity, never saved as-is" },
             foil: { type: "boolean", description: "Whether the card appears foil/holo" },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
             bbox: {
@@ -72,10 +73,11 @@ const DETECT_CARDS_TOOL = {
 
 const PROMPT_TEXT = "This is a photo of one page of a trading card binder — clear plastic " +
   "pockets, each holding one card. Identify every card you can see. For each, give its name " +
-  "as printed, the game it's from, the set/expansion if you can tell, whether it looks " +
-  "foil/holo, its rough grid position, and how confident you are. If you can't confidently " +
-  "identify a specific card, still report it with your best guess and confidence \"low\" " +
-  "rather than skipping it. Do not guess condition or price — only identification. Also give " +
+  "as printed, the game it's from, the set/expansion if you can tell, its rarity if you can " +
+  "tell from printed text or a rarity symbol, whether it looks foil/holo, its rough grid " +
+  "position, and how confident you are. If you can't confidently identify a specific card, " +
+  "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
+  "not guess condition or price — only identification. Also give " +
   "a bounding box around just that one card's pocket (not the whole page), as fractions of " +
   "the full photo's width/height — this is used to crop that exact card out of the page " +
   "photo, so it needs to actually bound that card and not a neighboring one. Anchor on the " +

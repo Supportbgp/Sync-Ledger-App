@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabaseClient, SHARED_LOGIN_EMAIL } from '../lib/supabase.js';
+import { useModalBackClose, backdropClose } from '../hooks/useModalBackClose.js';
 
 export default function ConfirmModal({ message, title, requirePassword, onResolve }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef(null);
+  useModalBackClose(() => onResolve(false));
 
   useEffect(() => {
     if (requirePassword && inputRef.current) {
@@ -30,7 +32,7 @@ export default function ConfirmModal({ message, title, requirePassword, onResolv
   }
 
   return (
-    <div className="overlay show">
+    <div className="overlay show" onClick={backdropClose(() => onResolve(false))}>
       <div className="modal">
         <div className="modal-head">
           <div className="name">{title || "Are you sure?"}</div>

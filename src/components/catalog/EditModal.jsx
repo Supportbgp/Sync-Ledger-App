@@ -3,6 +3,7 @@ import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
+import { useModalBackClose, backdropClose } from '../../hooks/useModalBackClose.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -51,6 +52,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
+  useModalBackClose(onClose);
 
   // For a brand-new item, follow whatever channels the same binder/case
   // already uses as the staff types the location in — until they manually
@@ -271,7 +273,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const marketValue = marketValueForCondition(form.basePrice, form.condition, multipliers);
 
   return (
-    <div className="overlay show">
+    <div className="overlay show" onClick={backdropClose(onClose)}>
       <div className="modal wide">
         <div className="modal-head">
           <div className="name">{card ? "Edit item" : "Add item"}</div>
@@ -449,7 +451,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 )}
                 {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
                   <div className="status-line err" style={{ marginTop: '8px' }}>
-                    High-value card — this estimate can be off by real money at this price level.
+                    Market value above is an estimate (NM reference price × a flat condition %), not real
+                    per-condition sales data — on a ${HIGH_VALUE_THRESHOLD}+ card that gap can be real money.
                     {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
                   </div>
                 )}
