@@ -120,6 +120,11 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
     }
     const autoGrade = !(mapping.itemType || mapping.grader || mapping.grade);
     const batchLocation = importLocation.trim();
+    // Not part of the catalog schema (see importParse.js) — kept in a
+    // separate array, indexed the same as newRows, purely to narrow the
+    // auto image search below. Never attached to the normalizeCard objects
+    // themselves so it can't leak into what actually gets saved.
+    const rarityHints = rows.map(r => (mapping.rarity ? (r[mapping.rarity] || "").trim() : ""));
     const newRows = rows.map((r, i) => {
       const rawName = mapping.name ? r[mapping.name] : "Unnamed";
       let detected = { name: rawName, itemType: "single", grader: "", grade: "" };
@@ -160,13 +165,15 @@ export default function ImportExportPanel({ catalog, queue, locations, onImport,
     // so unlike those two, there's no price/listing backfill and no per-row
     // review step: the top result just fills the image slot directly,
     // matching how little review any other imported field gets today.
-    const needsImage = newRows.filter(c => !c.imageUrl);
+    const needsImage = newRows
+      .map((card, i) => ({ card, rarityHint: rarityHints[i] }))
+      .filter(({ card }) => !card.imageUrl);
     let foundCount = 0;
     if (needsImage.length) {
       setStatus({ text: `Searching for card images for ${needsImage.length} row(s) without one…`, kind: "" });
-      await runWithConcurrency(needsImage, IMAGE_SEARCH_CONCURRENCY, async (card) => {
+      await runWithConcurrency(needsImage, IMAGE_SEARCH_CONCURRENCY, async ({ card, rarityHint }) => {
         try {
-          const results = await searchCardImage(card.game, card.name, card.set);
+          const results = await searchCardImage(card.game, card.name, card.set, rarityHint);
           if (results && results.length) {
             card.imageUrl = results[0].url;
             foundCount++;

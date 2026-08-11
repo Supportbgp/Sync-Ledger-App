@@ -78,6 +78,7 @@ async function findImageCandidates(name, game, set, rarityHint) {
 export default function ScannerPanel({ catalog, locations, onImport, multipliers }) {
   const { toast } = useUI();
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const [photo, setPhoto] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [rows, setRows] = useState(null);
@@ -260,16 +261,34 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
             <img src={photo} style={{ maxWidth: '100%', maxHeight: '260px', borderRadius: '8px' }} />
           ) : (
             <>
-              <span className="mark">Take or choose a photo of a binder page</span>
-              One page at a time works best — a full 9-pocket page in even light.
+              <span className="mark">Choose a photo of a binder page</span>
+              One page at a time works best — a full 9-pocket page in even light. Or use the camera button below.
             </>
           )}
         </div>
+        {/* Two separate inputs instead of one relying on the OS's default
+            file-picker chooser to offer both options — that chooser's exact
+            behavior (whether "Take Photo" even shows up) varies enough across
+            mobile browsers/OS versions that staff on some phones only ever
+            saw a plain file picker with no camera option. capture="environment"
+            here guarantees a real camera launch regardless of that. */}
         <input
           type="file" ref={fileInputRef} accept="image/*" style={{ display: 'none' }}
           disabled={scanning}
           onChange={(e) => handlePhotoSelected(e.target.files[0])}
         />
+        <input
+          type="file" ref={cameraInputRef} accept="image/*" capture="environment" style={{ display: 'none' }}
+          disabled={scanning}
+          onChange={(e) => handlePhotoSelected(e.target.files[0])}
+        />
+        <button
+          type="button" className="btn secondary small" disabled={scanning}
+          style={{ marginTop: '10px' }}
+          onClick={() => cameraInputRef.current.click()}
+        >
+          Take a photo
+        </button>
         {photo && !rows && (
           <div style={{ marginTop: '10px' }}>
             <button className="btn" disabled={scanning} onClick={handleScan}>

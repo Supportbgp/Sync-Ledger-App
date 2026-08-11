@@ -52,6 +52,10 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
+  // Best-guess only, same as ScannerPanel's row.rarity — never saved to the
+  // catalog, purely used to narrow the image/price search below (see
+  // preferRarity in cardSearch.js: a soft re-sort, never a hard filter).
+  const [rarity, setRarity] = useState("");
 
   // For a brand-new item, follow whatever channels the same binder/case
   // already uses as the staff types the location in — until they manually
@@ -110,7 +114,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("image");
     setSearching(true);
     try {
-      const results = await searchByGame(form.game, name, form.set.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
       if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
       } else if (!results.length) {
@@ -137,7 +141,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("price");
     setSearching(true);
     try {
-      const results = await searchByGame(form.game, name, form.set.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
       if (results === null) {
         setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
       } else if (!results.length) {
@@ -278,7 +282,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
           <div className="name">{card ? "Edit item" : "Add item"}</div>
           <div className="meta">Changes save with today's date as Last Updated</div>
         </div>
-        <div className="modal-body">
+        <div className="modal-body modal-body-reorder">
           <div className="img-preview-wrap">
             <div
               className="img-frame large"
@@ -289,22 +293,28 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               ) : (
                 <div className="img-preview-empty">No image</div>
               )}
+            </div>
+            {/* Toggle + Find/Upload actions share one container, on the side of
+                the image, instead of each stacking as its own full-width block
+                below it — real-phone testing found the old stacked layout too
+                tall/scrolly, and left the action buttons hugging the left edge. */}
+            <div className="img-side">
               {stockSrc && photoSrc && (
-                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                <div className="img-toggle-row">
                   <button type="button" className={`btn small${form.activeImage === 'photo' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'photo'); }}>Real photo</button>
                   <button type="button" className={`btn small${form.activeImage === 'stock' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'stock'); }}>Stock image</button>
                 </div>
               )}
-            </div>
-            <div className="img-actions">
-              <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
-              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
-              <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
-              <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
-              <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {stockSrc && <button className="btn ghost small" onClick={() => setStockPending("__clear__")}>Remove stock</button>}
-                {photoSrc && <button className="btn ghost small" onClick={() => setPhotoPending("__clear__")}>Remove photo</button>}
+              <div className="img-actions">
+                <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
+                <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
+                <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
+                <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
+                <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {stockSrc && <button className="btn ghost small" onClick={() => setStockPending("__clear__")}>Remove stock</button>}
+                  {photoSrc && <button className="btn ghost small" onClick={() => setPhotoPending("__clear__")}>Remove photo</button>}
+                </div>
               </div>
             </div>
             <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
@@ -323,7 +333,12 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
           )}
           {candidates.length > 0 && (
-            <div className="img-candidates">
+            // On desktop this renders under the form sections (order:1 below,
+            // vs. the sections' default order:0) since the search-results grid
+            // is secondary to the data fields staff are actively editing; on
+            // mobile it stays right here, near the image it's replacing —
+            // scrolling all the way past the form to find it read as broken.
+            <div className="img-candidates img-candidates-reorder">
               {candidates.map((r, i) => (
                 <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
               ))}
@@ -356,11 +371,22 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Set</label><input type="text" value={form.set} onChange={(e) => set('set', e.target.value)} /></div>
-              <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
+              <div className="field-group">
+                <label>Rarity</label>
+                <input
+                  type="text" placeholder="Optional — narrows image/price search" value={rarity}
+                  title="Not saved — same as Set, just narrows the search below for cards that reprint the same name/set at different rarities"
+                  onChange={(e) => setRarity(e.target.value)}
+                />
+              </div>
             </div>
             <div className="field-row2">
+              <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
               <div className="field-group"><label>Printing / finish</label><input type="text" placeholder="e.g. Foil, Normal" value={form.printing} onChange={(e) => set('printing', e.target.value)} /></div>
-              <div className="field-group"><label>SKU / barcode</label><input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)} /></div>
+            </div>
+            <div className="field-group">
+              <label>SKU / barcode</label>
+              <input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)} />
             </div>
             <div className="field-group">
               <label>Binder / case / collection</label>

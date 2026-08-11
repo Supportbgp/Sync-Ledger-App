@@ -700,6 +700,13 @@
       z-index: 40;
       opacity: 0;
       transition: opacity .2s;
+      /* Purely informational — nothing inside it is ever clickable. Without
+         this, the fixed-position box still intercepts clicks at that screen
+         location even at opacity 0 (opacity doesn't remove hit-testing), which
+         permanently ate clicks on the footer's "Pricing settings" link once a
+         toast had fired at least once, since the footer sits at the bottom of
+         the page — the same spot this box occupies. */
+      pointer-events: none;
     }
 
     .toast.show {
@@ -732,14 +739,23 @@
 
     .img-frame.large {
       border-radius: 8px;
-      /* Overrides .img-frame's plain inline-block: when the stock/photo
-         toggle row renders below the image, it can be wider than the image
-         itself, which would otherwise left-align the (narrower) image inside
-         the now-wider box. Flex + center keeps every child — image,
-         "No image" placeholder, toggle row — centered on its own. */
+      flex-shrink: 0;
+    }
+
+    /* Toggle row (Real photo/Stock image) + the Find/Upload actions below it
+       — one container, sitting beside .img-frame.large, instead of each
+       stacking as its own full-width block under the image. */
+    .img-side {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .img-toggle-row {
+      display: flex;
+      gap: 4px;
     }
 
     .thumb-placeholder {
@@ -1018,7 +1034,22 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      flex: 1;
+    }
+
+    /* Reorders .img-candidates-reorder relative to its modal-body siblings
+       (EditModal only — scoped to this modifier class, not the shared
+       .modal-body used by every other modal). Search results default to
+       after the form sections (order 1 vs. the sections' unset/0) since
+       they're secondary to the fields staff are actively editing; the mobile
+       override below resets that back to 0 so it stays right after the image
+       it's about to replace, instead of below a full screen's worth of form. */
+    .modal-body-reorder {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .img-candidates-reorder {
+      order: 1;
     }
 
     .img-candidates {
@@ -1319,12 +1350,19 @@
         grid-template-columns: 1fr;
       }
 
-      .img-preview-wrap {
-        flex-direction: column;
+      /* .img-preview-wrap stays a row on mobile too — image on the left,
+         .img-side (toggle + Find/Upload actions) on the right — rather than
+         stacking each into its own full-width block, which real-phone
+         testing found too tall/scrolly. .img-preview shrinks a bit further
+         so .img-side has enough room for its button text. */
+      .img-preview,
+      .img-preview-empty {
+        width: 72px;
+        height: 100px;
       }
 
-      .img-preview-wrap .img-frame.large {
-        align-self: center;
+      .img-candidates-reorder {
+        order: 0;
       }
 
       .sheet-picker {

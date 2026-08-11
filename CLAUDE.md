@@ -546,6 +546,94 @@ Everything else found:
   owner's go/no-go and a real Cumulus export/import file sample. Never guess
   Cumulus's file format.
 
+## Mobile polish round 3 (continued real-phone findings)
+
+Another round of live phone-testing feedback on top of round 2 above.
+
+- **A fixed-position toast with no `pointer-events: none` still blocks
+  clicks underneath it, even at `opacity: 0`** — opacity alone doesn't
+  remove an element from hit-testing. `.toast` sits `position: fixed;
+  bottom: 20px` centered, which is exactly where the footer (and its
+  "Pricing settings" link) ends up once a page is scrolled to the bottom —
+  so the first toast that ever fired (e.g. "Pricing settings saved" itself)
+  left an invisible box permanently eating clicks in that screen region,
+  matching the exact reported symptom ("the link is broken until I
+  refresh" — refreshing just hadn't happened to re-trigger a toast yet at
+  the moment they checked). Reproduced empirically with a throwaway
+  Playwright harness before fixing (real click at the link's coordinates,
+  toast fired first) — confirmed the click landed on `.toast`, not the
+  link. Fixed with `pointer-events: none` on `.toast` — nothing inside it
+  is ever clickable, so there's no reason for it to intercept anything.
+- **EditModal's image area reworked**: the Real-photo/Stock-image toggle
+  and the Find stock image/Find market price/Upload real photo/URL-paste
+  actions used to stack as separate full-width blocks below the image on
+  mobile (`.img-preview-wrap{flex-direction:column}`), which read as too
+  tall/scrolly and left those actions hugging the left edge (missing
+  `align-items` on the now-vertical cross-axis). Restructured so the
+  toggle + actions share one new container (`.img-side`) that sits beside
+  `.img-frame.large` in a row, on *both* desktop and mobile — removed the
+  mobile column override entirely rather than patching its alignment,
+  since "a lot of stacking" was the actual complaint. `.img-side`'s
+  children default to stretching full width of that column, which
+  incidentally also fixed the separate "buttons positioned to the left"
+  report (a full-width button isn't left-hugging, and button text is
+  center-aligned by default anyway). `.img-preview`/`.img-preview-empty`
+  shrink a bit further (72×100, was 90×126) under the mobile breakpoint so
+  `.img-side` has room for its button text next to the smaller image.
+- **`.img-candidates` (the search-result thumbnail grid) reorders itself
+  per breakpoint via CSS `order`, not a JS breakpoint hook** — on desktop
+  it now renders after all the form sections (order:1) since the grid is
+  secondary to the fields staff are actively editing; on mobile it resets
+  to order:0, staying right after the image it's about to replace, since
+  scrolling past a full form to find it read as broken there. Scoped to a
+  `.modal-body-reorder` modifier class on EditModal's own modal-body (not
+  the shared `.modal-body` every other modal uses) so this doesn't affect
+  SellModal/SettingsModal/ConfirmModal/Lightbox.
+- **Scanner's file input gained a second, explicit "Take a photo" button**
+  wired to its own `<input type="file" capture="environment">`, alongside
+  the existing capture-less input (still the default click target, for
+  choosing an existing photo). Round 2 removed `capture="environment"`
+  entirely to restore the OS's native chooser (Camera/Library/Files) after
+  it was found to skip straight to the camera — but real-phone testing
+  found some mobile browsers' default chooser doesn't reliably surface a
+  camera option at all without that attribute. Two explicit buttons sidesteps
+  relying on OS-chooser behavior that varies by browser/version instead of
+  re-introducing the original bug.
+- **Edge Function CORS was exact-match on `localhost` only** —
+  `scan-binder-page`/`card-lookup-proxy`'s `ALLOWED_ORIGINS` allowlist never
+  matched a phone testing against `npm run dev -- --host` (needed to reach
+  the dev server from a phone on the same LAN), since that serves from a
+  private-IP origin, not `localhost` — explaining why the exact same scan
+  worked from a laptop (`http://localhost:5173`) but failed only from a
+  phone on the same network ("Failed to send a request to the Edge
+  Function"). Added `DEV_ORIGIN_RE`, a regex matching any RFC1918 private
+  range (`192.168.x.x`/`10.x.x.x`/`172.16-31.x.x`) plus `localhost`/
+  `127.0.0.1` on Vite's dev/preview ports (5173/4173), alongside the
+  existing exact-match list — duplicated in both functions, matching this
+  codebase's existing convention of not sharing code between them.
+  **Requires redeploying both `scan-binder-page` and `card-lookup-proxy`**
+  to take effect.
+- **Rarity field extended to EditModal and CSV/XLSX import** — was only on
+  ScannerPanel's review rows before. EditModal gets the same transient,
+  never-saved input (next to Set) feeding `handleFindImage`/
+  `handleFindMarketPrice`'s `rarityHint` param. Import gets a new
+  `FIELD_TARGETS` entry (`rarity`) in `importParse.js`; `ImportExportPanel`
+  keeps the mapped column in a separate `rarityHints` array (indexed the
+  same as `newRows`, never attached to the `normalizeCard` objects
+  themselves) purely to pass into the per-row auto image search — same
+  "never let a transient search hint leak into what's actually saved"
+  discipline as the Scanner.
+- **Not resolved this round**: uploading a `.xlsx` file to Import was
+  reported as "returning to the main view" instead of loading the sheet
+  picker/column mapper. Could not reproduce with several synthetic test
+  files (single-sheet, multi-sheet, with/without hyperlink cells) against
+  both the pinned `xlsx@0.20.3` and the `0.18.5` that happened to already
+  be installed locally — both parsed correctly through the real dev server
+  every time. Needs the actual file that failed (or at minimum: single vs.
+  multi-sheet, and whether any console error appears) before a real fix is
+  possible — logged here rather than guessed at, per this project's
+  never-guess discipline.
+
 ## Next sprints
 
 - **TCG Player draft-catalog export**: TCG Player's draft catalog accepts a

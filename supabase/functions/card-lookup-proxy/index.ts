@@ -18,9 +18,21 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
+// The exact-match list above only ever matched `localhost` — testing via
+// `npm run dev -- --host` (needed to reach the dev server from a phone on
+// the same LAN) serves from a private-IP origin instead, which silently
+// failed CORS on that phone while the same call worked fine from a laptop's
+// `localhost` origin. Matches any RFC1918 private range on Vite's dev/preview
+// ports, not a specific IP, since that address varies by network.
+const DEV_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):(5173|4173)$/;
+
+function isAllowedOrigin(origin) {
+  return ALLOWED_ORIGINS.includes(origin) || DEV_ORIGIN_RE.test(origin);
+}
+
 function corsHeaders(origin) {
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   };
 }
