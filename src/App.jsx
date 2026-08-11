@@ -308,6 +308,8 @@ export default function App() {
 
       <div className="footnote">
         Shared store data, live in Supabase · not connected to POS, TCG Player, or Collectr APIs ·{' '}
+        <a href="?help=1" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--ink-faint)' }}>Staff docs</a>
+        {' · '}
         <a href="#" onClick={(e) => { e.preventDefault(); setShowSettings(true); }} style={{ color: 'var(--ink-faint)' }}>Pricing settings</a>
         {' · '}
         <a href="#" onClick={(e) => { e.preventDefault(); handleLogout(); }} style={{ color: 'var(--ink-faint)' }}>Sign out</a>

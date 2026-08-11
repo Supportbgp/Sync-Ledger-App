@@ -1,0 +1,67 @@
+import DocsSection from '../DocsSection.jsx';
+import DocsCallout from '../DocsCallout.jsx';
+
+export default function ImportExportSection() {
+  return (
+    <DocsSection id="import-export" title="Import / Export">
+      <h3>Importing a spreadsheet</h3>
+      <p>
+        Drag a .csv/.xlsx file onto the drop zone, or click to choose one.
+        If the file has multiple sheets, you'll pick which one to load
+        first. In an .xlsx file specifically, hyperlinks in cells are
+        detected and offered as image/source links automatically — a plain
+        .csv can't carry that.
+      </p>
+      <p>
+        Next is the <strong>column mapping</strong> step: for each field
+        Ledger understands (Name, Set, Game, Condition, Price, Rarity,
+        etc.), pick which column in your file it corresponds to, or leave
+        it "— skip —". Ledger guesses obvious matches automatically from
+        your file's own header row. You also pick a Binder/case/collection
+        for the whole batch (or map a per-row location column instead), and
+        the same Channels checkboxes as the Edit modal.
+      </p>
+      <p>
+        <strong>Import mode</strong> matters: <strong>Merge</strong> updates
+        matching SKUs and adds anything new, leaving the rest of the catalog
+        untouched. <strong>Replace</strong> wipes the entire catalog first —
+        only use it if you actually mean to start over.
+      </p>
+      <DocsCallout kind="note">
+        Rows with no image already found get one searched automatically in
+        the background — there's no review step here (unlike the Scanner),
+        so double-check a few afterward in Catalog if the source names were
+        unusual.
+      </DocsCallout>
+
+      <h3>Exporting</h3>
+      <p>
+        Pick a format — Full catalog, a TCG Player entry list, a Collectr
+        entry list, Pending POS updates, or Sync history — and optionally
+        scope it to one binder/case instead of everything.
+      </p>
+      <DocsCallout kind="warn">
+        Neither TCG Player nor Collectr support Ledger uploading listings to
+        them directly. These exports are reference lists to speed up manual
+        entry on those platforms, not an automatic sync.
+      </DocsCallout>
+
+      <h3>Binder QR codes</h3>
+      <p>
+        Pick a binder/case and hit Generate — you get a printable QR code
+        and a link to a public, login-free page listing everything
+        currently in stock in that binder (see{' '}
+        <a href="#public-binder-page">The public binder page</a>). It's a
+        live lookup, not a one-time snapshot — print it once and stick it on
+        the physical binder; it stays accurate as stock changes.
+      </p>
+
+      <h3>Reset all data</h3>
+      <DocsCallout kind="warn">
+        This wipes the entire catalog and sync queue for <em>everyone</em>{' '}
+        sharing this Ledger login — not just your own session. It asks you
+        to type a confirmation password first. There's no undo.
+      </DocsCallout>
+    </DocsSection>
+  );
+}
