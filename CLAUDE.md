@@ -668,9 +668,22 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   opening it never interrupts an in-progress edit/import/scan.
 - **`src/components/docs/StaffDocs.jsx`**: the page shell — reuses
   `.app`/`.topbar`/`.brand` for the same visual identity `BinderView.jsx`
-  already uses, plus a sticky left nav of jump-links beside the content
-  column (collapses to a wrapped row of pill links above the content under
-  the shared 640px mobile breakpoint — no room for two columns there).
+  already uses, plus a sticky left nav beside the content column
+  (collapses to a wrapped row of pill links above the content under the
+  shared 640px mobile breakpoint — no room for two columns there).
+  **Shows exactly one section at a time**, driven by the URL hash — not one
+  long scrolling page. The first pass used in-page jump-link anchors on a
+  single page, but staff wanted to be able to jump straight to what they
+  need without scrolling past everything else, or read straight through via
+  a Previous/Next stepper at the bottom without losing their place. Every
+  nav/stepper link is a real `#hash` anchor rather than a click handler —
+  `hashchange` is what drives which section renders, so browser back/
+  forward and a directly-linked/bookmarked URL (e.g. `?help=1#scan-binder`)
+  both just work for free; a missing/unrecognized hash falls back to the
+  first section. The last section's "Next" loops back to the first instead
+  of a dead end. Cross-reference links inside a section's own prose (e.g.
+  Catalog's "see Selling an item") are plain `#hash` links too, so they now
+  jump straight to that section instead of just scrolling to it.
 - **`src/components/docs/sections/*.jsx`** — one file per topic (Getting
   started, Catalog, Editing an item, Selling an item, Sync Queue,
   Import/Export, Scan Binder, Pricing settings, the public binder page,

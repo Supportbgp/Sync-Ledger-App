@@ -2,26 +2,56 @@ import { test, expect } from '@playwright/test';
 
 // No seedHarness call needed — this page never touches the database, and is
 // reachable with no session at all (see main.jsx's ?help=1 branch).
-test('renders every section with no login, at both viewport sizes', async ({ page }) => {
-  await page.goto('./?help=1');
 
+test('shows only the first section by default, with no hash', async ({ page }) => {
+  await page.goto('./?help=1');
   await expect(page.getByRole('heading', { name: 'Getting started' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Catalog' })).toHaveCount(0);
   // Public/no-auth page never shows authenticated-app chrome.
   await expect(page.getByRole('button', { name: '+ Add item' })).toHaveCount(0);
+});
 
-  const sectionTitles = [
+test('a direct link to a hash shows only that section', async ({ page }) => {
+  await page.goto('./?help=1#known-quirks');
+  await expect(page.getByRole('heading', { name: 'Known quirks' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Getting started' })).toHaveCount(0);
+});
+
+test('the nav highlights the current section and switches sections on click', async ({ page }) => {
+  await page.goto('./?help=1');
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  await expect(nav.getByRole('link', { name: 'Getting started' })).toHaveClass(/active/);
+
+  await nav.getByRole('link', { name: 'Sync Queue' }).click();
+  await expect(page).toHaveURL(/#sync-queue$/);
+  await expect(page.getByRole('heading', { name: 'Sync Queue' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Getting started' })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Sync Queue' })).toHaveClass(/active/);
+});
+
+test('the Next stepper walks through every section in order, and wraps at the end', async ({ page }) => {
+  await page.goto('./?help=1');
+  const titles = [
     'Getting started', 'Catalog', 'Editing an item', 'Selling an item',
     'Sync Queue', 'Import / Export', 'Scan Binder', 'Pricing settings',
     'The public binder page', 'Concepts & glossary', 'Known quirks',
   ];
-  for (const title of sectionTitles) {
-    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+
+  for (let i = 0; i < titles.length - 1; i++) {
+    await expect(page.getByRole('heading', { name: titles[i], exact: true })).toBeVisible();
+    await page.getByRole('link', { name: new RegExp(`^Next: ${titles[i + 1]}`) }).click();
   }
+  await expect(page.getByRole('heading', { name: 'Known quirks' })).toBeVisible();
+
+  // Last section's stepper loops back to the first instead of a dead end.
+  await page.getByRole('link', { name: /^Back to Getting started/ }).click();
+  await expect(page).toHaveURL(/#getting-started$/);
+  await expect(page.getByRole('heading', { name: 'Getting started' })).toBeVisible();
 });
 
-test('nav jump-links scroll to the matching section', async ({ page }) => {
-  await page.goto('./?help=1');
-  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Known quirks' }).click();
-  await expect(page).toHaveURL(/#known-quirks$/);
-  await expect(page.locator('#known-quirks')).toBeVisible();
+test('cross-reference links inside a section jump straight to the referenced section', async ({ page }) => {
+  await page.goto('./?help=1#catalog');
+  await page.locator('#catalog').getByRole('link', { name: 'Selling an item' }).click();
+  await expect(page).toHaveURL(/#selling-an-item$/);
+  await expect(page.getByRole('heading', { name: 'Selling an item' })).toBeVisible();
 });

@@ -1380,6 +1380,24 @@
       color: var(--ink);
     }
 
+    .docs-nav a.active {
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-weight: 600;
+    }
+
+    .docs-nav a.active:hover {
+      background: var(--teal-soft);
+    }
+
+    .docs-stepper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
     .docs-content {
       flex: 1;
       min-width: 0;
@@ -1614,5 +1632,15 @@
 
       .docs-content {
         max-width: 100%;
+      }
+
+      .docs-stepper {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+
+      .docs-stepper .btn {
+        width: 100%;
+        text-align: center;
       }
     }
