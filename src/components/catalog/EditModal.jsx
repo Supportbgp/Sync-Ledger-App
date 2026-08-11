@@ -76,6 +76,9 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const [photoPending, setPhotoPending] = useState("");
   const [candidates, setCandidates] = useState([]);
   const [imageStatus, setImageStatus] = useState({ text: "", kind: "" });
+  // Local to this modal session — reappears next time it's opened. Not worth
+  // persisting; it's a one-time explainer, not a setting.
+  const [imageHelpDismissed, setImageHelpDismissed] = useState(false);
   const [manualUrl, setManualUrl] = useState("");
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -282,7 +285,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
           <div className="name">{card ? "Edit item" : "Add item"}</div>
           <div className="meta">Changes save with today's date as Last Updated</div>
         </div>
-        <div className="modal-body modal-body-reorder">
+        <div className="modal-body">
           <div className="img-preview-wrap">
             <div
               className="img-frame large"
@@ -297,7 +300,11 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             {/* Toggle + Find/Upload actions share one container, on the side of
                 the image, instead of each stacking as its own full-width block
                 below it — real-phone testing found the old stacked layout too
-                tall/scrolly, and left the action buttons hugging the left edge. */}
+                tall/scrolly, and left the action buttons hugging the left edge.
+                The explanatory text used to live inside this row too — as a
+                third flex item it squeezed .img-side down to almost nothing,
+                so it's now a separate dismissible banner below the whole row
+                instead (see imageHelpDismissed below). */}
             <div className="img-side">
               {stockSrc && photoSrc && (
                 <div className="img-toggle-row">
@@ -317,14 +324,19 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
-              "Find stock image" searches a clean reference picture online; "Upload real photo" attaches an actual photo of
-              this exact copy. If both exist, use the toggle above the preview to pick which one shows in the catalog —
-              it defaults to the real photo. "Find market price" is separate: it backfills Market Value on a card that
-              already has the right image, and picking a result there never touches either photo.
-            </div>
           </div>
           {imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {!imageHelpDismissed && (
+            <div className="info-banner">
+              <span>
+                "Find stock image" searches a clean reference picture online; "Upload real photo" attaches an actual photo of
+                this exact copy. If both exist, use the toggle above the preview to pick which one shows in the catalog —
+                it defaults to the real photo. "Find market price" is separate: it backfills Market Value on a card that
+                already has the right image, and picking a result there never touches either photo.
+              </span>
+              <button type="button" className="info-banner-close" onClick={() => setImageHelpDismissed(true)} aria-label="Dismiss">✕</button>
+            </div>
+          )}
           {candidateMode === 'price' && candidates.length > 0 && (
             <div className="status-line ok" style={{ fontWeight: 500 }}>
               These are possible prints matching this card's name/set — click the one that matches your physical copy
@@ -333,12 +345,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
           )}
           {candidates.length > 0 && (
-            // On desktop this renders under the form sections (order:1 below,
-            // vs. the sections' default order:0) since the search-results grid
-            // is secondary to the data fields staff are actively editing; on
-            // mobile it stays right here, near the image it's replacing —
-            // scrolling all the way past the form to find it read as broken.
-            <div className="img-candidates img-candidates-reorder">
+            <div className="img-candidates">
               {candidates.map((r, i) => (
                 <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
               ))}

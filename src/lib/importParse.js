@@ -18,7 +18,7 @@ export const FIELD_TARGETS = [
   // Not part of the catalog schema — same as EditModal's/ScannerPanel's
   // transient rarity field, used only to narrow the auto image search below
   // for rows that don't already have an image mapped.
-  { key: "rarity", label: "Rarity (optional — narrows image search)", aliases: ["rarity"] },
+  { key: "rarity", label: "Rarity", aliases: ["rarity"] },
   { key: "qty", label: "Quantity", aliases: ["qty", "quantity", "stock", "on hand", "onhand"] },
   { key: "price", label: "Price", aliases: ["price", "market price", "list price"] },
   { key: "notes", label: "Notes", aliases: ["notes", "note", "comment", "comments"] },

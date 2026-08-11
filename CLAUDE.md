@@ -580,15 +580,22 @@ Another round of live phone-testing feedback on top of round 2 above.
   center-aligned by default anyway). `.img-preview`/`.img-preview-empty`
   shrink a bit further (72×100, was 90×126) under the mobile breakpoint so
   `.img-side` has room for its button text next to the smaller image.
-- **`.img-candidates` (the search-result thumbnail grid) reorders itself
-  per breakpoint via CSS `order`, not a JS breakpoint hook** — on desktop
-  it now renders after all the form sections (order:1) since the grid is
-  secondary to the fields staff are actively editing; on mobile it resets
-  to order:0, staying right after the image it's about to replace, since
-  scrolling past a full form to find it read as broken there. Scoped to a
-  `.modal-body-reorder` modifier class on EditModal's own modal-body (not
-  the shared `.modal-body` every other modal uses) so this doesn't affect
-  SellModal/SettingsModal/ConfirmModal/Lightbox.
+  - **First attempt at this still squashed the buttons**: the "Find stock
+    image"/"Upload real photo" explainer paragraph originally stayed inside
+    `.img-preview-wrap` as a third child — since that wrap is a flex *row*
+    (image | `.img-side`), a third flex item squeezed `.img-side` down to
+    almost nothing, the opposite of the fix's intent. Moved the explainer
+    out to its own dismissible `.info-banner` (blue background, a ✕ to
+    close, local-only state that resets next time the modal opens) below
+    the whole image row instead of inside it.
+- **`.img-candidates` (the search-result thumbnail grid) does *not* reorder
+  by breakpoint** — a round-3 attempt moved it after the form sections on
+  desktop via CSS `order`, on the theory that the grid is secondary to the
+  fields staff are editing. Real feedback said otherwise: it should stay
+  right after the image on both desktop and mobile, same position it was
+  already in. Reverted — removed the `order` rule and the scoped
+  `.modal-body-reorder` wrapper class entirely rather than leave unused CSS
+  behind.
 - **Scanner's file input gained a second, explicit "Take a photo" button**
   wired to its own `<input type="file" capture="environment">`, alongside
   the existing capture-less input (still the default click target, for
@@ -623,16 +630,17 @@ Another round of live phone-testing feedback on top of round 2 above.
   themselves) purely to pass into the per-row auto image search — same
   "never let a transient search hint leak into what's actually saved"
   discipline as the Scanner.
-- **Not resolved this round**: uploading a `.xlsx` file to Import was
-  reported as "returning to the main view" instead of loading the sheet
-  picker/column mapper. Could not reproduce with several synthetic test
-  files (single-sheet, multi-sheet, with/without hyperlink cells) against
-  both the pinned `xlsx@0.20.3` and the `0.18.5` that happened to already
-  be installed locally — both parsed correctly through the real dev server
-  every time. Needs the actual file that failed (or at minimum: single vs.
-  multi-sheet, and whether any console error appears) before a real fix is
-  possible — logged here rather than guessed at, per this project's
-  never-guess discipline.
+- **Known limitation, not fixed**: on mobile, selecting a multi-sheet `.xlsx`
+  file for Import auto-loads the first sheet instead of showing the sheet
+  picker — desktop shows the picker correctly. This is what the earlier
+  "returns to the main view" report actually was: not a crash, just the
+  sheet-picker step being silently skipped, which read as "nothing
+  happened" on a phone. Root cause not yet isolated (couldn't reproduce with
+  several synthetic multi-sheet test files against both `xlsx@0.20.3` and
+  `0.18.5` through the real dev server on desktop — the mobile-specific
+  trigger is still unknown). Deliberately parked rather than guessed at, per
+  this project's never-guess discipline — revisit with either a real device
+  repro or the actual file involved.
 
 ## Next sprints
 

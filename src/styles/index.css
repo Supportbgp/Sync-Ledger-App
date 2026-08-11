@@ -1036,20 +1036,33 @@
       gap: 6px;
     }
 
-    /* Reorders .img-candidates-reorder relative to its modal-body siblings
-       (EditModal only — scoped to this modifier class, not the shared
-       .modal-body used by every other modal). Search results default to
-       after the form sections (order 1 vs. the sections' unset/0) since
-       they're secondary to the fields staff are actively editing; the mobile
-       override below resets that back to 0 so it stays right after the image
-       it's about to replace, instead of below a full screen's worth of form. */
-    .modal-body-reorder {
+    /* Dismissible explainer (EditModal's "Find stock image" help text) —
+       used to live as a plain paragraph inside .img-preview-wrap, but as a
+       third flex item in that row it squeezed .img-side down to almost
+       nothing. Now a standalone banner below the whole image row instead. */
+    .info-banner {
       display: flex;
-      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--blue-soft);
+      border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
+      border-radius: 8px;
+      padding: 9px 10px;
+      margin-top: 10px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--ink-soft);
     }
 
-    .img-candidates-reorder {
-      order: 1;
+    .info-banner-close {
+      background: none;
+      border: none;
+      color: var(--ink-faint);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 2px;
+      flex-shrink: 0;
     }
 
     .img-candidates {
@@ -1359,10 +1372,6 @@
       .img-preview-empty {
         width: 72px;
         height: 100px;
-      }
-
-      .img-candidates-reorder {
-        order: 0;
       }
 
       .sheet-picker {
