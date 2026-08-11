@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { backdropClose } from '../../lib/modalDismiss.js';
 
 export default function SellModal({ card, onClose, onConfirm }) {
   // A single physical copy has nothing to choose — asking for a quantity
@@ -12,7 +13,7 @@ export default function SellModal({ card, onClose, onConfirm }) {
   }
 
   return (
-    <div className="overlay show">
+    <div className="overlay show" onClick={backdropClose(onClose)}>
       <div className="modal">
         <div className="modal-head">
           <div className="name">{card.name}</div>

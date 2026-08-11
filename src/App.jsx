@@ -5,7 +5,7 @@ import {
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
   dbLoadSettings, dbSaveSettings,
 } from './lib/db.js';
-import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition } from './lib/cardUtils.js';
+import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition, DEFAULT_CONDITION_MULTIPLIERS } from './lib/cardUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -74,7 +74,11 @@ export default function App() {
   const [tab, setTab] = useState('catalog');
   const [catalog, setCatalog] = useState([]);
   const [queue, setQueue] = useState([]);
-  const [multipliers, setMultipliers] = useState(null);
+  // Starts as the real defaults, not null — "Pricing settings" should be
+  // usable the instant staff tap it, not gated behind a network round trip
+  // that (on a flaky mobile connection) could leave this null indefinitely
+  // with zero feedback. Real settings just overwrite this once loaded.
+  const [multipliers, setMultipliers] = useState(DEFAULT_CONDITION_MULTIPLIERS);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -87,7 +91,11 @@ export default function App() {
   useEffect(() => {
     if (!signedIn) return;
     dbLoadAll(toast).then(({ catalog: c, queue: q }) => { setCatalog(c); setQueue(q); });
-    dbLoadSettings(toast).then(setMultipliers);
+    // dbLoadSettings already falls back to defaults on a Supabase-shaped
+    // error, but a thrown network exception would reject this promise
+    // instead — the .catch keeps that from silently leaving `multipliers`
+    // on a stale value with no feedback.
+    dbLoadSettings(toast).then(setMultipliers).catch(() => setMultipliers(DEFAULT_CONDITION_MULTIPLIERS));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
 
@@ -304,7 +312,7 @@ export default function App() {
         {' · '}
         <a href="#" onClick={(e) => { e.preventDefault(); handleLogout(); }} style={{ color: 'var(--ink-faint)' }}>Sign out</a>
       </div>
-      {showSettings && multipliers && (
+      {showSettings && (
         <SettingsModal
           multipliers={multipliers}
           onClose={() => setShowSettings(false)}

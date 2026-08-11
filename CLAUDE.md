@@ -96,14 +96,19 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   and mobile card rendering paths, so the two layouts can't quietly
   disagree on what "sold" or the subtitle line means.
 - **Per-game color tags** (`GAME_TAG_CLASS` in `cardUtils.js`, `.badge.tag-*`
-  in CSS): a small colored badge next to each item's name showing its game,
-  reusing the six existing accent tokens (some repeat — there are more
-  games than tokens) chosen loosely by each game's real-world brand color
-  where one exists (Magic's purple, Pokemon's yellow, One Piece's ocean
-  blue, Gundam's red). Games with no obvious color default to a neutral
-  gray tag rather than no tag at all, so every row still shows its game.
-  Requested as part of "more vibrant/colorful" — adds a real scan-by-color
-  aid on a catalog that stocks 9+ separate game lines, not just decoration.
+  in CSS): a small colored badge next to each item's name showing its game.
+  Originally reused the 6 shared UI accent tokens with some games sharing a
+  color; real-phone testing found 3 exact repeats (Magic/SWU, Pokemon/
+  Riftbound, Yugioh/Gundam) plus Lorcana/One Piece sitting only ~10° apart
+  on the color wheel despite different tokens — all too close to tell apart
+  at badge size. Every game now gets its own dedicated hue (4 new `--tag-*`
+  tokens — `--tag-gundam`/`--tag-riftbound`/`--tag-swu`/`--tag-lorcana` —
+  alongside the 5 shared tokens still reused for Magic/Pokemon/Yugioh/One
+  Piece/Sports Singles), spaced ~30-40° apart around the wheel, each
+  individually verified at ≥4.5:1 contrast against white. Games with no
+  obvious color default to a neutral gray tag rather than no tag at all, so
+  every row still shows its game. Adds a real scan-by-color aid on a
+  catalog that stocks 9+ separate game lines, not just decoration.
 - **Saturated palette v2**: every accent color (`--amber`/`--green`/`--rust`/
   `--purple`/`--blue`/`--teal`) was pushed noticeably more saturated than
   the first branding pass (which read as muted once actually deployed),
@@ -143,6 +148,126 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   screenshots, which is what caught the inline-`flex`-style bug above.
   BinderView and Login were checked directly against the built app instead
   since they don't require a session.
+
+## Mobile polish round 2 (real-phone findings)
+
+A first pass at mobile (above) was verified via a local harness and
+Playwright screenshots, not a real device. Actually testing on a real phone
+surfaced a second round of issues, several of which trace back to two root
+causes rather than N unrelated bugs:
+
+- **The toast's `z-index` (60) was accidentally *higher* than the modal
+  overlay's (50)** — a still-fading toast could sit on top of an open
+  modal. Fixed by making `.overlay` categorically outrank everything else
+  on screen (`z-index: 1000`) and dropping `.toast` to `40`.
+- **Flex items don't shrink below their content's width by default** — a
+  `<select>` inside a flex row (`.map-row` in the import column-mapper,
+  `.sheet-picker`'s sheet selector) with a long option text could force the
+  whole row, and the whole page, wider than the viewport. On mobile this
+  didn't just look bad — it also visually mislaid the Binder QR modal
+  (which centers on the *viewport*, so a page zoomed-to-fit to accommodate
+  the overflow no longer has that centered modal within the visible area)
+  and made the sheet picker read as "not there." Fixed at the source
+  (`flex: 1; min-width: 0` on both selects) plus a `overflow-x: hidden`
+  safety net on `body` so no future overflowing element can do this again.
+
+Everything else found:
+
+- **Modal system**: no modal closed on a backdrop tap — pressing outside a
+  modal did nothing. `backdropClose(onClose)` (`lib/modalDismiss.js`) is a
+  small shared helper wired onto each `.overlay`'s `onClick`, checking
+  `e.target === e.currentTarget` so clicks on the modal card itself don't
+  bubble into a close; used by all 5 modals (`EditModal`/`SellModal`/
+  `SettingsModal`/`ConfirmModal`/`Lightbox`).
+  - **Also tried, then reverted: closing a modal on the mobile back
+    button/gesture.** An earlier version pushed a throwaway `history` entry
+    per modal and closed on the resulting `popstate` (`useModalBackClose`,
+    since deleted). Real-device testing found this made Cancel and
+    backdrop-tap *also* trigger a real "go back" navigation — this app has
+    no history depth beneath a modal's pushed entry to safely consume, so
+    the cleanup's own `history.back()` call (meant to tidy up after a
+    non-back close) ended up navigating the browser away for real. Decided
+    the win wasn't worth the risk here and dropped it entirely — Cancel and
+    backdrop-tap are enough; the physical back button/gesture just does
+    its normal thing again, same as before this round.
+    (This is also where a `<React.StrictMode>` double-invoke dev-mode-only
+    bug briefly appeared — the *first* symptom found — where the modal
+    closed itself the instant it opened, because the async `history.back()`
+    from a phantom StrictMode cleanup landed its `popstate` on the second
+    mount's listener instead of firing into a void. Fixed with a timing
+    guard at the time; moot now that the whole back-button feature is
+    gone, but worth remembering if anything else in this app ever pairs
+    `pushState`/`history.back()` with effect cleanup.)
+- **Touch targets were sized for a mouse**: `.btn`/`.btn.small` get real
+  min-heights (44px/40px) under the mobile breakpoint; `.modal-foot`
+  buttons (Cancel/Delete/Save etc.) go full-width and stack, Cancel first
+  (top) — matching each modal's own markup order, so no per-modal
+  reordering trick (e.g. `column-reverse`) is needed; `.checkbox-row`
+  checkboxes and the mobile catalog card's platform-status chips and
+  Edit/Sell buttons all got bigger specifically in that context
+  (`.catalog-card-details` scoped rules), leaving the denser desktop table
+  untouched.
+- **`.img-frame.large` (EditModal's big preview) wasn't centering its own
+  children** when the Real photo/Stock image toggle row rendered below the
+  image — the toggle row could be wider than the image, and since the
+  frame is `display: inline-block` sized to its widest child, the
+  (narrower) image defaulted to the frame's left edge instead of centering
+  within it. Switched to `flex; flex-direction: column; align-items:
+  center`.
+- **CatalogTable**: "Select all visible" moved to the top of the mobile
+  card list (was at the bottom, easy to miss); the `deriveRow()` subtitle
+  builder now assembles parts as an array and joins once instead of
+  string-concatenating a separator onto a possibly-empty first join — the
+  old version left a stray leading " · " before a slab's grade whenever
+  set/condition/printing were *all* blank.
+- **Pricing settings silently failing to open**: `multipliers` started as
+  `null`, and the Settings modal was gated on it truthily
+  (`{showSettings && multipliers && <SettingsModal/>}`) — on any network
+  hiccup loading it (no `.catch` on that promise, so a thrown exception
+  rather than a Supabase-shaped `{error}` would leave it `null` forever),
+  tapping the footer link did nothing, with zero feedback. `multipliers`
+  now starts as `DEFAULT_CONDITION_MULTIPLIERS` instead of `null` — the
+  modal is usable immediately regardless of load state, and a real
+  settings row (or the same defaults, via the added `.catch`) just
+  overwrites it once the fetch actually resolves.
+- **Pricing warning text reworded** (`EditModal`/`ScannerPanel`, both had
+  the same copy) to actually explain itself — what Market Value is an
+  estimate *of* (NM price × a flat condition %) and why that can be off by
+  real money on an expensive card — instead of just asserting "this can be
+  off," which staff had to come ask about.
+- **Scanner file input dropped `capture="environment"`** — that attribute
+  is exactly what skips the OS's normal file-picker chooser and launches
+  the camera directly; removing it restores the OS's own "Camera / Photo
+  Library / Files" choice so a photo already on the device can be shared in
+  instead of always requiring a fresh one.
+- **Scanner "Find another image" doing nothing**: `ScanRow`'s displayed
+  image was `row.photoData || (stock image)` — since a crop almost always
+  exists, it unconditionally won regardless of what stock candidate got
+  picked, so a pick never visibly changed anything. Fixed by giving
+  `ScanRow` the same dual-image model as `EditModal` (`row.activeImage`,
+  defaulting to `'photo'`) with its own compact Photo/Stock toggle in the
+  thumbnail column; picking a stock candidate now also flips the toggle to
+  `'stock'` (same reasoning as `EditModal`'s `selectCandidate`), and the
+  chosen `activeImage` is carried into the saved catalog row.
+- **Rarity-based disambiguation** (`row.rarity` in `ScannerPanel`, a plain
+  editable field next to Set — the vision model now guesses it too, see
+  the crop-pipeline note above): the same-name/same-set-different-rarity
+  case wasn't disambiguated at all before, since rarity wasn't captured
+  anywhere. It's deliberately *not* a hard server-side filter for
+  Scryfall/pokemontcg.io — `preferRarity()` in `cardSearch.js` re-sorts
+  results whose own reported rarity loosely matches the hint to the front
+  but never drops anything, since a hard filter risks silently zeroing out
+  results over a free-text/vocabulary mismatch (same "never guess an
+  external API's exact behavior" discipline as everywhere else in this
+  project). For the three Egman-backed games (One Piece/Riftbound/Gundam),
+  `rarityHint` narrows server-side in `card-lookup-proxy`'s `egmanQuery` —
+  safe there specifically because `rarity` is a real, already-confirmed
+  field on that response (same sample that confirmed `card_code`/
+  `set_code`), using the identical narrow-if-it-helps/fall-back-if-not rule
+  already used for `setHint`. SWU gets neither — no confirmed rarity field
+  in its response, so nothing was added rather than guessed at. Requires
+  redeploying both `scan-binder-page` (new schema field) and
+  `card-lookup-proxy` (new request/response field) to take effect.
 
 ## Directory map
 
@@ -253,23 +378,29 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   crop failure (bad/missing bbox) just leaves that row's photo slot blank —
   the stock search result is still there as a fallback. The scan review
   row's thumbnail shows the crop over the stock search result when both
-  exist (same photo-first default as `resolveActiveImage`), with no
-  per-row toggle — that's available in the Edit modal once the item's
-  actually saved. **Requires redeploying `scan-binder-page`**
+  exist by default (same photo-first rule as `resolveActiveImage`), with a
+  per-row Photo/Stock toggle (mirroring `EditModal`'s) once both actually
+  exist — picking a different stock candidate switches this row's toggle
+  to "Stock" automatically, same reasoning as `EditModal`'s
+  `selectCandidate`. **Requires redeploying `scan-binder-page`**
   (`supabase functions deploy scan-binder-page`) before this takes effect —
   the schema change is server-side.
   - **Crop accuracy is hit-or-miss** — real-world testing showed the model's
     bbox tends to hug the card too tightly and most often clips the *top*
     edge (the bottom of a plastic pocket is a sharp, unambiguous line; the
-    top blends into the pocket/page above it). Two independent mitigations,
-    not one: the prompt now tells the model to anchor on the bottom edge
-    first and err toward a slightly larger box; separately, and regardless
-    of how good the model's box is, `cropImageRegion` always pads the box
-    outward before cropping — 10% of the box's own height on top, 2%
-    bottom, 3% left/right (`DEFAULT_CROP_PADDING`) — so a slightly-short box
-    still captures the whole card. Padding is relative to the detected
-    box's own size, not the full page, so it scales with card size rather
-    than being a fixed pixel margin.
+    top blends into the pocket/page above it) — and a second round of
+    real-phone testing found this specifically worse for the *bottom row* of
+    a page (those cards are typically more foreshortened/steeper-angled in
+    the photo, which degrades the model's already-weaker top-edge estimate
+    further). Three mitigations now, not two: the prompt tells the model to
+    anchor on the bottom edge first and err toward a slightly larger box;
+    `cropImageRegion` pads the box outward before cropping regardless — 2%
+    bottom, 3% left/right, flat (`DEFAULT_CROP_PADDING`); and top padding is
+    no longer flat — `adaptiveTopPadding` scales it from ~8% (near the top
+    of the photo) up to ~18% (near the bottom) based on the box's own
+    `y_max`, targeting the specific bottom-row problem directly. All
+    padding is relative to the detected box's own size, not the full page,
+    so it scales with card size rather than being a fixed pixel margin.
   - **Toggle/lightbox click bug (fixed)**: the stock/photo toggle buttons in
     `EditModal.jsx` live inside the big-preview `div` that opens the
     lightbox on click. Without `stopPropagation()`, clicking a toggle also
@@ -414,6 +545,102 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 - Phase 4 (a Cumulus POS SKU manager/import) is parked — needs the shop
   owner's go/no-go and a real Cumulus export/import file sample. Never guess
   Cumulus's file format.
+
+## Mobile polish round 3 (continued real-phone findings)
+
+Another round of live phone-testing feedback on top of round 2 above.
+
+- **A fixed-position toast with no `pointer-events: none` still blocks
+  clicks underneath it, even at `opacity: 0`** — opacity alone doesn't
+  remove an element from hit-testing. `.toast` sits `position: fixed;
+  bottom: 20px` centered, which is exactly where the footer (and its
+  "Pricing settings" link) ends up once a page is scrolled to the bottom —
+  so the first toast that ever fired (e.g. "Pricing settings saved" itself)
+  left an invisible box permanently eating clicks in that screen region,
+  matching the exact reported symptom ("the link is broken until I
+  refresh" — refreshing just hadn't happened to re-trigger a toast yet at
+  the moment they checked). Reproduced empirically with a throwaway
+  Playwright harness before fixing (real click at the link's coordinates,
+  toast fired first) — confirmed the click landed on `.toast`, not the
+  link. Fixed with `pointer-events: none` on `.toast` — nothing inside it
+  is ever clickable, so there's no reason for it to intercept anything.
+- **EditModal's image area reworked**: the Real-photo/Stock-image toggle
+  and the Find stock image/Find market price/Upload real photo/URL-paste
+  actions used to stack as separate full-width blocks below the image on
+  mobile (`.img-preview-wrap{flex-direction:column}`), which read as too
+  tall/scrolly and left those actions hugging the left edge (missing
+  `align-items` on the now-vertical cross-axis). Restructured so the
+  toggle + actions share one new container (`.img-side`) that sits beside
+  `.img-frame.large` in a row, on *both* desktop and mobile — removed the
+  mobile column override entirely rather than patching its alignment,
+  since "a lot of stacking" was the actual complaint. `.img-side`'s
+  children default to stretching full width of that column, which
+  incidentally also fixed the separate "buttons positioned to the left"
+  report (a full-width button isn't left-hugging, and button text is
+  center-aligned by default anyway). `.img-preview`/`.img-preview-empty`
+  shrink a bit further (72×100, was 90×126) under the mobile breakpoint so
+  `.img-side` has room for its button text next to the smaller image.
+  - **First attempt at this still squashed the buttons**: the "Find stock
+    image"/"Upload real photo" explainer paragraph originally stayed inside
+    `.img-preview-wrap` as a third child — since that wrap is a flex *row*
+    (image | `.img-side`), a third flex item squeezed `.img-side` down to
+    almost nothing, the opposite of the fix's intent. Moved the explainer
+    out to its own dismissible `.info-banner` (blue background, a ✕ to
+    close, local-only state that resets next time the modal opens) below
+    the whole image row instead of inside it.
+- **`.img-candidates` (the search-result thumbnail grid) does *not* reorder
+  by breakpoint** — a round-3 attempt moved it after the form sections on
+  desktop via CSS `order`, on the theory that the grid is secondary to the
+  fields staff are editing. Real feedback said otherwise: it should stay
+  right after the image on both desktop and mobile, same position it was
+  already in. Reverted — removed the `order` rule and the scoped
+  `.modal-body-reorder` wrapper class entirely rather than leave unused CSS
+  behind.
+- **Scanner's file input gained a second, explicit "Take a photo" button**
+  wired to its own `<input type="file" capture="environment">`, alongside
+  the existing capture-less input (still the default click target, for
+  choosing an existing photo). Round 2 removed `capture="environment"`
+  entirely to restore the OS's native chooser (Camera/Library/Files) after
+  it was found to skip straight to the camera — but real-phone testing
+  found some mobile browsers' default chooser doesn't reliably surface a
+  camera option at all without that attribute. Two explicit buttons sidesteps
+  relying on OS-chooser behavior that varies by browser/version instead of
+  re-introducing the original bug.
+- **Edge Function CORS was exact-match on `localhost` only** —
+  `scan-binder-page`/`card-lookup-proxy`'s `ALLOWED_ORIGINS` allowlist never
+  matched a phone testing against `npm run dev -- --host` (needed to reach
+  the dev server from a phone on the same LAN), since that serves from a
+  private-IP origin, not `localhost` — explaining why the exact same scan
+  worked from a laptop (`http://localhost:5173`) but failed only from a
+  phone on the same network ("Failed to send a request to the Edge
+  Function"). Added `DEV_ORIGIN_RE`, a regex matching any RFC1918 private
+  range (`192.168.x.x`/`10.x.x.x`/`172.16-31.x.x`) plus `localhost`/
+  `127.0.0.1` on Vite's dev/preview ports (5173/4173), alongside the
+  existing exact-match list — duplicated in both functions, matching this
+  codebase's existing convention of not sharing code between them.
+  **Requires redeploying both `scan-binder-page` and `card-lookup-proxy`**
+  to take effect.
+- **Rarity field extended to EditModal and CSV/XLSX import** — was only on
+  ScannerPanel's review rows before. EditModal gets the same transient,
+  never-saved input (next to Set) feeding `handleFindImage`/
+  `handleFindMarketPrice`'s `rarityHint` param. Import gets a new
+  `FIELD_TARGETS` entry (`rarity`) in `importParse.js`; `ImportExportPanel`
+  keeps the mapped column in a separate `rarityHints` array (indexed the
+  same as `newRows`, never attached to the `normalizeCard` objects
+  themselves) purely to pass into the per-row auto image search — same
+  "never let a transient search hint leak into what's actually saved"
+  discipline as the Scanner.
+- **Known limitation, not fixed**: on mobile, selecting a multi-sheet `.xlsx`
+  file for Import auto-loads the first sheet instead of showing the sheet
+  picker — desktop shows the picker correctly. This is what the earlier
+  "returns to the main view" report actually was: not a crash, just the
+  sheet-picker step being silently skipped, which read as "nothing
+  happened" on a phone. Root cause not yet isolated (couldn't reproduce with
+  several synthetic multi-sheet test files against both `xlsx@0.20.3` and
+  `0.18.5` through the real dev server on desktop — the mobile-specific
+  trigger is still unknown). Deliberately parked rather than guessed at, per
+  this project's never-guess discipline — revisit with either a real device
+  repro or the actual file involved.
 
 ## Next sprints
 
