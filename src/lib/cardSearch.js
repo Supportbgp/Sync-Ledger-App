@@ -44,13 +44,31 @@ async function scryfallQuery(q) {
     // real going rate), so staff need a one-click way to check the actual
     // current per-condition listings before pricing anything expensive.
     listingUrl: c.purchase_uris && c.purchase_uris.tcgplayer,
+    rarity: c.rarity || '',
   })).filter(r => r.url);
 }
 
-export async function searchScryfall(name) {
+// Soft preference, not a hard filter — moves results whose own reported
+// rarity loosely matches the hint to the front, but never drops anything.
+// A hard filter risks silently zeroing out results over a vocabulary
+// mismatch (the binder scanner's rarity guess is free text, not guaranteed
+// to match a given API's exact rarity strings); this can only ever help.
+function preferRarity(results, rarityHint) {
+  if (!rarityHint || !results.length) return results;
+  const needle = rarityHint.trim().toLowerCase();
+  if (!needle) return results;
+  const matched = [], rest = [];
+  for (const r of results) {
+    if (r.rarity && r.rarity.toLowerCase().includes(needle)) matched.push(r);
+    else rest.push(r);
+  }
+  return matched.length ? [...matched, ...rest] : results;
+}
+
+export async function searchScryfall(name, rarityHint) {
   const trimmed = name.trim();
   let results = await scryfallQuery(trimmed);
-  if (results.length) return results;
+  if (results.length) return preferRarity(results, rarityHint);
 
   const { name: withoutNumber, collectorNumber } = parseTrailingCollectorNumber(trimmed);
   const cleanName = stripTrailingParens(withoutNumber);
@@ -60,11 +78,11 @@ export async function searchScryfall(name) {
     // Try the number as printed, then with leading zeros stripped — Scryfall
     // stores it either way depending on the set.
     results = await scryfallQuery(`!"${cleanName}" number:${collectorNumber}`);
-    if (results.length) return results;
+    if (results.length) return preferRarity(results, rarityHint);
     const unpadded = collectorNumber.replace(/^0+/, '') || collectorNumber;
     if (unpadded !== collectorNumber) {
       results = await scryfallQuery(`!"${cleanName}" number:${unpadded}`);
-      if (results.length) return results;
+      if (results.length) return preferRarity(results, rarityHint);
     }
   }
   if (cleanName !== trimmed) {
@@ -73,7 +91,7 @@ export async function searchScryfall(name) {
     // pick the right one visually from the candidate grid.
     results = await scryfallQuery(cleanName);
   }
-  return results;
+  return preferRarity(results, rarityHint);
 }
 
 // pokemontcg.io's `q=` is a Lucene-like query string, not plain text — these
@@ -121,10 +139,11 @@ async function pokemonQuery(q) {
     // to this card's real TCGPlayer listing, for verifying actual current
     // per-condition prices before trusting the NM-based estimate.
     listingUrl: c.tcgplayer && c.tcgplayer.url,
+    rarity: c.rarity || '',
   })).filter(r => r.url);
 }
 
-export async function searchPokemon(name, setHint) {
+export async function searchPokemon(name, setHint, rarityHint) {
   // Exact phrase first (most precise), then a broader unquoted token match,
   // then just the first word — set/promo codes like "XY83" typed after the
   // name aren't part of the API's name field, so trailing words can sink an
@@ -137,17 +156,17 @@ export async function searchPokemon(name, setHint) {
   // is what actually finds the right one instead of an arbitrary handful.
   if (safeSet) {
     let results = await pokemonQuery(`name:"${safe}" set.name:"${safeSet}"`);
-    if (results.length) return results;
+    if (results.length) return preferRarity(results, rarityHint);
   }
   let results = await pokemonQuery('name:"' + safe + '"');
-  if (results.length) return results;
+  if (results.length) return preferRarity(results, rarityHint);
   results = await pokemonQuery('name:' + safe);
-  if (results.length) return results;
+  if (results.length) return preferRarity(results, rarityHint);
   const firstWord = safe.split(/\s+/)[0];
   if (firstWord && firstWord !== safe) {
     results = await pokemonQuery('name:' + firstWord + '*');
   }
-  return results;
+  return preferRarity(results, rarityHint);
 }
 
 async function ygoQuery(param, value) {
@@ -183,9 +202,9 @@ export async function searchYugioh(name) {
 // all (Riftbound, Gundam — via Egman's deckbuilder, used with his explicit
 // go-ahead). Routed through card-lookup-proxy (a Supabase Edge Function)
 // instead, which fetches server-side where CORS doesn't apply.
-async function proxyQuery(provider, query, setHint) {
+async function proxyQuery(provider, query, setHint, rarityHint) {
   const { data, error } = await supabaseClient.functions.invoke('card-lookup-proxy', {
-    body: { provider, query, setHint: setHint || '' },
+    body: { provider, query, setHint: setHint || '', rarityHint: rarityHint || '' },
   });
   if (error) return [];
   return data?.results || [];
@@ -195,17 +214,20 @@ async function proxyQuery(provider, query, setHint) {
 // holding whatever printed set/card code the binder scanner read off the
 // card (e.g. "EXBP-008"), which is exactly what disambiguates prints that
 // otherwise share an identical name (Gundam's base-set generics, alt art,
-// promos). See card-lookup-proxy for how it's used.
-export async function searchOnePiece(name, setHint) {
-  return await proxyQuery('onepiece', name.trim(), setHint);
+// promos). See card-lookup-proxy for how it's used. rarityHint is the same
+// idea, narrowed server-side there against a confirmed real `rarity` field
+// for these three games specifically (see card-lookup-proxy's egmanQuery) —
+// SWU has no confirmed rarity field, so it doesn't get one here either.
+export async function searchOnePiece(name, setHint, rarityHint) {
+  return await proxyQuery('onepiece', name.trim(), setHint, rarityHint);
 }
 
-export async function searchRiftbound(name, setHint) {
-  return await proxyQuery('riftbound', name.trim(), setHint);
+export async function searchRiftbound(name, setHint, rarityHint) {
+  return await proxyQuery('riftbound', name.trim(), setHint, rarityHint);
 }
 
-export async function searchGundam(name, setHint) {
-  return await proxyQuery('gundam', name.trim(), setHint);
+export async function searchGundam(name, setHint, rarityHint) {
+  return await proxyQuery('gundam', name.trim(), setHint, rarityHint);
 }
 
 export async function searchSwu(name, setHint) {
@@ -235,15 +257,15 @@ export async function searchLorcana(name) {
 // ScannerPanel's auto-fill, CSV/XLSX import's auto-fill) so adding a new
 // game's search function only means editing this one list, not three
 // near-identical copies of the same if-chain.
-export async function searchCardImage(game, name, setHint) {
+export async function searchCardImage(game, name, setHint, rarityHint) {
   if (!name) return [];
-  if (game === "Magic") return await searchScryfall(name);
-  if (game === "Pokemon") return await searchPokemon(name, setHint);
+  if (game === "Magic") return await searchScryfall(name, rarityHint);
+  if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint);
   if (game === "Yugioh") return await searchYugioh(name);
   if (game === "Lorcana") return await searchLorcana(name);
-  if (game === "One Piece") return await searchOnePiece(name, setHint);
-  if (game === "Riftbound") return await searchRiftbound(name, setHint);
-  if (game === "Gundam") return await searchGundam(name, setHint);
+  if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint);
+  if (game === "Riftbound") return await searchRiftbound(name, setHint, rarityHint);
+  if (game === "Gundam") return await searchGundam(name, setHint, rarityHint);
   if (game === "SWU") return await searchSwu(name, setHint);
   return null; // null (not []) signals "not set up for this game" vs. a real empty result
 }

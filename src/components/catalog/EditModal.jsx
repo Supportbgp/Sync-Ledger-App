@@ -3,6 +3,7 @@ import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
+import { backdropClose } from '../../lib/modalDismiss.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -51,6 +52,10 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
+  // Best-guess only, same as ScannerPanel's row.rarity — never saved to the
+  // catalog, purely used to narrow the image/price search below (see
+  // preferRarity in cardSearch.js: a soft re-sort, never a hard filter).
+  const [rarity, setRarity] = useState("");
 
   // For a brand-new item, follow whatever channels the same binder/case
   // already uses as the staff types the location in — until they manually
@@ -71,6 +76,9 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const [photoPending, setPhotoPending] = useState("");
   const [candidates, setCandidates] = useState([]);
   const [imageStatus, setImageStatus] = useState({ text: "", kind: "" });
+  // Local to this modal session — reappears next time it's opened. Not worth
+  // persisting; it's a one-time explainer, not a setting.
+  const [imageHelpDismissed, setImageHelpDismissed] = useState(false);
   const [manualUrl, setManualUrl] = useState("");
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -109,7 +117,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("image");
     setSearching(true);
     try {
-      const results = await searchByGame(form.game, name, form.set.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
       if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
       } else if (!results.length) {
@@ -136,7 +144,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("price");
     setSearching(true);
     try {
-      const results = await searchByGame(form.game, name, form.set.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
       if (results === null) {
         setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
       } else if (!results.length) {
@@ -271,7 +279,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const marketValue = marketValueForCondition(form.basePrice, form.condition, multipliers);
 
   return (
-    <div className="overlay show">
+    <div className="overlay show" onClick={backdropClose(onClose)}>
       <div className="modal wide">
         <div className="modal-head">
           <div className="name">{card ? "Edit item" : "Add item"}</div>
@@ -288,32 +296,47 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               ) : (
                 <div className="img-preview-empty">No image</div>
               )}
+            </div>
+            {/* Toggle + Find/Upload actions share one container, on the side of
+                the image, instead of each stacking as its own full-width block
+                below it — real-phone testing found the old stacked layout too
+                tall/scrolly, and left the action buttons hugging the left edge.
+                The explanatory text used to live inside this row too — as a
+                third flex item it squeezed .img-side down to almost nothing,
+                so it's now a separate dismissible banner below the whole row
+                instead (see imageHelpDismissed below). */}
+            <div className="img-side">
               {stockSrc && photoSrc && (
-                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                <div className="img-toggle-row">
                   <button type="button" className={`btn small${form.activeImage === 'photo' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'photo'); }}>Real photo</button>
                   <button type="button" className={`btn small${form.activeImage === 'stock' ? '' : ' ghost'}`} onClick={(e) => { e.stopPropagation(); set('activeImage', 'stock'); }}>Stock image</button>
                 </div>
               )}
-            </div>
-            <div className="img-actions">
-              <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
-              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
-              <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
-              <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
-              <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {stockSrc && <button className="btn ghost small" onClick={() => setStockPending("__clear__")}>Remove stock</button>}
-                {photoSrc && <button className="btn ghost small" onClick={() => setPhotoPending("__clear__")}>Remove photo</button>}
+              <div className="img-actions">
+                <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
+                <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
+                <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
+                <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
+                <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {stockSrc && <button className="btn ghost small" onClick={() => setStockPending("__clear__")}>Remove stock</button>}
+                  {photoSrc && <button className="btn ghost small" onClick={() => setPhotoPending("__clear__")}>Remove photo</button>}
+                </div>
               </div>
-            </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
-              "Find stock image" searches a clean reference picture online; "Upload real photo" attaches an actual photo of
-              this exact copy. If both exist, use the toggle above the preview to pick which one shows in the catalog —
-              it defaults to the real photo. "Find market price" is separate: it backfills Market Value on a card that
-              already has the right image, and picking a result there never touches either photo.
             </div>
           </div>
           {imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {!imageHelpDismissed && (
+            <div className="info-banner">
+              <span>
+                "Find stock image" searches a clean reference picture online; "Upload real photo" attaches an actual photo of
+                this exact copy. If both exist, use the toggle above the preview to pick which one shows in the catalog —
+                it defaults to the real photo. "Find market price" is separate: it backfills Market Value on a card that
+                already has the right image, and picking a result there never touches either photo.
+              </span>
+              <button type="button" className="info-banner-close" onClick={() => setImageHelpDismissed(true)} aria-label="Dismiss">✕</button>
+            </div>
+          )}
           {candidateMode === 'price' && candidates.length > 0 && (
             <div className="status-line ok" style={{ fontWeight: 500 }}>
               These are possible prints matching this card's name/set — click the one that matches your physical copy
@@ -355,11 +378,22 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Set</label><input type="text" value={form.set} onChange={(e) => set('set', e.target.value)} /></div>
-              <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
+              <div className="field-group">
+                <label>Rarity</label>
+                <input
+                  type="text" placeholder="Optional — narrows image/price search" value={rarity}
+                  title="Not saved — same as Set, just narrows the search below for cards that reprint the same name/set at different rarities"
+                  onChange={(e) => setRarity(e.target.value)}
+                />
+              </div>
             </div>
             <div className="field-row2">
+              <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
               <div className="field-group"><label>Printing / finish</label><input type="text" placeholder="e.g. Foil, Normal" value={form.printing} onChange={(e) => set('printing', e.target.value)} /></div>
-              <div className="field-group"><label>SKU / barcode</label><input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)} /></div>
+            </div>
+            <div className="field-group">
+              <label>SKU / barcode</label>
+              <input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)} />
             </div>
             <div className="field-group">
               <label>Binder / case / collection</label>
@@ -449,7 +483,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 )}
                 {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
                   <div className="status-line err" style={{ marginTop: '8px' }}>
-                    High-value card — this estimate can be off by real money at this price level.
+                    Market value above is an estimate (NM reference price × a flat condition %), not real
+                    per-condition sales data — on a ${HIGH_VALUE_THRESHOLD}+ card that gap can be real money.
                     {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
                   </div>
                 )}
@@ -474,8 +509,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
         </div>
         <div className="modal-foot">
           <button className="btn ghost small" onClick={onClose}>Cancel</button>
-          <button className="btn danger small" onClick={handleDelete}>Delete</button>
           <button className="btn small" disabled={saving || nameRequired} onClick={handleSave}>Save</button>
+          <button className="btn danger small" onClick={handleDelete}>Delete</button>
         </div>
       </div>
     </div>
