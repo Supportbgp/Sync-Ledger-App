@@ -1,7 +1,4 @@
-import { useModalBackClose } from '../hooks/useModalBackClose.js';
-
 export default function Lightbox({ url, onClose }) {
-  useModalBackClose(onClose);
   return (
     <div className="overlay show" onClick={onClose}>
       <img

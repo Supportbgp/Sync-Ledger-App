@@ -1374,11 +1374,10 @@
 
       /* Modal action buttons (Cancel/Delete/Save etc.) go full-width and
          stack instead of squeezing 2-3 small buttons into a row that's easy
-         to mis-tap — the confirming action (last in each modal's markup)
-         ends up on top via column-reverse, keeping it the most prominent/
-         reachable one. */
+         to mis-tap — Cancel first (top), matching each modal's own markup
+         order (Cancel/Save/Delete etc.). */
       .modal-foot {
-        flex-direction: column-reverse;
+        flex-direction: column;
         align-items: stretch;
       }
 

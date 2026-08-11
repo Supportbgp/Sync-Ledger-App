@@ -3,7 +3,7 @@ import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
-import { useModalBackClose, backdropClose } from '../../hooks/useModalBackClose.js';
+import { backdropClose } from '../../lib/modalDismiss.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -52,7 +52,6 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
-  useModalBackClose(onClose);
 
   // For a brand-new item, follow whatever channels the same binder/case
   // already uses as the staff types the location in — until they manually
@@ -477,8 +476,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
         </div>
         <div className="modal-foot">
           <button className="btn ghost small" onClick={onClose}>Cancel</button>
-          <button className="btn danger small" onClick={handleDelete}>Delete</button>
           <button className="btn small" disabled={saving || nameRequired} onClick={handleSave}>Save</button>
+          <button className="btn danger small" onClick={handleDelete}>Delete</button>
         </div>
       </div>
     </div>

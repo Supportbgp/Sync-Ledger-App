@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useModalBackClose, backdropClose } from '../hooks/useModalBackClose.js';
+import { backdropClose } from '../lib/modalDismiss.js';
 
 // NM is always 100% by definition, not editable — only the four non-NM
 // tiers are store-configurable.
@@ -13,7 +13,6 @@ const FIELDS = [
 export default function SettingsModal({ multipliers, onClose, onSave }) {
   const [form, setForm] = useState(multipliers);
   const [saving, setSaving] = useState(false);
-  useModalBackClose(onClose);
 
   async function handleSave() {
     setSaving(true);

@@ -173,44 +173,40 @@ causes rather than N unrelated bugs:
 
 Everything else found:
 
-- **Modal system**: no modal closed on a backdrop tap or the mobile back
-  button/gesture — pressing back just navigated away from the app entirely.
-  `useModalBackClose` (`hooks/useModalBackClose.js`) is a small shared hook
-  used by all 5 modals (`EditModal`/`SellModal`/`SettingsModal`/
-  `ConfirmModal`/`Lightbox`): it pushes a throwaway `history` entry on open
-  and treats the resulting `popstate` as "close this modal." Paired with
-  `backdropClose(onClose)` (same file) wired onto each `.overlay`'s
-  `onClick`, checking `e.target === e.currentTarget` so clicks on the modal
-  card itself don't bubble into a close. Known limitation: two modals open
-  at once (e.g. a delete confirmation over the Edit modal) both close on
-  one back-press rather than just the topmost — no global modal stack
-  exists to arbitrate that; still strictly better than leaving the app
-  entirely, which is what happened before.
-  - **Bug found via real device testing: the Edit modal (and every other
-    modal) closed itself the instant it opened**, in dev mode only. Root
-    cause: `<React.StrictMode>` (`main.jsx`) double-invokes effects in
-    dev — mount, cleanup, mount again, all synchronously — to catch
-    missing-cleanup bugs. The hook's cleanup calls `history.back()`
-    (asynchronous); by the time that resolves into a real `popstate`
-    event, the *second* mount's listener is already attached instead of
-    the first mount's (already removed), so it fires immediately and
-    closes the modal that was never supposed to be affected. Fixed with a
-    100ms guard in the `popstate` handler — a real physical back
-    press/gesture can't land within 100ms of a modal even finishing its
-    first render, so anything faster than that is this artifact, not a
-    real user action. Confirmed by reproducing it in an isolated throwaway
-    harness (same pattern as the "Manual QA note" above) with and without
-    the guard before shipping the fix — StrictMode is dev-only, so this
-    never affected the production build, but `npm run dev` is exactly how
-    real-phone testing runs the app.
+- **Modal system**: no modal closed on a backdrop tap — pressing outside a
+  modal did nothing. `backdropClose(onClose)` (`lib/modalDismiss.js`) is a
+  small shared helper wired onto each `.overlay`'s `onClick`, checking
+  `e.target === e.currentTarget` so clicks on the modal card itself don't
+  bubble into a close; used by all 5 modals (`EditModal`/`SellModal`/
+  `SettingsModal`/`ConfirmModal`/`Lightbox`).
+  - **Also tried, then reverted: closing a modal on the mobile back
+    button/gesture.** An earlier version pushed a throwaway `history` entry
+    per modal and closed on the resulting `popstate` (`useModalBackClose`,
+    since deleted). Real-device testing found this made Cancel and
+    backdrop-tap *also* trigger a real "go back" navigation — this app has
+    no history depth beneath a modal's pushed entry to safely consume, so
+    the cleanup's own `history.back()` call (meant to tidy up after a
+    non-back close) ended up navigating the browser away for real. Decided
+    the win wasn't worth the risk here and dropped it entirely — Cancel and
+    backdrop-tap are enough; the physical back button/gesture just does
+    its normal thing again, same as before this round.
+    (This is also where a `<React.StrictMode>` double-invoke dev-mode-only
+    bug briefly appeared — the *first* symptom found — where the modal
+    closed itself the instant it opened, because the async `history.back()`
+    from a phantom StrictMode cleanup landed its `popstate` on the second
+    mount's listener instead of firing into a void. Fixed with a timing
+    guard at the time; moot now that the whole back-button feature is
+    gone, but worth remembering if anything else in this app ever pairs
+    `pushState`/`history.back()` with effect cleanup.)
 - **Touch targets were sized for a mouse**: `.btn`/`.btn.small` get real
   min-heights (44px/40px) under the mobile breakpoint; `.modal-foot`
-  buttons (Cancel/Delete/Save etc.) go full-width and stack
-  (`column-reverse`, so the confirming action — last in each modal's own
-  markup — ends up on top); `.checkbox-row` checkboxes and the mobile
-  catalog card's platform-status chips and Edit/Sell buttons all got
-  bigger specifically in that context (`.catalog-card-details` scoped
-  rules), leaving the denser desktop table untouched.
+  buttons (Cancel/Delete/Save etc.) go full-width and stack, Cancel first
+  (top) — matching each modal's own markup order, so no per-modal
+  reordering trick (e.g. `column-reverse`) is needed; `.checkbox-row`
+  checkboxes and the mobile catalog card's platform-status chips and
+  Edit/Sell buttons all got bigger specifically in that context
+  (`.catalog-card-details` scoped rules), leaving the denser desktop table
+  untouched.
 - **`.img-frame.large` (EditModal's big preview) wasn't centering its own
   children** when the Real photo/Stock image toggle row rendered below the
   image — the toggle row could be wider than the image, and since the

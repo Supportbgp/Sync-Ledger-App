@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useModalBackClose, backdropClose } from '../../hooks/useModalBackClose.js';
+import { backdropClose } from '../../lib/modalDismiss.js';
 
 export default function SellModal({ card, onClose, onConfirm }) {
   // A single physical copy has nothing to choose — asking for a quantity
@@ -7,7 +7,6 @@ export default function SellModal({ card, onClose, onConfirm }) {
   // stocked 2+ deep get the stepper.
   const isSingleCopy = card.qty === 1;
   const [qty, setQty] = useState(1);
-  useModalBackClose(onClose);
 
   function clamp(n) {
     return Math.max(1, Math.min(n, card.qty));

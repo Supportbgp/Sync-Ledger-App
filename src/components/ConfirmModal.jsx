@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabaseClient, SHARED_LOGIN_EMAIL } from '../lib/supabase.js';
-import { useModalBackClose, backdropClose } from '../hooks/useModalBackClose.js';
+import { backdropClose } from '../lib/modalDismiss.js';
 
 export default function ConfirmModal({ message, title, requirePassword, onResolve }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef(null);
-  useModalBackClose(() => onResolve(false));
 
   useEffect(() => {
     if (requirePassword && inputRef.current) {
