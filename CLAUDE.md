@@ -287,6 +287,9 @@ Everything else found:
 - `src/components/scanner/` — the binder-page scanner review queue.
 - `src/components/BinderView.jsx` — the public, read-only binder page (no
   `UIContext`, no auth).
+- `src/components/docs/` — the standalone staff documentation page (also no
+  `UIContext`, no auth; reached via `?help=1`), split into one section file
+  per topic under `docs/sections/`.
 - `supabase/migrations/` — SQL run manually via the Supabase SQL Editor
   (there is no migration runner wired up — each file's header comment says
   when/how to run it).
@@ -652,10 +655,69 @@ Another round of live phone-testing feedback on top of round 2 above.
   for TCG Player specifically. Get the real required column layout/format
   before building — same "never guess an external platform's file format"
   discipline that's applied everywhere else in this project.
-- **Staff documentation page**: a final sprint to write end-user
-  documentation for shop staff (how to use each tab, the scanner workflow,
-  what the platform-status chips mean, etc.) — not yet started, no format
-  decided (in-app help page vs. a standalone doc).
+## Staff documentation
+
+A standalone, no-login reference page — not an in-app help tab — so staff
+can pull it up on a phone before ever signing in, bookmark it, or print it.
+
+- **Routing**: same pattern as the public binder page — `src/main.jsx`
+  checks `?help=1` (alongside the existing `?binder=`) and renders
+  `<StaffDocs/>` with no `UIProvider`/session check, same reasoning as
+  `BinderView.jsx`. Reached from a "Staff docs" link in the main app's
+  footer (`target="_blank"`, next to "Pricing settings"/"Sign out") so
+  opening it never interrupts an in-progress edit/import/scan.
+- **`src/components/docs/StaffDocs.jsx`**: the page shell — reuses
+  `.app`/`.topbar`/`.brand` for the same visual identity `BinderView.jsx`
+  already uses, plus a sticky left nav beside the content column
+  (collapses to a wrapped row of pill links above the content under the
+  shared 640px mobile breakpoint — no room for two columns there).
+  **Shows exactly one section at a time**, driven by the URL hash — not one
+  long scrolling page. The first pass used in-page jump-link anchors on a
+  single page, but staff wanted to be able to jump straight to what they
+  need without scrolling past everything else, or read straight through via
+  a Previous/Next stepper at the bottom without losing their place. Every
+  nav/stepper link is a real `#hash` anchor rather than a click handler —
+  `hashchange` is what drives which section renders, so browser back/
+  forward and a directly-linked/bookmarked URL (e.g. `?help=1#scan-binder`)
+  both just work for free; a missing/unrecognized hash falls back to the
+  first section. The last section's "Next" loops back to the first instead
+  of a dead end. Cross-reference links inside a section's own prose (e.g.
+  Catalog's "see Selling an item") are plain `#hash` links too, so they now
+  jump straight to that section instead of just scrolling to it.
+- **`src/components/docs/sections/*.jsx`** — one file per topic (Getting
+  started, Catalog, Editing an item, Selling an item, Sync Queue,
+  Import/Export, Scan Binder, Pricing settings, the public binder page,
+  Concepts & glossary, Known quirks), each a `<DocsSection>` with real
+  field/button labels from the actual UI. Deliberately split this way so a
+  future feature (e.g. the TCG Player export below) only means adding a
+  paragraph to one existing section file — nothing else about this page
+  changes.
+- **`src/components/docs/DocsSection.jsx`** / **`DocsCallout.jsx`**: the two
+  shared pieces every section is built from — a titled `<section>` wrapper,
+  and a small note/warning callout box (`.docs-callout-note`/`-warn`) for a
+  behavior worth flagging inline rather than burying in the glossary.
+- The "Known quirks" section doubles as a living list of this doc's own
+  "not a bug" answers — e.g. the mobile multi-sheet `.xlsx` sheet-picker
+  issue noted above, Reset All Data being irreversible and shared, editing/
+  selling resetting the P/T/C status chips. Update it alongside whatever
+  section documents a quirk's actual feature area.
+- `e2e/staff-docs.spec.js` follows the existing suite's conventions — loads
+  `?help=1` with no `seedHarness` call at all (the page never touches the
+  database), asserts every section heading renders and that a nav
+  jump-link actually scrolls to its section.
+
+## Next sprints
+
+- **TCG Player draft-catalog export**: TCG Player's draft catalog accepts a
+  bulk .xlsx/.csv upload for *new* products, not just updates to existing
+  listings — confirmed by hands-on investigation (see Known constraints
+  above), correcting the earlier "manual-entry-aid only" assumption Export
+  was built around. This sprint builds an actual upload-ready export format
+  for TCG Player specifically. Get the real required column layout/format
+  before building — same "never guess an external platform's file format"
+  discipline that's applied everywhere else in this project. Once built,
+  add a paragraph to `ImportExportSection.jsx` in the staff docs above —
+  that's the only doc change it needs.
 
 ## Testing
 
