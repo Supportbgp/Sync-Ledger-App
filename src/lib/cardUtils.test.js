@@ -90,11 +90,19 @@ describe('normalizeCard', () => {
 });
 
 describe('GAME_TAG_CLASS', () => {
-  it('only maps to the six real accent tokens', () => {
-    const allowed = new Set(['tag-teal', 'tag-green', 'tag-amber', 'tag-rust', 'tag-purple', 'tag-blue']);
+  it('only maps to real accent tokens', () => {
+    const allowed = new Set([
+      'tag-teal', 'tag-green', 'tag-amber', 'tag-rust', 'tag-purple', 'tag-blue',
+      'tag-gundam', 'tag-riftbound', 'tag-swu', 'tag-lorcana',
+    ]);
     for (const cls of Object.values(GAME_TAG_CLASS)) {
       expect(allowed.has(cls)).toBe(true);
     }
+  });
+
+  it('gives every game its own distinct tag class — no two games share a color', () => {
+    const values = Object.values(GAME_TAG_CLASS);
+    expect(new Set(values).size).toBe(values.length);
   });
 });
 
