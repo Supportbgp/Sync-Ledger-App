@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { backdropClose } from '../lib/modalDismiss.js';
 
 // NM is always 100% by definition, not editable — only the four non-NM
 // tiers are store-configurable.
@@ -21,7 +20,7 @@ export default function SettingsModal({ multipliers, onClose, onSave }) {
   }
 
   return (
-    <div className="overlay show" onClick={backdropClose(onClose)}>
+    <div className="overlay show">
       <div className="modal">
         <div className="modal-head">
           <div className="name">Pricing settings</div>

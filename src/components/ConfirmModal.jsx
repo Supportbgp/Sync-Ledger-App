@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabaseClient, SHARED_LOGIN_EMAIL } from '../lib/supabase.js';
-import { backdropClose } from '../lib/modalDismiss.js';
 
 export default function ConfirmModal({ message, title, requirePassword, onResolve }) {
   const [password, setPassword] = useState("");
@@ -31,7 +30,7 @@ export default function ConfirmModal({ message, title, requirePassword, onResolv
   }
 
   return (
-    <div className="overlay show" onClick={backdropClose(() => onResolve(false))}>
+    <div className="overlay show">
       <div className="modal">
         <div className="modal-head">
           <div className="name">{title || "Are you sure?"}</div>

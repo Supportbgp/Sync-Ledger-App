@@ -3,7 +3,6 @@ import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
-import { backdropClose } from '../../lib/modalDismiss.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -279,7 +278,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const marketValue = marketValueForCondition(form.basePrice, form.condition, multipliers);
 
   return (
-    <div className="overlay show" onClick={backdropClose(onClose)}>
+    <div className="overlay show">
       <div className="modal wide">
         <div className="modal-head">
           <div className="name">{card ? "Edit item" : "Add item"}</div>

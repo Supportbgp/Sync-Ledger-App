@@ -173,23 +173,29 @@ causes rather than N unrelated bugs:
 
 Everything else found:
 
-- **Modal system**: no modal closed on a backdrop tap — pressing outside a
-  modal did nothing. `backdropClose(onClose)` (`lib/modalDismiss.js`) is a
-  small shared helper wired onto each `.overlay`'s `onClick`, checking
-  `e.target === e.currentTarget` so clicks on the modal card itself don't
-  bubble into a close; used by all 5 modals (`EditModal`/`SellModal`/
-  `SettingsModal`/`ConfirmModal`/`Lightbox`).
-  - **Also tried, then reverted: closing a modal on the mobile back
-    button/gesture.** An earlier version pushed a throwaway `history` entry
+- **Modal system**: `EditModal`/`SellModal`/`SettingsModal`/`ConfirmModal`
+  close only via their own explicit Cancel/confirm buttons — no backdrop-tap-
+  to-close. That was tried (a shared `backdropClose(onClose)` helper wired
+  onto each `.overlay`'s `onClick`, checking `e.target === e.currentTarget`
+  so clicks on the modal card itself didn't bubble into a close) and then
+  removed after real use found it caused more accidental dismissals than it
+  prevented — deliberately staying with explicit-button-only closing rather
+  than re-adding a backdrop shortcut. `Lightbox` is the one exception, and
+  was never wired through that helper in the first place: it closes on a
+  click anywhere (including the image), which is the expected pattern for a
+  plain image viewer with no form state to protect.
+  - **Also tried, then reverted before that: closing a modal on the mobile
+    back button/gesture.** An earlier version pushed a throwaway `history` entry
     per modal and closed on the resulting `popstate` (`useModalBackClose`,
     since deleted). Real-device testing found this made Cancel and
     backdrop-tap *also* trigger a real "go back" navigation — this app has
     no history depth beneath a modal's pushed entry to safely consume, so
     the cleanup's own `history.back()` call (meant to tidy up after a
     non-back close) ended up navigating the browser away for real. Decided
-    the win wasn't worth the risk here and dropped it entirely — Cancel and
-    backdrop-tap are enough; the physical back button/gesture just does
-    its normal thing again, same as before this round.
+    the win wasn't worth the risk here and dropped it entirely — at the
+    time, Cancel plus backdrop-tap (since also removed, above) were enough;
+    the physical back button/gesture just does its normal thing again, same
+    as before this round.
     (This is also where a `<React.StrictMode>` double-invoke dev-mode-only
     bug briefly appeared — the *first* symptom found — where the modal
     closed itself the instant it opened, because the async `history.back()`
