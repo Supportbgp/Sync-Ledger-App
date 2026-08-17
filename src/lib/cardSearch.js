@@ -106,6 +106,15 @@ function sanitizeForPokemonQuery(s) {
   return s.replace(/[+\-!(){}[\]^"~*?:\\/]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// A printed number is usually shown as "280/217" (this print's number over
+// the set's total card count) — pokemontcg.io's `number` field only stores
+// the first part, so the denominator has to be dropped rather than passed
+// through sanitizeForPokemonQuery (which would turn the slash into a space
+// and search for "280 217" as if that were the number).
+function sanitizePokemonNumber(s) {
+  return s.split('/')[0].trim();
+}
+
 // TCGPlayer prices on a pokemontcg.io card are keyed by print variant
 // (normal/holofoil/reverseHolofoil/1st-edition combos), not one flat field —
 // take the first variant that's actually present, in roughly most-to-least
@@ -143,14 +152,30 @@ async function pokemonQuery(q) {
   })).filter(r => r.url);
 }
 
-export async function searchPokemon(name, setHint, rarityHint) {
+export async function searchPokemon(name, setHint, rarityHint, numberHint) {
   // Exact phrase first (most precise), then a broader unquoted token match,
   // then just the first word — set/promo codes like "XY83" typed after the
   // name aren't part of the API's name field, so trailing words can sink an
   // otherwise-good search unless we fall back to something broader.
   const safe = sanitizeForPokemonQuery(name);
   const safeSet = setHint ? sanitizeForPokemonQuery(setHint) : '';
+  const safeNumber = numberHint ? sanitizePokemonNumber(String(numberHint)) : '';
 
+  // Set+number together is about as close to a unique key as a print has —
+  // a name alone can match 8+ reprints (alt arts, "ex"/"V"/"VMAX" variants,
+  // etc.), but this combination narrows to essentially one exact card.
+  if (safeSet && safeNumber) {
+    let results = await pokemonQuery(`name:"${safe}" set.name:"${safeSet}" number:"${safeNumber}"`);
+    if (results.length) return preferRarity(results, rarityHint);
+  }
+  // Number is the stronger of the two signals — the vision scan's set guess
+  // is the least reliable field it reports (it often defaults to a vague
+  // era name instead of the specific expansion), so a number-only match is
+  // tried before falling back to a set-only one rather than after.
+  if (safeNumber) {
+    let results = await pokemonQuery(`name:"${safe}" number:"${safeNumber}"`);
+    if (results.length) return preferRarity(results, rarityHint);
+  }
   // A card with many reprints (Charizard, etc.) can easily have more prints
   // than fit in one page — narrowing by the item's own recorded set first
   // is what actually finds the right one instead of an arbitrary handful.
@@ -256,11 +281,13 @@ export async function searchLorcana(name) {
 // entry point that needs it (EditModal's Find image/Find market price,
 // ScannerPanel's auto-fill, CSV/XLSX import's auto-fill) so adding a new
 // game's search function only means editing this one list, not three
-// near-identical copies of the same if-chain.
-export async function searchCardImage(game, name, setHint, rarityHint) {
+// near-identical copies of the same if-chain. numberHint (the printed
+// collector number) is Pokemon-only for now — every other game's search
+// function simply ignores the extra argument.
+export async function searchCardImage(game, name, setHint, rarityHint, numberHint) {
   if (!name) return [];
   if (game === "Magic") return await searchScryfall(name, rarityHint);
-  if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint);
+  if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint, numberHint);
   if (game === "Yugioh") return await searchYugioh(name);
   if (game === "Lorcana") return await searchLorcana(name);
   if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint);

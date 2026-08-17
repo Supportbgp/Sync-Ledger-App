@@ -418,6 +418,35 @@ Everything else found:
     just switched to, even though the small preview itself updated
     correctly on the next render. Both toggle buttons now call
     `e.stopPropagation()`.
+- **Pokemon set/rarity recognition was poor for alt-art/high-rarity cards**
+  (e.g. a Special Illustration Rare getting "Scarlet & Violet" as its set —
+  too vague to be useful — and "Pokemon EX" reported as a *rarity*, which
+  isn't a real one). Root-caused to two schema/prompt gaps, not a vision
+  capability limit: (1) the `rarity` field's description never distinguished
+  a print's actual rarity tier from a Pokemon card's *subtype* printed in
+  its name area (ex/GX/V/VMAX/VSTAR) — the model was doing exactly what an
+  ambiguous instruction invited, reporting the subtype it could clearly see
+  as if it were the rarity; (2) `set` had no guidance to prefer the specific
+  expansion name over the general era/block, so it defaulted to the vaguer,
+  easier-to-infer-from-styling answer. Fixed by rewriting both field
+  descriptions with explicit anti-examples and real rarity-ladder terms
+  (Double Rare/Illustration Rare/Special Illustration Rare/Hyper Rare,
+  alongside older Rare Holo/Rare Secret), reinforced in `PROMPT_TEXT` too.
+  Also added a new `number` field (the printed collector number, e.g.
+  "280/217") — previously never captured at all, despite being the
+  strongest disambiguator a print has among many same-name/alt-art
+  versions. `searchPokemon` (`cardSearch.js`) now tries `name+set+number`,
+  then `name+number` *before* falling back to `name+set` — number is
+  deliberately given priority over set in the fallback ladder because set
+  is the less reliable of the two signals per the above, so a set guess
+  that's still just the vague era name shouldn't block a number-based
+  match. **Requires redeploying `scan-binder-page`** (schema/prompt
+  changes are server-side); `number` is threaded through `ScannerPanel` the
+  same transient, never-saved way `rarity` already was — a plain editable
+  field next to Rarity in the review row, used only to narrow the search.
+  Scoped to Pokemon only for now, per an explicit decision to prove the
+  approach on the game with the worst symptoms before generalizing the
+  same rarity/set-description discipline to the other games.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
@@ -651,16 +680,6 @@ Another round of live phone-testing feedback on top of round 2 above.
   this project's never-guess discipline — revisit with either a real device
   repro or the actual file involved.
 
-## Next sprints
-
-- **TCG Player draft-catalog export**: TCG Player's draft catalog accepts a
-  bulk .xlsx/.csv upload for *new* products, not just updates to existing
-  listings — confirmed by hands-on investigation (see Known constraints
-  above), correcting the earlier "manual-entry-aid only" assumption Export
-  was built around. This sprint builds an actual upload-ready export format
-  for TCG Player specifically. Get the real required column layout/format
-  before building — same "never guess an external platform's file format"
-  discipline that's applied everywhere else in this project.
 ## Staff documentation
 
 A standalone, no-login reference page — not an in-app help tab — so staff

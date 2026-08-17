@@ -59,8 +59,18 @@ const DETECT_CARDS_TOOL = {
             position: { type: "string", description: "Rough grid position, e.g. 'row1-col2' — top-left is row1-col1" },
             name: { type: "string", description: "Card name as printed" },
             game: { type: "string", enum: CARD_GAMES },
-            set: { type: "string", description: "Set/expansion name if identifiable, else an empty string" },
-            rarity: { type: "string", description: "Rarity as printed or shown by a rarity symbol on the card (e.g. 'Common', 'Rare', 'Rare Holo', 'Secret Rare'), else an empty string — used only to narrow an image search among same-name/same-set prints that differ by rarity, never saved as-is" },
+            set: {
+              type: "string",
+              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible.",
+            },
+            number: {
+              type: "string",
+              description: "The printed collector number for this exact print, read from near the set symbol at the bottom of the card — e.g. '280' or '280/217' if a total-count denominator is shown. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name), so look closely for it even if you're unsure of the set or rarity. Used only to narrow an image search, never saved as-is.",
+            },
+            rarity: {
+              type: "string",
+              description: "Rarity as printed or shown by a rarity symbol/text near the collector number — e.g. 'Common', 'Uncommon', 'Rare', 'Double Rare', 'Ultra Rare', 'Illustration Rare', 'Special Illustration Rare', 'Hyper Rare', 'Rare Holo', 'Rare Secret'. IMPORTANT: this is NOT the same as a Pokemon card's type/subtype printed in its name area — 'ex', 'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, and must never be reported in this field even if that's the only text you can make out. If you can tell a card is an 'ex'/'V'/etc. card but can't tell its specific rarity tier from the symbol/text near the number, leave this as an empty string rather than reporting the subtype. Else an empty string. Used only to narrow an image search among same-name/same-set prints that differ by rarity, never saved as-is.",
+            },
             foil: { type: "boolean", description: "Whether the card appears foil/holo" },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
             bbox: {
@@ -85,9 +95,17 @@ const DETECT_CARDS_TOOL = {
 
 const PROMPT_TEXT = "This is a photo of one page of a trading card binder — clear plastic " +
   "pockets, each holding one card. Identify every card you can see. For each, give its name " +
-  "as printed, the game it's from, the set/expansion if you can tell, its rarity if you can " +
-  "tell from printed text or a rarity symbol, whether it looks foil/holo, its rough grid " +
-  "position, and how confident you are. If you can't confidently identify a specific card, " +
+  "as printed, the game it's from, the set/expansion if you can tell, its printed collector " +
+  "number if legible, its rarity if you can tell from printed text or a rarity symbol, " +
+  "whether it looks foil/holo, its rough grid position, and how confident you are. A single " +
+  "card name can have many different prints (alternate arts, different rarities, etc.) that " +
+  "only the set, number, and rarity actually tell apart, so look closely for those even when " +
+  "you're confident about the name. For set, prefer the specific expansion name over the " +
+  "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
+  "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
+  "be read. For rarity, look at the symbol or text near the collector number, not the card's " +
+  "name — Pokemon 'ex'/'GX'/'V'/'VMAX'/'VSTAR' are card subtypes printed in the name area, " +
+  "not rarities, and must never be reported as the rarity. If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +
   "a bounding box around just that one card's pocket (not the whole page), as fractions of " +

@@ -96,6 +96,33 @@ describe('searchPokemon', () => {
     await searchPokemon('V - SWSH204');
     expect(decodeURIComponent(global.fetch.mock.calls[0][0])).not.toContain('\\-');
   });
+
+  it('tries set+number together first when both hints are given, stripping a "/total" denominator', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{ name: "Lillie's Clefairy ex", set: { name: 'Ascended Heroes' }, number: '280', images: { large: 'https://x/clefairy.jpg' } }],
+    }));
+    const results = await searchPokemon("Lillie's Clefairy ex", 'Ascended Heroes', '', '280/217');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const q = decodeURIComponent(global.fetch.mock.calls[0][0]);
+    expect(q).toContain('set.name:"Ascended Heroes"');
+    expect(q).toContain('number:"280"');
+    expect(q).not.toContain('217');
+    expect(results[0].url).toBe('https://x/clefairy.jpg');
+  });
+
+  it('falls back to number alone (no set) before trying set alone, since the scan\'s set guess is the less reliable signal', async () => {
+    global.fetch
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // set+number, empty (wrong set guess)
+      .mockResolvedValueOnce(jsonResponse({
+        data: [{ name: "Lillie's Clefairy ex", set: { name: 'Ascended Heroes' }, number: '280', images: { large: 'https://x/clefairy.jpg' } }],
+      })); // number alone finds it
+    const results = await searchPokemon("Lillie's Clefairy ex", 'Scarlet & Violet', '', '280');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const secondQuery = decodeURIComponent(global.fetch.mock.calls[1][0]);
+    expect(secondQuery).toContain('number:"280"');
+    expect(secondQuery).not.toContain('set.name');
+    expect(results[0].url).toBe('https://x/clefairy.jpg');
+  });
 });
 
 describe('searchYugioh', () => {

@@ -25,8 +25,12 @@ function detectedToRow(card) {
     // Best-guess only — the vision model isn't always right about it, same
     // as name/game/set, which is why it's a plain editable field here too.
     // Used purely to narrow the image search (see findImageCandidates);
-    // never saved to the catalog.
+    // never saved to the catalog. number is the strongest of the two
+    // signals (a printed collector number narrows a same-name/alt-art card
+    // to essentially one exact print), currently only acted on for Pokemon
+    // — see searchPokemon in cardSearch.js.
     rarity: card.rarity || '',
+    number: card.number || '',
     printing: card.foil ? 'Foil' : '',
     confidence: card.confidence || 'medium',
     qty: 1,
@@ -66,10 +70,10 @@ function detectedToRow(card) {
 // (see searchCardImage) — it re-sorts matches that report their own rarity,
 // it never excludes anything, so a wrong/unrecognized guess can't zero out
 // the results.
-async function findImageCandidates(name, game, set, rarityHint) {
+async function findImageCandidates(name, game, set, rarityHint, numberHint) {
   if (!name) return [];
   try {
-    return (await searchCardImage(game, name, set, rarityHint)) || [];
+    return (await searchCardImage(game, name, set, rarityHint, numberHint)) || [];
   } catch {
     return [];
   }
@@ -147,7 +151,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       // explicitly reveals it, since that's money-relevant and shouldn't
       // come from an unconfirmed top search result.
       newRows.forEach(async (row) => {
-        const results = await findImageCandidates(row.name, row.game, row.set, row.rarity);
+        const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {
             ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
@@ -174,7 +178,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity);
+    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
@@ -417,6 +421,11 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
             {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
           <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
+          <input
+            type="text" placeholder="Number" className="sf" value={row.number}
+            title="Optional — the printed collector number (e.g. 280/217). The strongest signal for telling apart same-name/alt-art prints; currently only used to narrow Pokemon search"
+            onChange={(e) => onChange({ number: e.target.value })}
+          />
           <input
             type="text" placeholder="Rarity" className="sf" value={row.rarity}
             title="Optional — narrows the image search, same as Set, for cards that reprint the same name/set at different rarities"
