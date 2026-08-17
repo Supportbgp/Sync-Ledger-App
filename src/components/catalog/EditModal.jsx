@@ -313,7 +313,6 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               )}
               <div className="img-actions">
                 <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
-                <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
                 <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
                 <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
                 <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
@@ -324,26 +323,20 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               </div>
             </div>
           </div>
-          {imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {candidateMode === 'image' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
           {!imageHelpDismissed && (
             <div className="info-banner">
               <span>
                 "Find stock image" searches a clean reference picture online; "Upload real photo" attaches an actual photo of
                 this exact copy. If both exist, use the toggle above the preview to pick which one shows in the catalog —
-                it defaults to the real photo. "Find market price" is separate: it backfills Market Value on a card that
-                already has the right image, and picking a result there never touches either photo.
+                it defaults to the real photo. Picking a stock image result also fills in Market Value automatically.
+                To refresh Market Value on its own, without touching either image, use "Find market price" in the
+                Pricing section below instead.
               </span>
               <button type="button" className="info-banner-close" onClick={() => setImageHelpDismissed(true)} aria-label="Dismiss">✕</button>
             </div>
           )}
-          {candidateMode === 'price' && candidates.length > 0 && (
-            <div className="status-line ok" style={{ fontWeight: 500 }}>
-              These are possible prints matching this card's name/set — click the one that matches your physical copy
-              exactly. We'll pull that specific print's real market price into the Pricing section below as this
-              item's Market Value reference. Nothing else on this item changes, including the photo above.
-            </div>
-          )}
-          {candidates.length > 0 && (
+          {candidateMode === 'image' && candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
                 <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
@@ -444,6 +437,28 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} />
               </div>
             </div>
+            <div className="field-group">
+              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
+              <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                Looks up this card's real market price from the name/game/set/rarity above — independent of
+                whichever image is showing, and never changes either photo.
+              </div>
+            </div>
+            {candidateMode === 'price' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+            {candidateMode === 'price' && candidates.length > 0 && (
+              <div className="status-line ok" style={{ fontWeight: 500 }}>
+                These are possible prints matching this card's name/set — click the one that matches your physical
+                copy exactly. We'll pull that specific print's real market price into the reference below as this
+                item's Market Value. Nothing else on this item changes, including the photo above.
+              </div>
+            )}
+            {candidateMode === 'price' && candidates.length > 0 && (
+              <div className="img-candidates">
+                {candidates.map((r, i) => (
+                  <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
+                ))}
+              </div>
+            )}
             {form.basePrice != null && (
               <div className="field-group">
                 <label>Pricing</label>

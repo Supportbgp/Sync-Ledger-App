@@ -445,6 +445,20 @@ Everything else found:
   image (auto-picked, or chosen via "Find another image"), so confirming
   the right card via the image is what gates seeing/trusting a price at
   all, with no extra network call needed since that data's already there.
+- **EditModal's "Find market price" button moved into the Quantity &
+  pricing section** (out of the image area's `.img-actions` row) — staff
+  found its old spot next to "Find stock image" confusing, since it reads
+  the same name/game/set/rarity fields but runs an independent search, not
+  something tied to the image. The button, its underlying
+  `handleFindMarketPrice` search, and `selectCandidate`'s `candidateMode
+  === "price"` branch (still never touches either image slot) are
+  unchanged — only where the button and its resulting status line/
+  candidate grid render moved, gated on the same `candidateMode` state
+  that already existed to distinguish an image-search result set from a
+  price-search one. Picking a stock image via "Find stock image" still
+  auto-backfills Market Value as a bonus, same as before — the new button
+  is for refreshing/backfilling that price independently, without needing
+  to touch (or already have) an image.
 - **The condition-multiplier estimate can be materially wrong for
   high-value cards** — a flat percentage is a population average, not any
   specific card's real going rate, and a real example (M Rayquaza EX,
