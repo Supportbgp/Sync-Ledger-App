@@ -83,7 +83,8 @@ const DETECT_CARDS_TOOL = {
                 "box left at all, plus a holographic border line around the very edge; usually a non-'ex' " +
                 "Pokemon or a Trainer/Supporter card. " +
                 "'Ultra Rare' = the same full-bleed edge-to-edge treatment as Illustration Rare, but for an " +
-                "'ex' Pokemon. " +
+                "'ex' Pokemon. (Word order: 'Ultra Rare' — Ultra comes first. See the CAUTION note below — " +
+                "this is easy to mix up with the older era's differently-ordered 'Rare Ultra'.) " +
                 "'Special Illustration Rare' = the same full-bleed edge-to-edge art, PLUS a visible extra " +
                 "sparkle/glitter-foil texture over the whole card (often a wider, multi-element scene); for an " +
                 "'ex' Pokemon or a Trainer/Supporter card. " +
@@ -96,7 +97,9 @@ const DETECT_CARDS_TOOL = {
                 "overlapping the border) instead of staying boxed inside a small window, plus a holo sheen. " +
                 "'Rare Ultra' = full-art version of the same EX/GX/V Pokemon — artwork extends well past the " +
                 "normal small window, though a colored bar remains where the attack text sits (bottom-only for " +
-                "EX-era cards; thin bars top AND bottom for GX/V-era cards). " +
+                "EX-era cards; thin bars top AND bottom for GX/V-era cards). (Word order: 'Rare Ultra' — Rare " +
+                "comes first — the opposite order from the modern era's 'Ultra Rare' above. See the CAUTION " +
+                "note below.) " +
                 "'Rare Secret' = the same full-art extent as Rare Ultra, but with a gold-toned holographic " +
                 "border/background replacing the normal frame colors, and/or a collector number higher than " +
                 "the set's listed total (e.g. '105' printed in a set whose total is '100'). " +
@@ -104,6 +107,11 @@ const DETECT_CARDS_TOOL = {
                 "traits: 'Common' / 'Uncommon' / 'Rare' — these three genuinely cannot be told apart by look " +
                 "alone; only report one if a tiny rarity symbol next to the collector number is actually " +
                 "legible, otherwise leave this field blank rather than guessing. " +
+                "CAUTION: 'Ultra Rare' (modern) and 'Rare Ultra' (older) describe the same visual treatment " +
+                "in two different eras and are NOT interchangeable — they are the same two words in opposite " +
+                "order, which is easy to transpose by mistake. Before answering either one, re-check which " +
+                "word comes first: modern full-art 'ex' card → 'Ultra Rare' (Ultra first); older full-art " +
+                "EX/GX/V card → 'Rare Ultra' (Rare first). " +
                 "IMPORTANT: never report a Pokemon card's type/subtype printed in its name area — 'ex', 'EX', " +
                 "'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, even though they're a required " +
                 "clue for several of the values above (e.g. telling 'Illustration Rare' apart from 'Ultra " +
@@ -155,7 +163,9 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "with the art breaking past its border, foil, for an EX/GX/V Pokemon is 'Rare Holo EX'/'Rare Holo " +
   "GX'/'Rare Holo V'; a non-EX/GX/V card with foil over just the art is 'Rare Holo'; full art with a " +
   "text bar remaining is 'Rare Ultra'; the same full art plus a gold border (or a collector number " +
-  "past the set's total) is 'Rare Secret'. Only fall back to reading a tiny rarity symbol/text for " +
+  "past the set's total) is 'Rare Secret'. CAUTION: 'Ultra Rare' and 'Rare Ultra' are the same two " +
+  "words in opposite order for two different eras — re-check which word comes first before answering " +
+  "either one. Only fall back to reading a tiny rarity symbol/text for " +
   "the plain Common/Uncommon/Rare tiers, and leave rarity blank rather than guess if that's not " +
   "legible. The 'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
   "must never be reported as the rarity value — it's only a clue for picking the right rarity name " +
@@ -202,6 +212,13 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "claude-sonnet-5",
         max_tokens: 2048,
+        // This is structured extraction (forced tool-use), not creative
+        // writing — pinned low rather than left at the API default to cut
+        // down on run-to-run variance in how many cards get detected and
+        // how confidently their fields get filled in on the exact same
+        // photo (observed firsthand: 3-7 cards detected across reruns of
+        // the same 9-card page before this was added).
+        temperature: 0,
         tools: [DETECT_CARDS_TOOL],
         tool_choice: { type: "tool", name: "report_detected_cards" },
         messages: [

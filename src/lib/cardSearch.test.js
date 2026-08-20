@@ -128,6 +128,14 @@ describe('searchPokemon', () => {
     expect(decodeURIComponent(global.fetch.mock.calls[0][0])).not.toContain('\\-');
   });
 
+  it('strips apostrophes out of the query — real-world testing found every search for "Lillie\'s Clefairy ex" failing regardless of which hints were passed', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ data: [] }));
+    await searchPokemon("Lillie's Clefairy ex");
+    const q = decodeURIComponent(global.fetch.mock.calls[0][0]);
+    expect(q).not.toContain("'");
+    expect(q).not.toContain('’');
+  });
+
   it('tries set+number together first when both hints are given, stripping a "/total" denominator', async () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({
       data: [{ name: "Lillie's Clefairy ex", set: { name: 'Ascended Heroes' }, number: '280', images: { large: 'https://x/clefairy.jpg' } }],

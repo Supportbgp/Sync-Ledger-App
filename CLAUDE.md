@@ -575,6 +575,29 @@ Everything else found:
     jumping straight into mass-retrying "Find another image" clicks would
     recreate the exact request burst the pacing above exists to avoid — one
     nudge is more useful than staff discovering blanks by scrolling.
+- **Real-phone scan accuracy findings, round 2** — a 9-card real binder page
+  test surfaced three more distinct issues beyond the rarity/set/number work
+  above, each with a different fix:
+  - **"Rare Ultra" (older era) and "Ultra Rare" (modern era) were getting
+    swapped** — same two words, opposite order, for the visually-identical
+    full-art "ex"/EX/GX/V treatment in different eras; an easy thing for the
+    model to transpose. Both the `rarity` field's schema description and
+    `PROMPT_TEXT` now call this out explicitly with a CAUTION note at the
+    exact point each term is defined, telling the model to re-check word
+    order before answering either one.
+  - **Detection was noticeably non-deterministic** — the same 9-card photo
+    scanned anywhere from 3 to 7 detected cards across reruns. The Anthropic
+    call had no explicit `temperature`, so it ran at the API default; this
+    is forced tool-use structured extraction, not creative writing, so
+    `temperature: 0` is now pinned to reduce that variance.
+  - **"Find market price" failed on every input combination for "Lillie's
+    Clefairy ex"** specifically — since literally every query variant for
+    that card failed, not just some, the one constant across all of them
+    (the apostrophe in the name) was the prime suspect over a data-
+    availability gap. `sanitizeForPokemonQuery` now strips apostrophes
+    (straight and curly) same as its other special characters.
+  **Requires redeploying `scan-binder-page`** (schema description + prompt
+  + temperature are all server-side).
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
@@ -913,6 +936,42 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   discipline that's applied everywhere else in this project. Once built,
   add a paragraph to `ImportExportSection.jsx` in the staff docs above —
   that's the only doc change it needs.
+- **Scan review UX, staged plan** (agreed after the real-phone round-2
+  findings above) — Sprint 0 (rarity word-order/temperature/apostrophe
+  fixes) is done; these are next, in order, each independently shippable.
+  Every one applies equally to EditModal and ScannerPanel — this app has no
+  separate "scanner-only" vs. "catalog-only" field behavior, and these
+  shouldn't be the first exception:
+  1. **Backfill Number/Set/Rarity from a confirmed stock-image pick** —
+     once staff visually confirm a candidate, that print's real metadata
+     from pokemontcg.io is more trustworthy than the scan's own guess.
+     Needs `pokemonQuery` to return structured `set`/`number` on each
+     candidate (currently only baked into the display label), then the
+     selection handlers in both EditModal and ScannerPanel to backfill
+     those fields the same moment they already backfill Market Value.
+  2. **Rarity as a real `<select>`, not a `<datalist>`** — the datalist's
+     browser-native filtering hides suggestions once the field already has
+     a non-matching value typed, which isn't the "always show me every
+     option" behavior wanted here. Reuse `LocationPicker`'s existing
+     select-plus-"add new" escape-hatch pattern so an unresearched rarity
+     stays enterable.
+  3. **Condition dropdown**, same pattern, sourced from the tiers already
+     in `DEFAULT_CONDITION_MULTIPLIERS`/Pricing Settings (NM/LP/MP/HP/DMG).
+  4. **Printing/finish ("foil") dropdown** — UI only, no scan-side
+     recognition; explicitly decided not to have the model guess foil type,
+     since it's not reliable enough to be worth it. Manual/optional field,
+     same select-plus-escape-hatch pattern, sourced from a real per-game
+     vocabulary (Pokemon already has one sitting in `cardSearch.js`:
+     `POKEMON_PRICE_VARIANTS` — Normal/Holofoil/Reverse Holofoil/1st
+     Edition Normal/1st Edition Holofoil).
+  **Future enhancements (parked, not scheduled)**: Set-symbol accuracy
+  (near-always blank in real testing — tiny icons buried in busy full-art
+  illustrations; fixing this for real would mean deterministic icon
+  matching against a reference library, a much bigger investment for a
+  field that's already low-yield) and Japanese-print price coverage
+  (pokemontcg.io is English-print-focused; a name search on a Japanese
+  card can surface the English equivalent's image with no matching price
+  data — no verified alternative data source yet, don't guess one).
 
 ## Testing
 

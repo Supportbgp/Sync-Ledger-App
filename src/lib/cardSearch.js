@@ -101,9 +101,13 @@ export async function searchScryfall(name, rarityHint) {
 // code, e.g. "V \- SWSH204") — so instead of trusting their parser to honor
 // an escape, just replace the special character with a space. It's a fuzzy
 // image lookup, not an exact-match field, so losing the literal punctuation
-// costs nothing.
+// costs nothing. Straight and curly apostrophes are included too — a name
+// like "Lillie's Clefairy ex" reproduced consistent search failures
+// (every field-hint combination, not just one) in real-world testing, which
+// pointed at the one thing every query for that card had in common rather
+// than a data-availability gap.
 function sanitizeForPokemonQuery(s) {
-  return s.replace(/[+\-!(){}[\]^"~*?:\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s.replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // A printed number is usually shown as "280/217" (this print's number over
