@@ -216,6 +216,17 @@ describe('searchPokemon', () => {
       vi.useRealTimers();
     }
   });
+
+  it('matches a rarity hint against pokemontcg.io\'s real (inconsistently-formatted) value — "MEGA_ATTACK_RARE" for a Mega Evolution-era card', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [
+        { name: 'Mega Froslass ex', number: '1', rarity: 'Common', images: { large: 'https://x/common.jpg' } },
+        { name: 'Mega Froslass ex', number: '265', rarity: 'MEGA_ATTACK_RARE', images: { large: 'https://x/mar.jpg' } },
+      ],
+    }));
+    const results = await searchPokemon('Mega Froslass ex', '', 'Mega Attack Rare');
+    expect(results[0].url).toBe('https://x/mar.jpg');
+  });
 });
 
 describe('searchYugioh', () => {

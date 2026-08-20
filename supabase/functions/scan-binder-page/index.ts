@@ -90,6 +90,15 @@ const DETECT_CARDS_TOOL = {
                 "'ex' Pokemon or a Trainer/Supporter card. " +
                 "'Hyper Rare' = the card's entire border/background is a gold-toned holographic finish " +
                 "replacing the normal color scheme — a distinctly gold, 'gilded' looking card. " +
+                "MEGA EVOLUTION era (2025-present, 'Mega ___ ex' Pokemon — check this BEFORE the plain modern " +
+                "rules above, since it overrides them for Mega Pokemon specifically): " +
+                "'Mega Attack Rare' = the printed attack name itself is written in Japanese katakana script " +
+                "instead of English, even though the rest of the card (HP, rules text, flavor text) is in " +
+                "English — a distinctive, easy-to-spot swap that's the real tell for this rarity regardless of " +
+                "how full-art or bordered the rest of the card looks. " +
+                "'Mega Hyper Rare' = the same all-gold border/background treatment described for 'Hyper Rare' " +
+                "above, but for a 'Mega ___ ex' Pokemon specifically — use this name instead of 'Hyper Rare' " +
+                "whenever the gold-bordered card is a Mega Pokemon. " +
                 "OLDER cards (roughly 2012-2022, '-EX'/'-GX'/'V' suffix, uppercase): " +
                 "'Rare Holo' = normal small boxed artwork with a holographic sheen over just the art. " +
                 "'Rare Holo EX' / 'Rare Holo GX' / 'Rare Holo V' = normal card frame for an EX/GX/V-suffixed " +
@@ -159,7 +168,10 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "edge-to-edge art with a holo border line is 'Illustration Rare' (non-ex) or 'Ultra Rare' (ex); " +
   "the same full-bleed art plus extra glitter foil is 'Special Illustration Rare'; a normal small " +
   "boxed-art frame with all-over foil for an ex Pokemon is 'Double Rare'; an all-gold border/" +
-  "background is 'Hyper Rare'. Older cards (2012-2022, uppercase '-EX'/'-GX'/'V'): a normal frame " +
+  "background is 'Hyper Rare' ('Mega Hyper Rare' instead if the Pokemon is a 'Mega ___ ex'). For " +
+  "any 'Mega ___ ex' Pokemon (2025+ Mega Evolution era), check first whether the attack name itself " +
+  "is printed in Japanese katakana instead of English — if so it's a 'Mega Attack Rare' regardless " +
+  "of how full-art the rest of the card looks. Older cards (2012-2022, uppercase '-EX'/'-GX'/'V'): a normal frame " +
   "with the art breaking past its border, foil, for an EX/GX/V Pokemon is 'Rare Holo EX'/'Rare Holo " +
   "GX'/'Rare Holo V'; a non-EX/GX/V card with foil over just the art is 'Rare Holo'; full art with a " +
   "text bar remaining is 'Rare Ultra'; the same full art plus a gold border (or a collector number " +

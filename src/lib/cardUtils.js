@@ -83,6 +83,12 @@ export const RARITY_OPTIONS_BY_GAME = {
     "Common", "Uncommon", "Rare", "Rare Holo",
     // Modern (2023+, Scarlet & Violet era, lowercase "ex")
     "Double Rare", "Illustration Rare", "Ultra Rare", "Special Illustration Rare", "Hyper Rare",
+    // Mega Evolution era (2025+, "Mega ___ ex") — verified against a real
+    // Mega Evolution/Ascended Heroes sample; Mega Hyper Rare replaces plain
+    // Hyper Rare as that era's gold chase-card tier, and Mega Attack Rare
+    // (real API value "MEGA_ATTACK_RARE" — see the normalization note in
+    // cardSearch.js's preferRarity) debuted with Ascended Heroes.
+    "Mega Attack Rare", "Mega Hyper Rare",
     // Older (2012-2022, uppercase "-EX"/"-GX"/"V")
     "Rare Holo EX", "Rare Holo GX", "Rare Holo V", "Rare Ultra", "Rare Secret",
   ],

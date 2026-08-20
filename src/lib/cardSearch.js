@@ -48,6 +48,16 @@ async function scryfallQuery(q) {
   })).filter(r => r.url);
 }
 
+// pokemontcg.io doesn't always use its own Title-Case convention — a real
+// sample from the Mega Evolution era (Ascended Heroes) returned
+// "MEGA_ATTACK_RARE" for one rarity while every other value in the same set
+// was normal Title Case ("Special Illustration Rare", etc.). Normalizing
+// underscores/hyphens to spaces before comparing means the model's (Title
+// Case) guess still matches that inconsistency instead of silently missing it.
+function normalizeRarityForMatch(s) {
+  return s.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // Soft preference, not a hard filter — moves results whose own reported
 // rarity loosely matches the hint to the front, but never drops anything.
 // A hard filter risks silently zeroing out results over a vocabulary
@@ -55,11 +65,11 @@ async function scryfallQuery(q) {
 // to match a given API's exact rarity strings); this can only ever help.
 function preferRarity(results, rarityHint) {
   if (!rarityHint || !results.length) return results;
-  const needle = rarityHint.trim().toLowerCase();
+  const needle = normalizeRarityForMatch(rarityHint);
   if (!needle) return results;
   const matched = [], rest = [];
   for (const r of results) {
-    if (r.rarity && r.rarity.toLowerCase().includes(needle)) matched.push(r);
+    if (r.rarity && normalizeRarityForMatch(r.rarity).includes(needle)) matched.push(r);
     else rest.push(r);
   }
   return matched.length ? [...matched, ...rest] : results;

@@ -502,6 +502,25 @@ Everything else found:
   is guessed wrong, provided the number itself was legible.
   **Requires redeploying `scan-binder-page`** again (prompt-only change,
   no schema/version bump needed on the client side).
+- **Mega Evolution era rarities added** (`Mega Attack Rare`, `Mega Hyper
+  Rare`) — researched the same way as the rest of this section, against a
+  real sample (`me1.json`/Mega Evolution base set and `me2pt5.json`/
+  Ascended Heroes, both from `pokemon-tcg-data`) rather than assumed from
+  the name alone. `Mega Hyper Rare` replaces plain `Hyper Rare` as this
+  era's gold chase-card tier for a `Mega ___ ex` headliner; `Mega Attack
+  Rare` debuted specifically with Ascended Heroes and — unlike every other
+  visual-style rule above — isn't about border/art-bleed extent at all:
+  its real tell is the attack name itself being printed in Japanese
+  katakana instead of English, even on an otherwise-English card, which
+  the prompt now checks for explicitly on any `Mega ___ ex` Pokemon.
+  Also found and fixed a real data quirk while verifying: pokemontcg.io's
+  actual API value for Mega Attack Rare is `MEGA_ATTACK_RARE` (all-caps,
+  underscored) — inconsistent with every other rarity string in the same
+  set, which are normal Title Case. Rather than special-case that one
+  value, `preferRarity`'s matching (`cardSearch.js`) now normalizes
+  underscores/hyphens to spaces before comparing, so the model's Title
+  Case guess still connects to the real data regardless of this kind of
+  formatting inconsistency, for this or any future rarity.
 - **ScannerPanel's post-scan auto-fill silently failing, then working on
   manual retry** — also surfaced by the same round of real testing above,
   and a separate root cause from the two rarity/set issues above: an
@@ -618,21 +637,22 @@ Everything else found:
   empty result and falls through to the next tier — except the *last*
   tier, whose failure still propagates, so a genuinely unreachable API
   still reports as an error rather than a misleading "no matches."
-- **"Find another image" (ScannerPanel) and "Find stock image"/"Find
-  market price" (EditModal) now search by name only** — no set/rarity/
-  number hints. Real-world testing found the scan's own guesses for those
-  fields (frequently wrong, especially Set) narrowing OUT the correct
-  print more often than narrowing in on it — and a wrong Number can cause
-  a false-positive match (locking onto a different real card that happens
-  to share that number) rather than just an empty, harmlessly-skipped
-  tier. Deliberately scoped to these manual, explicit re-search actions
-  only — the initial post-scan auto-fill in `ScannerPanel.handleScan`
-  still uses every hint it has, since a wrong auto-pick there is at least
-  visible and correctable, and the fallback-ladder fix above already
-  makes a bad hint there safe to fall through rather than fatal. The
-  Rarity/Number fields in both EditModal and ScannerPanel are unchanged —
-  still there to capture what staff know, still feeding the initial
-  auto-fill — they just no longer narrow this specific manual search.
+- **"Find another image"/"Find stock image"/"Find market price" briefly
+  went name-only, then reverted** — the theory (a wrong hint narrows OUT
+  the correct print) was real, but real-world retesting found it was a net
+  regression: names with multiple genuine variants sharing a first word
+  ("Eevee" vs "Eevee ex") lost their disambiguation entirely, and
+  possessive names ("Lillie's", "Cynthia's") fell through to the broad
+  first-word-prefix tier and matched unrelated cards (e.g. "Cynthia's
+  Gabite" instead of "Cynthia's Garchomp ex") once hints weren't there to
+  short-circuit before reaching it — the same prefix-tier fallback
+  mechanism, just triggered by a missing hint instead of a wrong one.
+  Reverted to using every hint again everywhere (both these manual actions
+  and the initial auto-fill), trusting the fallback-ladder isolation fix
+  above to degrade gracefully on a bad hint instead of removing hints
+  altogether. EditModal's search calls now also pass `number` (via its new
+  scratch field, added for Sprint 1 below) to match ScannerPanel's full
+  hint set.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
@@ -986,11 +1006,10 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
     whenever the candidate actually carries them (a no-op for every
     non-Pokemon game today, which don't populate those fields). EditModal
     gained a Number scratch field to match ScannerPanel's, which already
-    had one. Landed alongside the "search by name only" change, which
-    makes this backfill more important, not less — with hints no longer
-    narrowing the search itself, confirming a candidate visually and then
-    trusting *that print's* real Set/Number/Rarity is now the main way
-    those fields end up accurate at all.
+    had one. Stays valuable independent of the name-only-search experiment
+    above (tried and reverted) — confirming a candidate visually and
+    trusting *that print's* real Set/Number/Rarity is a good source of
+    truth for those fields regardless of how the search itself is hinted.
   2. **Rarity as a real `<select>`, not a `<datalist>`** — the datalist's
      browser-native filtering hides suggestions once the field already has
      a non-matching value typed, which isn't the "always show me every
