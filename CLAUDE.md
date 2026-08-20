@@ -973,17 +973,24 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   that's the only doc change it needs.
 - **Scan review UX, staged plan** (agreed after the real-phone round-2
   findings above) — Sprint 0 (rarity word-order/temperature/apostrophe
-  fixes) is done; these are next, in order, each independently shippable.
-  Every one applies equally to EditModal and ScannerPanel — this app has no
-  separate "scanner-only" vs. "catalog-only" field behavior, and these
-  shouldn't be the first exception:
-  1. **Backfill Number/Set/Rarity from a confirmed stock-image pick** —
-     once staff visually confirm a candidate, that print's real metadata
-     from pokemontcg.io is more trustworthy than the scan's own guess.
-     Needs `pokemonQuery` to return structured `set`/`number` on each
-     candidate (currently only baked into the display label), then the
-     selection handlers in both EditModal and ScannerPanel to backfill
-     those fields the same moment they already backfill Market Value.
+  fixes) and Sprint 1 (backfill from a confirmed candidate) are done;
+  these are next, in order, each independently shippable. Every one
+  applies equally to EditModal and ScannerPanel — this app has no separate
+  "scanner-only" vs. "catalog-only" field behavior, and these shouldn't be
+  the first exception:
+  - ~~1. Backfill Number/Set/Rarity from a confirmed stock-image pick~~ —
+    done. `pokemonQuery`'s candidates now carry structured `set`/`number`
+    (previously only baked into the display label); picking a candidate in
+    either EditModal's `selectCandidate` or ScannerPanel's per-row grid now
+    overwrites the item's Set/Number/Rarity with that print's own values
+    whenever the candidate actually carries them (a no-op for every
+    non-Pokemon game today, which don't populate those fields). EditModal
+    gained a Number scratch field to match ScannerPanel's, which already
+    had one. Landed alongside the "search by name only" change, which
+    makes this backfill more important, not less — with hints no longer
+    narrowing the search itself, confirming a candidate visually and then
+    trusting *that print's* real Set/Number/Rarity is now the main way
+    those fields end up accurate at all.
   2. **Rarity as a real `<select>`, not a `<datalist>`** — the datalist's
      browser-native filtering hides suggestions once the field already has
      a non-matching value typed, which isn't the "always show me every

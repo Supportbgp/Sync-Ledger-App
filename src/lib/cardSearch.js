@@ -166,6 +166,12 @@ async function pokemonQueryUncached(q, attempt = 0) {
     // per-condition prices before trusting the NM-based estimate.
     listingUrl: c.tcgplayer && c.tcgplayer.url,
     rarity: c.rarity || '',
+    // Structured (not just baked into the label) so a confirmed pick can
+    // back-fill the item's own Set/Number fields — once staff visually
+    // confirm a candidate, this real database value is more trustworthy
+    // than the scan's own guess for these two frequently-wrong fields.
+    set: (c.set && c.set.name) || '',
+    number: c.number || '',
   })).filter(r => r.url);
 }
 

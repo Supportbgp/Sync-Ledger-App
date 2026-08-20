@@ -51,10 +51,13 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
-  // Best-guess only, same as ScannerPanel's row.rarity — never saved to the
-  // catalog, purely used to narrow the image/price search below (see
-  // preferRarity in cardSearch.js: a soft re-sort, never a hard filter).
+  // Best-guess/scratch fields only, same as ScannerPanel's row.rarity/
+  // row.number — never saved to the catalog directly. No longer used to
+  // narrow Find stock image/Find market price (name-only search performed
+  // better in real-world testing), but selectCandidate below fills these
+  // back in from a confirmed pick's own real data.
   const [rarity, setRarity] = useState("");
+  const [number, setNumber] = useState("");
 
   // For a brand-new item, follow whatever channels the same binder/case
   // already uses as the staff types the location in — until they manually
@@ -167,7 +170,18 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setSearching(false);
   }
 
-  function selectCandidate(url, price, listingUrl) {
+  function selectCandidate({ url, price, listingUrl, set: candidateSet, number: candidateNumber, rarity: candidateRarity }) {
+    // Once staff visually confirm a candidate, that print's own Set/Number/
+    // Rarity from pokemontcg.io is more trustworthy than the scan's guess —
+    // back-fill whichever of these the candidate actually carries (only
+    // Pokemon populates them today; every other game's candidates simply
+    // don't have these fields, so this is a no-op there). Applies in both
+    // modes — a price-search pick still means staff have identified the
+    // exact print, same as an image-search pick.
+    if (candidateSet) set('set', candidateSet);
+    if (candidateNumber) setNumber(candidateNumber);
+    if (candidateRarity) setRarity(candidateRarity);
+
     if (candidateMode === "price") {
       // Deliberately leaves both images alone — this path exists specifically
       // so backfilling Market Value on an old card doesn't disturb an
@@ -345,7 +359,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
           {candidateMode === 'image' && candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
-                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
+                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r)} />
               ))}
             </div>
           )}
@@ -377,16 +391,24 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             <div className="field-row2">
               <div className="field-group"><label>Set</label><input type="text" value={form.set} onChange={(e) => set('set', e.target.value)} /></div>
               <div className="field-group">
-                <label>Rarity</label>
+                <label>Number</label>
                 <input
-                  type="text" list="rarity-options" placeholder="Optional — not used to search, just tracked here" value={rarity}
-                  title="Not saved to the catalog yet. No longer used to narrow Find stock image/Find market price below — real-world testing found a plain name search consistently outperforms one narrowed by a possibly-wrong rarity guess. Pick a suggestion or type your own."
-                  onChange={(e) => setRarity(e.target.value)}
+                  type="text" placeholder="Optional — e.g. 280/217" value={number}
+                  title="Not saved to the catalog — a scratch field. No longer used to narrow Find stock image/Find market price below, same as Rarity, but picking a confirmed candidate there fills this back in from that print's real data."
+                  onChange={(e) => setNumber(e.target.value)}
                 />
-                <datalist id="rarity-options">
-                  {(RARITY_OPTIONS_BY_GAME[form.game] || []).map(r => <option key={r} value={r} />)}
-                </datalist>
               </div>
+            </div>
+            <div className="field-group">
+              <label>Rarity</label>
+              <input
+                type="text" list="rarity-options" placeholder="Optional — not used to search, just tracked here" value={rarity}
+                title="Not saved to the catalog yet. No longer used to narrow Find stock image/Find market price below — real-world testing found a plain name search consistently outperforms one narrowed by a possibly-wrong rarity guess. Pick a suggestion or type your own."
+                onChange={(e) => setRarity(e.target.value)}
+              />
+              <datalist id="rarity-options">
+                {(RARITY_OPTIONS_BY_GAME[form.game] || []).map(r => <option key={r} value={r} />)}
+              </datalist>
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
@@ -464,7 +486,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             {candidateMode === 'price' && candidates.length > 0 && (
               <div className="img-candidates">
                 {candidates.map((r, i) => (
-                  <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
+                  <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r)} />
                 ))}
               </div>
             )}

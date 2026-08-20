@@ -542,6 +542,16 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
                   // See findAnotherImageForRow — otherwise this pick could
                   // silently stay invisible behind an existing photo crop.
                   activeImage: 'stock',
+                  // Once staff visually confirm a candidate, that print's own
+                  // Set/Number/Rarity from pokemontcg.io is more trustworthy
+                  // than the scan's guess — back-fill whichever of these the
+                  // candidate actually carries (falls back to the scan's own
+                  // value when a candidate doesn't have one, e.g. every
+                  // non-Pokemon game today). Same reasoning as EditModal's
+                  // selectCandidate.
+                  set: c.set || row.set,
+                  number: c.number || row.number,
+                  rarity: c.rarity || row.rarity,
                 })}
               />
             ))}

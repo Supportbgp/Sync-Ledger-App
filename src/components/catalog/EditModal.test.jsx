@@ -54,6 +54,38 @@ describe('EditModal — image candidate selection', () => {
     expect(screen.getByText('No image')).toBeInTheDocument();
     expect(screen.getAllByText('$12.00').length).toBeGreaterThan(0);
   });
+
+  it('picking a confirmed candidate backfills Set/Number/Rarity from that print\'s real data', async () => {
+    searchCardImageMock.mockResolvedValueOnce([
+      {
+        url: 'https://x/clefairy.jpg', label: "Lillie's Clefairy ex (Ascended Heroes) #280", price: 12,
+        listingUrl: 'https://tcg/x', set: 'Ascended Heroes', number: '280/217', rarity: 'Special Illustration Rare',
+      },
+    ]);
+    // The scan's own (wrong) guess — should be overwritten by the confirmed pick.
+    render(<EditModal card={baseCard({ set: 'Scarlet & Violet' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Find stock image'));
+    const candidate = await screen.findByTitle("Lillie's Clefairy ex (Ascended Heroes) #280");
+    fireEvent.click(candidate);
+
+    expect(screen.getByDisplayValue('Ascended Heroes')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('280/217')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Special Illustration Rare')).toBeInTheDocument();
+  });
+
+  it('leaves Set/Number/Rarity alone when a candidate carries none of that data (e.g. every non-Pokemon game today)', async () => {
+    searchCardImageMock.mockResolvedValueOnce([
+      { url: 'https://x/luffy.jpg', label: 'Luffy', price: 5, listingUrl: '' },
+    ]);
+    render(<EditModal card={baseCard({ game: 'One Piece', set: 'OP01' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Find stock image'));
+    const candidate = await screen.findByTitle('Luffy');
+    fireEvent.click(candidate);
+
+    expect(screen.getByDisplayValue('OP01')).toBeInTheDocument();
+  });
 });
 
 describe('EditModal — per-location channel defaults', () => {
