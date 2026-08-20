@@ -586,10 +586,13 @@ Everything else found:
     exact point each term is defined, telling the model to re-check word
     order before answering either one.
   - **Detection was noticeably non-deterministic** — the same 9-card photo
-    scanned anywhere from 3 to 7 detected cards across reruns. The Anthropic
-    call had no explicit `temperature`, so it ran at the API default; this
-    is forced tool-use structured extraction, not creative writing, so
-    `temperature: 0` is now pinned to reduce that variance.
+    scanned anywhere from 3 to 7 detected cards across reruns. Tried pinning
+    `temperature: 0` on the Anthropic call to cut down that variance (this
+    is forced tool-use structured extraction, not creative writing), but a
+    real scan attempt came back with `"temperature" is deprecated for this
+    model` — this model rejects the parameter outright rather than
+    ignoring/clamping it, so it can't be set at all here. Reverted; this
+    specific variance is unaddressed for now.
   - **"Find market price" failed on every input combination for "Lillie's
     Clefairy ex"** specifically — since literally every query variant for
     that card failed, not just some, the one constant across all of them

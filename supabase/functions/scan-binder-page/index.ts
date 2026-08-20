@@ -212,13 +212,11 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "claude-sonnet-5",
         max_tokens: 2048,
-        // This is structured extraction (forced tool-use), not creative
-        // writing — pinned low rather than left at the API default to cut
-        // down on run-to-run variance in how many cards get detected and
-        // how confidently their fields get filled in on the exact same
-        // photo (observed firsthand: 3-7 cards detected across reruns of
-        // the same 9-card page before this was added).
-        temperature: 0,
+        // Tried pinning `temperature: 0` here to reduce run-to-run
+        // detection variance (3-7 cards detected across reruns of the same
+        // photo) — confirmed via a real API error that this model rejects
+        // the parameter outright ("`temperature` is deprecated for this
+        // model"), not just ignores/clamps it, so it can't be set at all.
         tools: [DETECT_CARDS_TOOL],
         tool_choice: { type: "tool", name: "report_detected_cards" },
         messages: [
