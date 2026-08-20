@@ -4,6 +4,7 @@ import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
+import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -150,7 +151,13 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       // as "pending" — Market Value stays hidden until "Find market price"
       // explicitly reveals it, since that's money-relevant and shouldn't
       // come from an unconfirmed top search result.
-      newRows.forEach(async (row) => {
+      // Capped concurrency, not one request burst per card — a full 9-card
+      // page firing unbounded parallel searches (each up to 4 fallback
+      // queries for Pokemon) can hit 30+ simultaneous requests against
+      // pokemontcg.io's key-less tier, which is prone to rate-limiting/5xx
+      // under exactly that kind of burst (same reasoning as CSV import's
+      // runWithConcurrency cap, reused here).
+      runWithConcurrency(newRows, 3, async (row) => {
         const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {

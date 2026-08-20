@@ -504,6 +504,18 @@ Everything else found:
   on a second try). Doesn't touch Scryfall/Yugioh/Lorcana/the proxy-backed
   games — scoped to the one provider a real report came in for, same
   discipline as the Pokemon-only scan-accuracy work above.
+- **ScannerPanel's post-scan image auto-fill is concurrency-capped, not
+  unbounded** (`runWithConcurrency`, cap 3 — same helper CSV import already
+  used for the same reason) — found via a real-phone test scan where a
+  card's automatic image/price fill silently came up empty, but manually
+  retrying that one row via "Find another image" immediately succeeded.
+  Root cause: `handleScan` used to fire one search per detected card on the
+  page all at once with no cap — a full 9-card page can mean 30+
+  simultaneous requests against pokemontcg.io's key-less tier (each card's
+  search can itself fire up to 4 fallback queries), which is exactly the
+  kind of burst that tier's rate limiting/5xx-proneness (see above) hits
+  hardest. A manual single-row retry doesn't compete with that burst, which
+  is why it worked when the automatic pass didn't.
 - **The condition-multiplier estimate can be materially wrong for
   high-value cards** — a flat percentage is a population average, not any
   specific card's real going rate, and a real example (M Rayquaza EX,
