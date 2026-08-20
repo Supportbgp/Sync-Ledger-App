@@ -1264,6 +1264,17 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Each review row fades/slides in once, on its first mount right after a
+       scan — staff see the queue populate card-by-card instead of the whole
+       batch appearing at once. Only plays on mount: later re-renders (e.g. an
+       image/price search resolving) don't replay it, since React keeps the
+       same DOM node for a given row's stable key. animation-delay is set
+       per-row via an inline style (see ScannerPanel.jsx). */
+    @keyframes scanRowIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     .scan-row {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1272,6 +1283,11 @@
       display: flex;
       gap: 10px;
       align-items: flex-start;
+      animation: scanRowIn 0.35s ease both;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .scan-row { animation: none; }
     }
 
     .scan-row-thumb-col {

@@ -130,7 +130,7 @@ function pokemonTcgplayerPrice(c) {
   return null;
 }
 
-async function pokemonQuery(q, attempt = 0) {
+async function pokemonQueryUncached(q, attempt = 0) {
   // Generous cap, not the API default — Pokemon reprints the same name
   // across dozens of sets/rarities (see searchPokemon below), and a small
   // cap just cuts off whichever prints happen to sort last.
@@ -145,7 +145,7 @@ async function pokemonQuery(q, attempt = 0) {
     // so only 5xx gets one.
     if (res.status >= 500 && attempt === 0) {
       await new Promise((r) => setTimeout(r, 600));
-      return pokemonQuery(q, 1);
+      return pokemonQueryUncached(q, 1);
     }
     throw new Error(`pokemontcg.io returned ${res.status}`);
   }
@@ -163,6 +163,32 @@ async function pokemonQuery(q, attempt = 0) {
     listingUrl: c.tcgplayer && c.tcgplayer.url,
     rarity: c.rarity || '',
   })).filter(r => r.url);
+}
+
+// A binder page commonly has several copies of the same card (bulk commons
+// especially), and a scan's per-row auto-fill searches each copy
+// independently — without this, N identical copies would fire N identical
+// requests. Keyed on the exact query string, this collapses duplicates
+// (including ones still in flight, not just already-resolved ones) onto a
+// single real request for the rest of the session. Cleared on failure so a
+// transient error doesn't get stuck cached — a successful result is safe to
+// reuse indefinitely, since a print's card data doesn't change while
+// browsing a single session.
+const pokemonQueryCache = new Map();
+async function pokemonQuery(q) {
+  if (pokemonQueryCache.has(q)) return pokemonQueryCache.get(q);
+  const promise = pokemonQueryUncached(q);
+  pokemonQueryCache.set(q, promise);
+  promise.catch(() => pokemonQueryCache.delete(q));
+  return promise;
+}
+
+// Test-only — clears the cache above so tests stay isolated from each other
+// regardless of whether two of them happen to reuse the same query string.
+// No real app code path ever needs to call this; a browser tab's session
+// living for hours is exactly the case the cache is meant to help.
+export function __resetPokemonQueryCacheForTests() {
+  pokemonQueryCache.clear();
 }
 
 export async function searchPokemon(name, setHint, rarityHint, numberHint) {

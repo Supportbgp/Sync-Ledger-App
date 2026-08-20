@@ -535,6 +535,37 @@ Everything else found:
     and the test now finds it via `getByLabelText` instead of a
     position-dependent index that any future added form control could
     just as easily have broken again.
+- **Scanner post-scan auto-fill hardened further against overloading
+  pokemontcg.io** (on top of the `runWithConcurrency` cap above), after
+  the same round of real-phone testing that surfaced the concurrency and
+  rarity/set issues above:
+  - **Self-imposed request pacing**: the batch auto-fill in
+    `ScannerPanel.handleScan` now staggers the first wave of requests
+    (`Math.min(i, 2) * 220ms` before each row's search starts) instead of
+    firing the initial concurrency-capped batch in the same instant — a
+    deliberately conservative pace meant to stay under whatever limit the
+    API enforces, rather than finding it the hard way via 5xx responses.
+  - **Query de-duplication cache** (`pokemonQueryCache` in `cardSearch.js`,
+    module-level, keyed on the exact query string): a binder page with
+    several copies of the same card (bulk commons especially) previously
+    fired one full search per copy — now the first search's promise is
+    cached and reused for any identical query, whether still in-flight or
+    already resolved, collapsing N duplicate requests into one for the
+    rest of the session. Cleared on failure so a transient error doesn't
+    get stuck cached; a successful result is safe to reuse indefinitely
+    since a print's data doesn't change mid-session. Test-only
+    `__resetPokemonQueryCacheForTests()` clears it between test cases so
+    two tests reusing the same query string (e.g. two 5xx-retry tests
+    both searching "Charizard") don't interfere with each other.
+  - **Progress UI to mask the added latency**: a `fillProgress` counter
+    ("Looking up images & prices — X of Y done…", reusing the existing
+    `.status-line`/`.spinner` styling) shows while the batch runs, each
+    `.scan-row` fades/slides in once on its first mount via a staggered
+    `scanRowIn` CSS animation (`prefers-reduced-motion` respected) so the
+    queue visibly populates card-by-card, and once every row settles the
+    view scrolls smoothly back to the top of the review queue — covers
+    the pacing/dedup changes with something that reads as intentional
+    rather than makes scanning feel slower.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

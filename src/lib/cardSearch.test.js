@@ -8,6 +8,7 @@ vi.mock('./supabase.js', () => ({
 const {
   searchScryfall, searchPokemon, searchYugioh, searchLorcana,
   searchOnePiece, searchRiftbound, searchGundam, searchSwu, searchCardImage,
+  __resetPokemonQueryCacheForTests,
 } = await import('./cardSearch.js');
 
 function jsonResponse(body, ok = true) {
@@ -17,6 +18,11 @@ function jsonResponse(body, ok = true) {
 beforeEach(() => {
   global.fetch = vi.fn();
   invokeMock.mockReset();
+  // Pokemon queries are cached across calls (see cardSearch.js) so a real
+  // session doesn't refetch an identical query twice — reset it here so
+  // tests stay isolated from each other regardless of whether two of them
+  // happen to build the same query string.
+  __resetPokemonQueryCacheForTests();
 });
 
 describe('searchScryfall', () => {
@@ -76,6 +82,31 @@ describe('searchPokemon', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('set.name:"Base Set"');
     expect(results[0]).toMatchObject({ url: 'https://x/char.jpg', price: 300, listingUrl: 'https://tcg/char' });
+  });
+
+  it('reuses an identical in-flight query instead of firing a duplicate request — same card, multiple copies on a page', async () => {
+    let resolveFetch;
+    global.fetch.mockImplementationOnce(() => new Promise((r) => { resolveFetch = r; }));
+    const first = searchPokemon('Charizard', 'Base Set');
+    const second = searchPokemon('Charizard', 'Base Set'); // e.g. two copies scanned off the same page
+    resolveFetch(jsonResponse({
+      data: [{ name: 'Charizard', set: { name: 'Base Set' }, number: '4', images: { large: 'https://x/char.jpg' } }],
+    }));
+    const [r1, r2] = await Promise.all([first, second]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(r1[0].url).toBe('https://x/char.jpg');
+    expect(r2[0].url).toBe('https://x/char.jpg');
+  });
+
+  it('reuses an already-resolved query on a later call too, not just ones still in flight', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{ name: 'Charizard', set: { name: 'Base Set' }, number: '4', images: { large: 'https://x/char.jpg' } }],
+    }));
+    await searchPokemon('Charizard', 'Base Set');
+    global.fetch.mockClear();
+    const results = await searchPokemon('Charizard', 'Base Set');
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(results[0].url).toBe('https://x/char.jpg');
   });
 
   it('falls through exact phrase -> unquoted -> first-word prefix when nothing narrower matches', async () => {

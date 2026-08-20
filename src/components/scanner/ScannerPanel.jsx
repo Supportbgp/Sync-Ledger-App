@@ -91,6 +91,11 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   const [saving, setSaving] = useState(false);
   const [channels, setChannels] = useState({ posChannel: true, tcgplayerChannel: true, collectrChannel: true });
   const [channelsTouched, setChannelsTouched] = useState(false);
+  // Tracks the post-scan image/price auto-fill batch — null once it's done
+  // (or hasn't started). Drives the "Looking up images & prices" progress
+  // line and the scroll-to-top once every row has settled.
+  const [fillProgress, setFillProgress] = useState(null);
+  const reviewRef = useRef(null);
 
   // One scan is one binder page, i.e. one location for the whole batch — so
   // just like the Edit modal, follow whatever channels that binder/case
@@ -156,8 +161,14 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       // queries for Pokemon) can hit 30+ simultaneous requests against
       // pokemontcg.io's key-less tier, which is prone to rate-limiting/5xx
       // under exactly that kind of burst (same reasoning as CSV import's
-      // runWithConcurrency cap, reused here).
-      runWithConcurrency(newRows, 3, async (row) => {
+      // runWithConcurrency cap, reused here). A small staggered start on top
+      // of that cap spreads the very first wave out further still, rather
+      // than firing several requests in the same instant — a self-imposed
+      // pace meant to stay well under whatever limit the API enforces,
+      // instead of finding it the hard way.
+      setFillProgress({ done: 0, total: newRows.length });
+      runWithConcurrency(newRows, 3, async (row, i) => {
+        await new Promise((r) => setTimeout(r, Math.min(i, 2) * 220));
         const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {
@@ -165,6 +176,13 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
             pendingPrice: results[0]?.price ?? null, pendingListingUrl: results[0]?.listingUrl || '',
           }
           : r));
+        setFillProgress(p => p && { ...p, done: p.done + 1 });
+      }).then(() => {
+        setFillProgress(null);
+        // Staff may have scrolled to watch a specific row fill in — snap
+        // back to the top of the review queue now that every row has
+        // settled, so they start reviewing from card #1.
+        reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     } catch (err) {
       toast("Scan failed: " + err.message, true);
@@ -316,8 +334,14 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       </div>
 
       {rows && rows.length > 0 && (
-        <div className="card card-pad">
+        <div className="card card-pad" ref={reviewRef}>
           <div className="section-label">Review before adding ({rows.length})</div>
+          {fillProgress && (
+            <div className="status-line" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="spinner" />
+              Looking up images &amp; prices — {fillProgress.done} of {fillProgress.total} done…
+            </div>
+          )}
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Binder / case / collection for this page</label>
             <LocationPicker locations={locations} value={location} onChange={setLocation} ariaLabel="Binder / case / collection for this page" />
@@ -343,10 +367,11 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {rows.map(row => (
+            {rows.map((row, i) => (
               <ScanRow
                 key={row.id}
                 row={row}
+                entranceDelay={i}
                 multipliers={multipliers}
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
@@ -371,7 +396,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   );
 }
 
-function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
+function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
   const { openLightbox } = useUI();
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
@@ -383,7 +408,10 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
   const displaySrc = row.activeImage === 'stock' ? (stockSrc || photoSrc) : (photoSrc || stockSrc);
   const canZoom = !!displaySrc;
   return (
-    <div className="scan-row">
+    // Capped so a big page's later rows don't queue behind a silly-long
+    // delay — the fade-in itself is what reads as "one by one," not how
+    // long the last one waits.
+    <div className="scan-row" style={{ animationDelay: `${Math.min(entranceDelay, 10) * 60}ms` }}>
       <div className="scan-row-thumb-col">
         <div
           className="scan-row-thumb"
