@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -373,10 +373,13 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <div className="field-group">
                 <label>Rarity</label>
                 <input
-                  type="text" placeholder="Optional — narrows image/price search" value={rarity}
-                  title="Not saved — same as Set, just narrows the search below for cards that reprint the same name/set at different rarities"
+                  type="text" list="rarity-options" placeholder="Optional — narrows image/price search" value={rarity}
+                  title="Not saved — same as Set, just narrows the search below for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
                   onChange={(e) => setRarity(e.target.value)}
                 />
+                <datalist id="rarity-options">
+                  {(RARITY_OPTIONS_BY_GAME[form.game] || []).map(r => <option key={r} value={r} />)}
+                </datalist>
               </div>
             </div>
             <div className="field-row2">
@@ -389,7 +392,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
             <div className="field-group">
               <label>Binder / case / collection</label>
-              <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} />
+              <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} ariaLabel="Binder / case / collection" />
             </div>
 
             <div className="checkbox-row">

@@ -64,7 +64,7 @@ describe('EditModal — per-location channel defaults', () => {
   ];
 
   function locationSelect() {
-    return screen.getAllByRole('combobox')[1];
+    return screen.getByLabelText('Binder / case / collection');
   }
 
   it('follows the majority channel usage of the chosen location for a brand-new item', () => {

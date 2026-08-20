@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -320,7 +320,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
           <div className="section-label">Review before adding ({rows.length})</div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Binder / case / collection for this page</label>
-            <LocationPicker locations={locations} value={location} onChange={setLocation} />
+            <LocationPicker locations={locations} value={location} onChange={setLocation} ariaLabel="Binder / case / collection for this page" />
           </div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Where do these live?</label>
@@ -434,10 +434,15 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
             onChange={(e) => onChange({ number: e.target.value })}
           />
           <input
-            type="text" placeholder="Rarity" className="sf" value={row.rarity}
-            title="Optional — narrows the image search, same as Set, for cards that reprint the same name/set at different rarities"
+            type="text" list={`rarity-options-${row.id}`} placeholder="Rarity" className="sf" value={row.rarity}
+            title="Optional — narrows the image search, same as Set, for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
             onChange={(e) => onChange({ rarity: e.target.value })}
           />
+          {/* Per-row id — a page scans several cards at once, so a shared
+              static datalist id would collide across rows. */}
+          <datalist id={`rarity-options-${row.id}`}>
+            {(RARITY_OPTIONS_BY_GAME[row.game] || []).map(r => <option key={r} value={r} />)}
+          </datalist>
         </div>
         <div className="scan-row-line">
           <input type="text" placeholder="Condition" className="sf" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />

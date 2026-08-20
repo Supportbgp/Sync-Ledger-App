@@ -6,7 +6,7 @@ const ADD_NEW = '__add_new__';
 // plus an explicit "add new" path — instead of a plain text input with a
 // browser datalist, which is easy to mistype and silently break exact-match
 // lookups elsewhere (e.g. per-location channel defaults).
-export default function LocationPicker({ locations, value, onChange, placeholder }) {
+export default function LocationPicker({ locations, value, onChange, placeholder, ariaLabel }) {
   const [adding, setAdding] = useState(value !== '' && !locations.includes(value));
 
   if (adding) {
@@ -15,6 +15,7 @@ export default function LocationPicker({ locations, value, onChange, placeholder
         <input
           type="text"
           autoFocus
+          aria-label={ariaLabel}
           placeholder={placeholder || "e.g. Black and red toploader binder (Pokemon)"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -36,6 +37,7 @@ export default function LocationPicker({ locations, value, onChange, placeholder
   return (
     <select
       value={locations.includes(value) ? value : ''}
+      aria-label={ariaLabel}
       onChange={(e) => {
         if (e.target.value === ADD_NEW) { setAdding(true); onChange(''); }
         else onChange(e.target.value);

@@ -509,6 +509,32 @@ Everything else found:
   `runWithConcurrency` concurrency-cap note further down, under Market
   Value/pokemontcg.io reliability) was the actual culprit, not a
   search-logic bug.
+- **Rarity field gained a `<datalist>` of real suggestions for Pokemon**
+  (`RARITY_OPTIONS_BY_GAME` in `cardUtils.js`, the same researched rarity
+  strings from the tier-2 fix above) in both `EditModal.jsx` and
+  `ScannerPanel.jsx`'s `ScanRow` — still a plain text `<input>`, so staff
+  can type any value, but now with a dropdown of real options to pick
+  from instead of needing to remember/spell the exact rarity name. Games
+  with no entry in `RARITY_OPTIONS_BY_GAME` (everything except Pokemon,
+  for now) just get no suggestions, same free-text behavior as before —
+  to be filled in "when the time comes" for each other game, matching the
+  Pokemon-first staged rollout elsewhere in this doc. `ScannerPanel`'s
+  `<datalist>` id is keyed per-row (`rarity-options-${row.id}`) since a
+  single scan can review several cards — and therefore several `ScanRow`s
+  — at once; a shared static id would collide.
+  - **Found a real accessibility gap while wiring this up**: an `<input
+    list="...">` gets an implicit ARIA `combobox` role per the HTML-ARIA
+    mapping spec — same as a `<select>` — which shifted the position that
+    `EditModal.test.jsx`'s `getAllByRole('combobox')[1]` hack depended on
+    to find `LocationPicker`'s `<select>` (it had no accessible name of
+    its own; its `<label>` was a visual sibling only, never wired via
+    `htmlFor`). Fixed at the actual root cause rather than dodging the
+    datalist pattern: `LocationPicker` now takes an `ariaLabel` prop
+    (passed as each caller's own visible label text — "Binder / case /
+    collection" in `EditModal`, "...for this page" in `ScannerPanel`),
+    and the test now finds it via `getByLabelText` instead of a
+    position-dependent index that any future added form control could
+    just as easily have broken again.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

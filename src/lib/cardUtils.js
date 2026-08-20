@@ -70,6 +70,24 @@ export const GAME_TAG_CLASS = {
   Gundam: "tag-gundam",
 };
 
+// Suggestions for the Rarity field's <datalist> (EditModal/ScannerPanel) — a
+// text input with autocomplete, not a hard <select>, since Rarity is never
+// saved and staff should still be able to type something that isn't listed.
+// Values are real rarity strings pokemontcg.io's own data uses (verified
+// directly against pokemon-tcg-data on GitHub, not guessed), grouped by era
+// so the same free-text field works whether the card in hand is a brand new
+// pull or something from a binder that's years old. Games with no entry
+// here just get no suggestions — the field still works as plain free text.
+export const RARITY_OPTIONS_BY_GAME = {
+  Pokemon: [
+    "Common", "Uncommon", "Rare", "Rare Holo",
+    // Modern (2023+, Scarlet & Violet era, lowercase "ex")
+    "Double Rare", "Illustration Rare", "Ultra Rare", "Special Illustration Rare", "Hyper Rare",
+    // Older (2012-2022, uppercase "-EX"/"-GX"/"V")
+    "Rare Holo EX", "Rare Holo GX", "Rare Holo V", "Rare Ultra", "Rare Secret",
+  ],
+};
+
 export function normalizeCard(c) {
   return {
     sku: c.sku || "",
