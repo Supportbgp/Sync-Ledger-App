@@ -459,6 +459,22 @@ Everything else found:
   auto-backfills Market Value as a bonus, same as before — the new button
   is for refreshing/backfilling that price independently, without needing
   to touch (or already have) an image.
+- **pokemontcg.io's key-less public tier occasionally returns a transient
+  5xx** (real-world example: a card search for "Alolan Exeggutor ex" in
+  "SV08: Surging Sparks (SSP)" hit a 500 then a 502 back to back) — before
+  this fix, `pokemonQuery` (`cardSearch.js`) silently treated any
+  non-`ok` response as "zero results," so a real API failure got
+  misreported to staff as "No matches found" instead of a real error, and
+  `searchPokemon`'s fallback ladder would then burn through 3 more
+  requests against an endpoint that was already failing. `pokemonQuery`
+  now retries once (600ms) on a 5xx before giving up, and throws instead of
+  swallowing a failure that survives the retry, so EditModal's
+  `handleFindImage`/`handleFindMarketPrice` catch it and show an honest
+  "couldn't reach the database, try again" message rather than a
+  misleading "no matches." A 4xx isn't retried (a bad query won't succeed
+  on a second try). Doesn't touch Scryfall/Yugioh/Lorcana/the proxy-backed
+  games — scoped to the one provider a real report came in for, same
+  discipline as the Pokemon-only scan-accuracy work above.
 - **The condition-multiplier estimate can be materially wrong for
   high-value cards** — a flat percentage is a population average, not any
   specific card's real going rate, and a real example (M Rayquaza EX,

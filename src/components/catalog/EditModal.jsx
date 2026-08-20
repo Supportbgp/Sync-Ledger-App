@@ -126,7 +126,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
         setCandidates(results);
       }
     } catch (e) {
-      setImageStatus({ text: "Couldn't reach the card image database (network/CORS). Try uploading a photo or pasting a URL instead.", kind: "err" });
+      setImageStatus({ text: "Couldn't reach the card image database — it may be down, rate-limited, or blocked by CORS. Try again in a moment, or upload a photo / paste a URL instead.", kind: "err" });
     }
     setSearching(false);
   }
@@ -156,7 +156,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
         setCandidates(results);
       }
     } catch (e) {
-      setImageStatus({ text: "Couldn't reach the card price database (network/CORS).", kind: "err" });
+      setImageStatus({ text: "Couldn't reach the card price database — it may be down or rate-limited. Try again in a moment.", kind: "err" });
     }
     setSearching(false);
   }

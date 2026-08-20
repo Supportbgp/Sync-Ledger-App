@@ -121,12 +121,25 @@ function pokemonTcgplayerPrice(c) {
   return null;
 }
 
-async function pokemonQuery(q) {
+async function pokemonQuery(q, attempt = 0) {
   // Generous cap, not the API default — Pokemon reprints the same name
   // across dozens of sets/rarities (see searchPokemon below), and a small
   // cap just cuts off whichever prints happen to sort last.
   const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=20`);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    // pokemontcg.io's public (key-less) tier is documented as prone to
+    // transient 5xx under load — retry once before giving up, rather than
+    // silently treating a real API failure as "no cards matched" (which
+    // used to mask the actual problem and let searchPokemon's fallback
+    // ladder burn through several more requests against an
+    // already-failing endpoint). A 4xx (bad query) won't succeed on retry,
+    // so only 5xx gets one.
+    if (res.status >= 500 && attempt === 0) {
+      await new Promise((r) => setTimeout(r, 600));
+      return pokemonQuery(q, 1);
+    }
+    throw new Error(`pokemontcg.io returned ${res.status}`);
+  }
   const data = await res.json();
   return (data.data || []).map(c => ({
     url: (c.images && (c.images.large || c.images.small)),
