@@ -22,7 +22,6 @@ export default function EditingItemSection() {
       </p>
       <ul>
         <li><strong>Find stock image</strong> — searches by name/game/set (and Rarity, if filled in) and shows a grid of candidates; click one to use it. This also backfills the NM reference price used for Market Value, if the result has one.</li>
-        <li><strong>Find market price</strong> — the same search, but for an item that already has the right image and just needs its Market Value reference filled in. Picking a result here never touches either image.</li>
         <li><strong>Upload real photo</strong> — attach an actual photo of this exact copy from your device.</li>
         <li>The URL field lets you paste a stock image link directly instead of searching.</li>
         <li>"Remove stock" / "Remove photo" only appear once that slot actually has something in it.</li>
@@ -59,11 +58,17 @@ export default function EditingItemSection() {
       <h3>Quantity &amp; pricing</h3>
       <p>
         "Our price" is always yours to set directly — Ledger never changes
-        it automatically. If a card has an NM reference price on file (from
-        Find stock image/Find market price), this section also shows the
-        computed <strong>Market Value</strong> for the condition you typed
-        in, with a "Use as Our Price" shortcut, plus a link to check the
-        live TCGPlayer listing.
+        it automatically. A <strong>Find market price</strong> button here
+        runs the same name/game/set/rarity search as Find stock image, but
+        independently of whichever image is showing — pick a result to set
+        or refresh the NM reference price without touching either photo.
+        Selecting a stock image up in the image area does the same thing
+        automatically as a bonus, so this button is really for an item that
+        already has the right image and just needs its price reference set
+        or refreshed. Once an NM reference exists (from either path), this
+        section also shows the computed <strong>Market Value</strong> for
+        the condition you typed in, with a "Use as Our Price" shortcut, plus
+        a link to check the live TCGPlayer listing.
       </p>
       <DocsCallout kind="warn">
         On anything priced $25+ at the NM reference, a warning appears
