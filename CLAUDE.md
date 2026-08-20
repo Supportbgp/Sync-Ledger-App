@@ -566,6 +566,15 @@ Everything else found:
     view scrolls smoothly back to the top of the review queue — covers
     the pacing/dedup changes with something that reads as intentional
     rather than makes scanning feel slower.
+  - **Post-batch "needs review" nudge**: once the auto-fill batch settles,
+    a toast reports how many rows ended up with no image found (tallied in
+    a plain closure variable inside the `runWithConcurrency` callback, not
+    read back off `rows` state — the `.then()` fires the instant every
+    worker resolves, which can outrace React actually applying the last
+    `setRows` calls). A blank thumbnail is easy to miss in a long list, and
+    jumping straight into mass-retrying "Find another image" clicks would
+    recreate the exact request burst the pacing above exists to avoid — one
+    nudge is more useful than staff discovering blanks by scrolling.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
@@ -986,3 +995,9 @@ without a physical phone every time.
 - Never guess an external platform's exact file format/API capability when
   wrong-ness risk is high — get a real sample or do the research first
   (this burned us once on TCG Player/Collectr bulk-upload assumptions).
+- **Verification cadence while iterating on an open PR**: run `npm test`
+  (unit) and `npm run build` on every push — they're fast. Only run the
+  full `npm run test:e2e` suite (~3 min) right before actually merging, not
+  on every intermediate push — run just the specific `e2e/*.spec.js` file(s)
+  that cover the area touched, if one exists, otherwise skip e2e for that
+  push. Do the full e2e run as the last step before merge regardless.

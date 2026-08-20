@@ -167,9 +167,15 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       // pace meant to stay well under whatever limit the API enforces,
       // instead of finding it the hard way.
       setFillProgress({ done: 0, total: newRows.length });
+      // Tallied locally, not read back off `rows` state — the .then() below
+      // fires the instant every worker's promise resolves, which can beat
+      // React actually applying the last batch of setRows updates. A plain
+      // closure variable has no such race.
+      let noImageCount = 0;
       runWithConcurrency(newRows, 3, async (row, i) => {
         await new Promise((r) => setTimeout(r, Math.min(i, 2) * 220));
         const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
+        if (!results.length) noImageCount++;
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {
             ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
@@ -183,6 +189,14 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         // back to the top of the review queue now that every row has
         // settled, so they start reviewing from card #1.
         reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // A blank thumbnail is easy to miss in a long list, and jumping
+        // straight into "Find another image" clicks recreates the exact
+        // burst the pacing above is trying to avoid — a single nudge here
+        // is more useful than staff mass-retrying rows the moment the queue
+        // settles.
+        if (noImageCount > 0) {
+          toast(`${noImageCount} card${noImageCount === 1 ? '' : 's'} need${noImageCount === 1 ? 's' : ''} a manual image search — see the row(s) below with no thumbnail.`, true);
+        }
       });
     } catch (err) {
       toast("Scan failed: " + err.message, true);
