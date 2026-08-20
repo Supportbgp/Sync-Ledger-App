@@ -208,16 +208,23 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
   }
 
-  // Searches for alternative prints/art using whatever name/set/game staff
-  // have already corrected, and shows the candidate grid so they can pick a
+  // Searches for alternative prints/art using whatever name/game staff have
+  // already corrected, and shows the candidate grid so they can pick a
   // different one — image only. Picking a candidate updates the pending
   // price/listing behind the scenes (see the click handler in ScanRow) but
   // doesn't reveal it; that's "Find market price" below.
+  // Deliberately name-only, no set/rarity/number hints — real-world testing
+  // found the scan's own guesses for those (often wrong) narrowing OUT the
+  // correct print more often than they narrowed in on it, consistently
+  // producing a worse candidate pool than a plain name search. The initial
+  // post-scan auto-fill above still uses every hint it has, since a wrong
+  // auto-pick there is at least visible and correctable — this is an
+  // explicit, one-off retry, so favor breadth here instead.
   async function findAnotherImageForRow(id) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
+    const results = await findImageCandidates(row.name, row.game);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
@@ -472,12 +479,12 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
           <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
           <input
             type="text" placeholder="Number" className="sf" value={row.number}
-            title="Optional — the printed collector number (e.g. 280/217). The strongest signal for telling apart same-name/alt-art prints; currently only used to narrow Pokemon search"
+            title="Optional — the printed collector number (e.g. 280/217). Used to narrow the initial automatic image/price fill for Pokemon; 'Find another image' below searches by name only regardless, since a wrong guess here can narrow OUT the correct print"
             onChange={(e) => onChange({ number: e.target.value })}
           />
           <input
             type="text" list={`rarity-options-${row.id}`} placeholder="Rarity" className="sf" value={row.rarity}
-            title="Optional — narrows the image search, same as Set, for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
+            title="Optional — used to narrow the initial automatic image/price fill, same as Set/Number; 'Find another image' below searches by name only regardless. Pick a suggestion or type your own."
             onChange={(e) => onChange({ rarity: e.target.value })}
           />
           {/* Per-row id — a page scans several cards at once, so a shared

@@ -195,6 +195,27 @@ describe('searchPokemon', () => {
       vi.useRealTimers();
     }
   });
+
+  it('falls through to a broader tier when an earlier, narrower tier persistently 5xxs, instead of aborting the whole search', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // number-alone tier, 1st attempt
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // number-alone tier, retry — still fails
+        .mockResolvedValueOnce(jsonResponse({
+          data: [{ name: 'Charizard', set: { name: 'Base Set' }, images: { large: 'https://x/char.jpg' } }],
+        })); // next (broader) tier succeeds
+
+      const promise = searchPokemon('Charizard', '', '', '999'); // numberHint, no setHint
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(results[0].url).toBe('https://x/char.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('searchYugioh', () => {

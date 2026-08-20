@@ -108,6 +108,11 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   // resolveActiveImage in cardUtils.js, just pending-state aware here.
   const src = form.activeImage === 'stock' ? (stockSrc || photoSrc) : (photoSrc || stockSrc);
 
+  // Deliberately name-only, no set/rarity hints — real-world testing found
+  // the scan's own set/rarity guesses (often wrong) narrowing OUT the
+  // correct print more often than they narrowed in on it, consistently
+  // producing a worse candidate pool than a plain name search. Matches
+  // ScannerPanel's "Find another image", which is the same action.
   async function handleFindImage() {
     const name = form.name.trim();
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
@@ -116,7 +121,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("image");
     setSearching(true);
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
+      const results = await searchByGame(form.game, name);
       if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
       } else if (!results.length) {
@@ -132,9 +137,10 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   }
 
   // For old cards that already have a correct image (basePrice didn't exist
-  // as a field when they were added) — same search as "Find image", but
-  // picking a candidate below only backfills Market Value, leaving the
-  // existing image and everything else untouched.
+  // as a field when they were added) — same search as "Find image" (name
+  // only, same reasoning as above), but picking a candidate below only
+  // backfills Market Value, leaving the existing image and everything else
+  // untouched.
   async function handleFindMarketPrice() {
     const name = form.name.trim();
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
@@ -143,7 +149,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("price");
     setSearching(true);
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
+      const results = await searchByGame(form.game, name);
       if (results === null) {
         setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
       } else if (!results.length) {
@@ -373,8 +379,8 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <div className="field-group">
                 <label>Rarity</label>
                 <input
-                  type="text" list="rarity-options" placeholder="Optional — narrows image/price search" value={rarity}
-                  title="Not saved — same as Set, just narrows the search below for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
+                  type="text" list="rarity-options" placeholder="Optional — not used to search, just tracked here" value={rarity}
+                  title="Not saved to the catalog yet. No longer used to narrow Find stock image/Find market price below — real-world testing found a plain name search consistently outperforms one narrowed by a possibly-wrong rarity guess. Pick a suggestion or type your own."
                   onChange={(e) => setRarity(e.target.value)}
                 />
                 <datalist id="rarity-options">

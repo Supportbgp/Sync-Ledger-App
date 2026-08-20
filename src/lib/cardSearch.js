@@ -203,36 +203,38 @@ export async function searchPokemon(name, setHint, rarityHint, numberHint) {
   const safe = sanitizeForPokemonQuery(name);
   const safeSet = setHint ? sanitizeForPokemonQuery(setHint) : '';
   const safeNumber = numberHint ? sanitizePokemonNumber(String(numberHint)) : '';
-
-  // Set+number together is about as close to a unique key as a print has —
-  // a name alone can match 8+ reprints (alt arts, "ex"/"V"/"VMAX" variants,
-  // etc.), but this combination narrows to essentially one exact card.
-  if (safeSet && safeNumber) {
-    let results = await pokemonQuery(`name:"${safe}" set.name:"${safeSet}" number:"${safeNumber}"`);
-    if (results.length) return preferRarity(results, rarityHint);
-  }
-  // Number is the stronger of the two signals — the vision scan's set guess
-  // is the least reliable field it reports (it often defaults to a vague
-  // era name instead of the specific expansion), so a number-only match is
-  // tried before falling back to a set-only one rather than after.
-  if (safeNumber) {
-    let results = await pokemonQuery(`name:"${safe}" number:"${safeNumber}"`);
-    if (results.length) return preferRarity(results, rarityHint);
-  }
-  // A card with many reprints (Charizard, etc.) can easily have more prints
-  // than fit in one page — narrowing by the item's own recorded set first
-  // is what actually finds the right one instead of an arbitrary handful.
-  if (safeSet) {
-    let results = await pokemonQuery(`name:"${safe}" set.name:"${safeSet}"`);
-    if (results.length) return preferRarity(results, rarityHint);
-  }
-  let results = await pokemonQuery('name:"' + safe + '"');
-  if (results.length) return preferRarity(results, rarityHint);
-  results = await pokemonQuery('name:' + safe);
-  if (results.length) return preferRarity(results, rarityHint);
   const firstWord = safe.split(/\s+/)[0];
-  if (firstWord && firstWord !== safe) {
-    results = await pokemonQuery('name:' + firstWord + '*');
+
+  // Narrowest first, broadest last. Set+number together is about as close
+  // to a unique key as a print has (a name alone can match 8+ reprints —
+  // alt arts, "ex"/"V"/"VMAX" variants, etc.) — but the scan's own set/
+  // number guesses are frequently wrong in practice, so number-alone comes
+  // before set-alone (number is the more reliable of the two signals).
+  const tiers = [];
+  if (safeSet && safeNumber) tiers.push(`name:"${safe}" set.name:"${safeSet}" number:"${safeNumber}"`);
+  if (safeNumber) tiers.push(`name:"${safe}" number:"${safeNumber}"`);
+  if (safeSet) tiers.push(`name:"${safe}" set.name:"${safeSet}"`);
+  tiers.push(`name:"${safe}"`);
+  tiers.push('name:' + safe);
+  if (firstWord && firstWord !== safe) tiers.push('name:' + firstWord + '*');
+
+  let results = [];
+  for (let i = 0; i < tiers.length; i++) {
+    try {
+      results = await pokemonQuery(tiers[i]);
+    } catch (err) {
+      // A tier that throws (e.g. a persistent 5xx specific to that exact
+      // combined query — observed for real cards where name+set+number
+      // failed outright but a plain name search on the same card
+      // succeeded) is treated the same as an empty result and falls
+      // through to the next, broader tier, rather than aborting the whole
+      // search. Only the last tier's failure is allowed to propagate, so a
+      // genuinely unreachable API still reports as an error instead of a
+      // misleading "no matches."
+      if (i === tiers.length - 1) throw err;
+      results = [];
+    }
+    if (results.length) return preferRarity(results, rarityHint);
   }
   return preferRarity(results, rarityHint);
 }

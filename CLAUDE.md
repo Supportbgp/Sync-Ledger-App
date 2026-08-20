@@ -593,14 +593,46 @@ Everything else found:
     model` — this model rejects the parameter outright rather than
     ignoring/clamping it, so it can't be set at all here. Reverted; this
     specific variance is unaddressed for now.
-  - **"Find market price" failed on every input combination for "Lillie's
-    Clefairy ex"** specifically — since literally every query variant for
-    that card failed, not just some, the one constant across all of them
-    (the apostrophe in the name) was the prime suspect over a data-
-    availability gap. `sanitizeForPokemonQuery` now strips apostrophes
-    (straight and curly) same as its other special characters.
+  - **"Find market price"/"Find another image" failed on every input
+    combination for "Lillie's Clefairy ex"** specifically — first suspected
+    to be the apostrophe in the name (fixed via `sanitizeForPokemonQuery`
+    stripping it, same as its other special characters), but real-world
+    retesting after that fix showed the client correctly sending the
+    sanitized query and *still* hitting a 500. The apostrophe fix was
+    real but not the actual cause here — see the fallback-ladder bug
+    below, which is.
   **Requires redeploying `scan-binder-page`** (schema description + prompt
   + temperature are all server-side).
+- **`searchPokemon`'s fallback ladder had no per-tier failure isolation** —
+  a real regression from the retry-then-throw change above. Before that
+  change, a failing tier silently returned "zero results" and the ladder
+  moved on to the next, broader tier; after it, a *persistent* 5xx on the
+  first tier tried (most often `name+set+number`, since Set is frequently
+  wrong per the findings above) now threw straight out of `searchPokemon`
+  entirely, aborting the whole search before ever reaching the plain-name
+  tier that would likely have succeeded. This is almost certainly why
+  "search by name only" empirically outperformed hint-narrowed search in
+  real testing, and directly explains the Lillie's Clefairy 500 above (not
+  the apostrophe). Fixed by restructuring the ladder into a list of tiers
+  tried in a loop, wrapped so a thrown error is treated the same as an
+  empty result and falls through to the next tier — except the *last*
+  tier, whose failure still propagates, so a genuinely unreachable API
+  still reports as an error rather than a misleading "no matches."
+- **"Find another image" (ScannerPanel) and "Find stock image"/"Find
+  market price" (EditModal) now search by name only** — no set/rarity/
+  number hints. Real-world testing found the scan's own guesses for those
+  fields (frequently wrong, especially Set) narrowing OUT the correct
+  print more often than narrowing in on it — and a wrong Number can cause
+  a false-positive match (locking onto a different real card that happens
+  to share that number) rather than just an empty, harmlessly-skipped
+  tier. Deliberately scoped to these manual, explicit re-search actions
+  only — the initial post-scan auto-fill in `ScannerPanel.handleScan`
+  still uses every hint it has, since a wrong auto-pick there is at least
+  visible and correctable, and the fallback-ladder fix above already
+  makes a bad hint there safe to fall through rather than fatal. The
+  Rarity/Number fields in both EditModal and ScannerPanel are unchanged —
+  still there to capture what staff know, still feeding the initial
+  auto-fill — they just no longer narrow this specific manual search.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
