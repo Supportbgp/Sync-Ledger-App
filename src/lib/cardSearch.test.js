@@ -96,6 +96,39 @@ describe('searchPokemon', () => {
     await searchPokemon('V - SWSH204');
     expect(decodeURIComponent(global.fetch.mock.calls[0][0])).not.toContain('\\-');
   });
+
+  it('retries once after a transient 5xx, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // transient 5xx, first attempt
+        .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Charizard', set: { name: 'Base Set' }, images: { large: 'https://x/char.jpg' } }] }));
+
+      const promise = searchPokemon('Charizard');
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(results[0].url).toBe('https://x/char.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up and throws after a second consecutive 5xx, instead of reporting "no matches"', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+      const promise = searchPokemon('Charizard');
+      // Attach a rejection handler immediately so the unresolved promise
+      // doesn't trip an unhandled-rejection warning while timers advance.
+      const assertion = expect(promise).rejects.toThrow('502');
+      await vi.runAllTimersAsync();
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('searchYugioh', () => {
