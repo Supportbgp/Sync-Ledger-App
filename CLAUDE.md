@@ -447,6 +447,49 @@ Everything else found:
   Scoped to Pokemon only for now, per an explicit decision to prove the
   approach on the game with the worst symptoms before generalizing the
   same rarity/set-description discipline to the other games.
+- **Rarity detection (tier 2) now leans on visual border/frame treatment,
+  not fine-print reading** — real testing of the tier-1 fix above (schema/
+  prompt wording only) still found the model regularly failing to fill in
+  Rarity at all, and separately misreading the specific Set on some cards
+  (e.g. an XY-era Zapdos ex reported as "XY Evolutions" instead of the
+  correct "XY — Phantom Forces"). Root cause: tier 1 only fixes the
+  model's *instructions* for what counts as a rarity vs. a subtype — it
+  doesn't help the model actually *see* a rarity symbol or set icon that's
+  printed too small/blurry to read in an ordinary binder-page photo,
+  which is a real, separate limitation. Rather than a second zoom/crop
+  pass on that same tiny text (still fragile against any photo that isn't
+  perfectly sharp), the `rarity` field's description was rewritten to
+  judge PRIMARILY from the card's overall visual layout — how much of the
+  card front is illustration vs. a normal colored border/text box, and
+  whether the border itself is a foil/metallic finish — which is a much
+  bigger, more robust signal than reading small print, and this is a case
+  where Claude's vision is far more reliable at holistic style
+  recognition than fine-grained OCR under imperfect photo conditions. A
+  near-borderless edge-to-edge illustration → Special Illustration Rare/
+  Illustration Rare; a gold/rainbow/metallic border → Hyper Rare/Rare
+  Secret; a normal-bordered card with foil sheen on the art → Rare Holo;
+  only the plain Common/Uncommon/Rare tiers still require reading an
+  actual tiny rarity symbol, and the field stays blank rather than
+  guessing if that's not legible — same never-guess discipline as
+  before, just with a much higher chance of successfully identifying the
+  higher (and more valuable, more disambiguation-critical) tiers. No
+  schema change — same `rarity` field, so no client-side code changes
+  needed, only the Edge Function's field description/`PROMPT_TEXT`.
+  Doesn't address wrong Set guesses directly (border style doesn't tell
+  you *which* expansion a card is from) — that failure mode instead
+  relies on the existing number-before-set fallback priority in
+  `searchPokemon` for resilience: a correctly-read collector number still
+  finds the right card even when Set is guessed wrong, provided the
+  number itself was legible. **Requires redeploying `scan-binder-page`**
+  again (prompt-only change, no schema/version bump needed on the client
+  side).
+- **ScannerPanel's post-scan auto-fill silently failing, then working on
+  manual retry** — also surfaced by the same round of real testing above,
+  and a separate root cause from the two rarity/set issues above: an
+  unbounded parallel search burst right after a scan (see the
+  `runWithConcurrency` concurrency-cap note further down, under Market
+  Value/pokemontcg.io reliability) was the actual culprit, not a
+  search-logic bug.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

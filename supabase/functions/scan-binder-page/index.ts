@@ -69,7 +69,30 @@ const DETECT_CARDS_TOOL = {
             },
             rarity: {
               type: "string",
-              description: "Rarity as printed or shown by a rarity symbol/text near the collector number — e.g. 'Common', 'Uncommon', 'Rare', 'Double Rare', 'Ultra Rare', 'Illustration Rare', 'Special Illustration Rare', 'Hyper Rare', 'Rare Holo', 'Rare Secret'. IMPORTANT: this is NOT the same as a Pokemon card's type/subtype printed in its name area — 'ex', 'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, and must never be reported in this field even if that's the only text you can make out. If you can tell a card is an 'ex'/'V'/etc. card but can't tell its specific rarity tier from the symbol/text near the number, leave this as an empty string rather than reporting the subtype. Else an empty string. Used only to narrow an image search among same-name/same-set prints that differ by rarity, never saved as-is.",
+              description: "Rarity — determine this PRIMARILY from the card's overall visual layout/border " +
+                "treatment, not by trying to read tiny printed rarity text/symbols, which are often too small " +
+                "or blurry to trust in an ordinary binder-page photo. A photo good enough to identify the card " +
+                "at all is usually good enough to judge its overall visual style, even when the fine print " +
+                "isn't legible. Use this order of visual cues: " +
+                "(1) Artwork fills almost the entire card front edge-to-edge with little or no colored info " +
+                "box/border left, depicting a wide or multi-character scene → 'Special Illustration Rare'. " +
+                "(2) Artwork is large and bleeds past a normal card frame, but a colored HP/type info box is " +
+                "still visible, usually a single-subject illustration → 'Illustration Rare'. " +
+                "(3) The card's border itself is gold, rainbow, or another metallic/textured finish replacing " +
+                "the normal colored frame → 'Hyper Rare' (or 'Rare Secret' for an older/non-modern card style). " +
+                "(4) A normal colored border and attack/ability text box, but the artwork itself has a visible " +
+                "holographic/foil sheen → 'Rare Holo'. " +
+                "(5) None of the above (a plain, non-foil card with a standard border) — telling Common/" +
+                "Uncommon/Rare apart at this point genuinely requires reading a tiny rarity symbol next to the " +
+                "collector number, which often isn't reliable from a binder photo. Only report one of these " +
+                "three if that symbol/text is actually legible; otherwise leave this field as an empty string " +
+                "rather than guessing. " +
+                "IMPORTANT: this is NOT the same as a Pokemon card's type/subtype printed in its name area — " +
+                "'ex', 'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, and must never be " +
+                "reported in this field even if that's the only text you can make out (an 'ex'/'V'/etc. card " +
+                "is frequently ALSO an Illustration Rare or Special Illustration Rare print — use the visual " +
+                "cues above to identify that, rather than reporting the subtype itself). Used only to narrow " +
+                "an image search among same-name/same-set prints that differ by rarity, never saved as-is.",
             },
             foil: { type: "boolean", description: "Whether the card appears foil/holo" },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -103,9 +126,18 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "you're confident about the name. For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
-  "be read. For rarity, look at the symbol or text near the collector number, not the card's " +
-  "name — Pokemon 'ex'/'GX'/'V'/'VMAX'/'VSTAR' are card subtypes printed in the name area, " +
-  "not rarities, and must never be reported as the rarity. If you can't confidently identify a specific card, " +
+  "be read. For rarity, judge PRIMARILY from the card's overall visual style — how much of the " +
+  "card front is illustration vs. a normal colored border/text box, and whether the border itself " +
+  "is a special foil/metallic finish — rather than trying to read tiny printed rarity text, which " +
+  "is often illegible from an ordinary binder photo even when the card itself is clearly " +
+  "identifiable. A nearly borderless, edge-to-edge illustration is a Special Illustration Rare or " +
+  "Illustration Rare; a gold/rainbow/metallic border replacing the normal frame is a Hyper Rare or " +
+  "Rare Secret; a normal bordered card with a foil sheen over the art is a Rare Holo. Only fall " +
+  "back to reading a tiny rarity symbol/text for the plain Common/Uncommon/Rare tiers, and leave " +
+  "rarity blank rather than guess if that's not legible. Pokemon 'ex'/'GX'/'V'/'VMAX'/'VSTAR' are " +
+  "card subtypes printed in the name area, not rarities, and must never be reported as the rarity " +
+  "— use the visual cues above instead, since these subtypes are frequently also Illustration Rare " +
+  "or Special Illustration Rare prints. If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +
   "a bounding box around just that one card's pocket (not the whole page), as fractions of " +
