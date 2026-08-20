@@ -459,30 +459,49 @@ Everything else found:
   which is a real, separate limitation. Rather than a second zoom/crop
   pass on that same tiny text (still fragile against any photo that isn't
   perfectly sharp), the `rarity` field's description was rewritten to
-  judge PRIMARILY from the card's overall visual layout — how much of the
-  card front is illustration vs. a normal colored border/text box, and
-  whether the border itself is a foil/metallic finish — which is a much
-  bigger, more robust signal than reading small print, and this is a case
-  where Claude's vision is far more reliable at holistic style
-  recognition than fine-grained OCR under imperfect photo conditions. A
-  near-borderless edge-to-edge illustration → Special Illustration Rare/
-  Illustration Rare; a gold/rainbow/metallic border → Hyper Rare/Rare
-  Secret; a normal-bordered card with foil sheen on the art → Rare Holo;
-  only the plain Common/Uncommon/Rare tiers still require reading an
+  judge PRIMARILY from the card's overall visual layout — a much bigger,
+  more robust signal than reading small print, and a case where Claude's
+  vision is far more reliable at holistic style recognition than
+  fine-grained OCR under imperfect photo conditions. Researched (not
+  guessed) via `pokemon-tcg-data` on GitHub — the actual open-source
+  dataset pokemontcg.io serves, fetched directly (`curl` on
+  `raw.githubusercontent.com`, not blocked here unlike most other TCG
+  sites) and inspected for real rarity values across a modern set
+  (`sv1.json`, Scarlet & Violet base) and an older one (`xy4.json`,
+  Phantom Forces — the same set as the real Zapdos ex report). This
+  caught and corrected a wrong first guess (this doc originally said
+  Illustration Rare keeps "a colored info box" unlike Special Illustration
+  Rare — false; both are fully borderless, the real difference is an
+  added glitter-foil layer on SIR) before it shipped. Confirmed real
+  values, by era — the field now asks for one of these exact strings
+  (matching what `preferRarity`'s substring search actually matches
+  against), not a free-text description:
+  **Modern (2023+, lowercase "ex")**: `Double Rare` = normal small-boxed
+  frame, all-over foil, for an ex Pokemon. `Illustration Rare` = full-bleed
+  edge-to-edge art, holo border line, no ex suffix. `Ultra Rare` = same
+  full-bleed treatment, ex suffix. `Special Illustration Rare` = same
+  full-bleed art plus an extra glitter-foil layer. `Hyper Rare` = entire
+  border/background gold-toned.
+  **Older (2012-2022, uppercase "-EX"/"-GX"/"V")**: `Rare Holo` = normal
+  frame, foil over the art only, no suffix. `Rare Holo EX`/`Rare Holo GX`/
+  `Rare Holo V` = normal frame but the art breaks past its border, for an
+  EX/GX/V Pokemon. `Rare Ultra` = full art, a colored text bar remains.
+  `Rare Secret` = same full art plus a gold border, and/or a collector
+  number past the set's listed total.
+  Only the plain `Common`/`Uncommon`/`Rare` tiers still require reading an
   actual tiny rarity symbol, and the field stays blank rather than
-  guessing if that's not legible — same never-guess discipline as
-  before, just with a much higher chance of successfully identifying the
-  higher (and more valuable, more disambiguation-critical) tiers. No
-  schema change — same `rarity` field, so no client-side code changes
-  needed, only the Edge Function's field description/`PROMPT_TEXT`.
-  Doesn't address wrong Set guesses directly (border style doesn't tell
-  you *which* expansion a card is from) — that failure mode instead
-  relies on the existing number-before-set fallback priority in
-  `searchPokemon` for resilience: a correctly-read collector number still
-  finds the right card even when Set is guessed wrong, provided the
-  number itself was legible. **Requires redeploying `scan-binder-page`**
-  again (prompt-only change, no schema/version bump needed on the client
-  side).
+  guessing if that's not legible — same never-guess discipline as before,
+  just with a much higher chance of correctly identifying the higher (and
+  more valuable, more disambiguation-critical) tiers. No schema change —
+  same `rarity` field, so no client-side code changes needed, only the
+  Edge Function's field description/`PROMPT_TEXT`. Doesn't address wrong
+  Set guesses directly (border style doesn't tell you *which* expansion a
+  card is from) — that failure mode instead relies on the existing
+  number-before-set fallback priority in `searchPokemon` for resilience: a
+  correctly-read collector number still finds the right card even when Set
+  is guessed wrong, provided the number itself was legible.
+  **Requires redeploying `scan-binder-page`** again (prompt-only change,
+  no schema/version bump needed on the client side).
 - **ScannerPanel's post-scan auto-fill silently failing, then working on
   manual retry** — also surfaced by the same round of real testing above,
   and a separate root cause from the two rarity/set issues above: an

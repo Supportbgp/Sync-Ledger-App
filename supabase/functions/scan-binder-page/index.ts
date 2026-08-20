@@ -72,27 +72,43 @@ const DETECT_CARDS_TOOL = {
               description: "Rarity — determine this PRIMARILY from the card's overall visual layout/border " +
                 "treatment, not by trying to read tiny printed rarity text/symbols, which are often too small " +
                 "or blurry to trust in an ordinary binder-page photo. A photo good enough to identify the card " +
-                "at all is usually good enough to judge its overall visual style, even when the fine print " +
-                "isn't legible. Use this order of visual cues: " +
-                "(1) Artwork fills almost the entire card front edge-to-edge with little or no colored info " +
-                "box/border left, depicting a wide or multi-character scene → 'Special Illustration Rare'. " +
-                "(2) Artwork is large and bleeds past a normal card frame, but a colored HP/type info box is " +
-                "still visible, usually a single-subject illustration → 'Illustration Rare'. " +
-                "(3) The card's border itself is gold, rainbow, or another metallic/textured finish replacing " +
-                "the normal colored frame → 'Hyper Rare' (or 'Rare Secret' for an older/non-modern card style). " +
-                "(4) A normal colored border and attack/ability text box, but the artwork itself has a visible " +
-                "holographic/foil sheen → 'Rare Holo'. " +
-                "(5) None of the above (a plain, non-foil card with a standard border) — telling Common/" +
-                "Uncommon/Rare apart at this point genuinely requires reading a tiny rarity symbol next to the " +
-                "collector number, which often isn't reliable from a binder photo. Only report one of these " +
-                "three if that symbol/text is actually legible; otherwise leave this field as an empty string " +
-                "rather than guessing. " +
-                "IMPORTANT: this is NOT the same as a Pokemon card's type/subtype printed in its name area — " +
-                "'ex', 'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, and must never be " +
-                "reported in this field even if that's the only text you can make out (an 'ex'/'V'/etc. card " +
-                "is frequently ALSO an Illustration Rare or Special Illustration Rare print — use the visual " +
-                "cues above to identify that, rather than reporting the subtype itself). Used only to narrow " +
-                "an image search among same-name/same-set prints that differ by rarity, never saved as-is.",
+                "at all is usually good enough to judge its overall visual style. Report EXACTLY one of the " +
+                "values below (they match this game's real rarity database) based on which visual description " +
+                "fits, or an empty string if none clearly apply. Pokemon has used two rarity-naming systems by " +
+                "era — use whichever era the card's overall art style/set matches: " +
+                "MODERN cards (2023-present, Scarlet & Violet era, 'ex' lowercase suffix): " +
+                "'Double Rare' = normal small boxed artwork (NOT full art) for an 'ex' Pokemon, with an all-over " +
+                "foil/holo sheen across the whole card face, not just over the art window. " +
+                "'Illustration Rare' = artwork covers the card's ENTIRE front edge-to-edge with no colored info " +
+                "box left at all, plus a holographic border line around the very edge; usually a non-'ex' " +
+                "Pokemon or a Trainer/Supporter card. " +
+                "'Ultra Rare' = the same full-bleed edge-to-edge treatment as Illustration Rare, but for an " +
+                "'ex' Pokemon. " +
+                "'Special Illustration Rare' = the same full-bleed edge-to-edge art, PLUS a visible extra " +
+                "sparkle/glitter-foil texture over the whole card (often a wider, multi-element scene); for an " +
+                "'ex' Pokemon or a Trainer/Supporter card. " +
+                "'Hyper Rare' = the card's entire border/background is a gold-toned holographic finish " +
+                "replacing the normal color scheme — a distinctly gold, 'gilded' looking card. " +
+                "OLDER cards (roughly 2012-2022, '-EX'/'-GX'/'V' suffix, uppercase): " +
+                "'Rare Holo' = normal small boxed artwork with a holographic sheen over just the art. " +
+                "'Rare Holo EX' / 'Rare Holo GX' / 'Rare Holo V' = normal card frame for an EX/GX/V-suffixed " +
+                "Pokemon, but the illustration typically breaks past the frame's edge (the Pokemon visually " +
+                "overlapping the border) instead of staying boxed inside a small window, plus a holo sheen. " +
+                "'Rare Ultra' = full-art version of the same EX/GX/V Pokemon — artwork extends well past the " +
+                "normal small window, though a colored bar remains where the attack text sits (bottom-only for " +
+                "EX-era cards; thin bars top AND bottom for GX/V-era cards). " +
+                "'Rare Secret' = the same full-art extent as Rare Ultra, but with a gold-toned holographic " +
+                "border/background replacing the normal frame colors, and/or a collector number higher than " +
+                "the set's listed total (e.g. '105' printed in a set whose total is '100'). " +
+                "ANY era, plain non-foil card with a standard small-boxed border and none of the above visual " +
+                "traits: 'Common' / 'Uncommon' / 'Rare' — these three genuinely cannot be told apart by look " +
+                "alone; only report one if a tiny rarity symbol next to the collector number is actually " +
+                "legible, otherwise leave this field blank rather than guessing. " +
+                "IMPORTANT: never report a Pokemon card's type/subtype printed in its name area — 'ex', 'EX', " +
+                "'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, even though they're a required " +
+                "clue for several of the values above (e.g. telling 'Illustration Rare' apart from 'Ultra " +
+                "Rare' requires noticing the 'ex' suffix in the name). Used only to narrow an image search " +
+                "among same-name/same-set prints that differ by rarity, never saved as-is.",
             },
             foil: { type: "boolean", description: "Whether the card appears foil/holo" },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -126,18 +142,24 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "you're confident about the name. For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
-  "be read. For rarity, judge PRIMARILY from the card's overall visual style — how much of the " +
-  "card front is illustration vs. a normal colored border/text box, and whether the border itself " +
-  "is a special foil/metallic finish — rather than trying to read tiny printed rarity text, which " +
-  "is often illegible from an ordinary binder photo even when the card itself is clearly " +
-  "identifiable. A nearly borderless, edge-to-edge illustration is a Special Illustration Rare or " +
-  "Illustration Rare; a gold/rainbow/metallic border replacing the normal frame is a Hyper Rare or " +
-  "Rare Secret; a normal bordered card with a foil sheen over the art is a Rare Holo. Only fall " +
-  "back to reading a tiny rarity symbol/text for the plain Common/Uncommon/Rare tiers, and leave " +
-  "rarity blank rather than guess if that's not legible. Pokemon 'ex'/'GX'/'V'/'VMAX'/'VSTAR' are " +
-  "card subtypes printed in the name area, not rarities, and must never be reported as the rarity " +
-  "— use the visual cues above instead, since these subtypes are frequently also Illustration Rare " +
-  "or Special Illustration Rare prints. If you can't confidently identify a specific card, " +
+  "be read. For rarity, judge PRIMARILY from the card's overall visual style, matching one of " +
+  "Pokemon's real rarity names exactly (not a description) — how much of the card front is " +
+  "illustration vs. a normal colored border/text box, whether the border itself is a foil/metallic " +
+  "finish, and whether the Pokemon's name has an 'ex'/'EX'/'GX'/'V' suffix — rather than trying to " +
+  "read tiny printed rarity text, which is often illegible from an ordinary binder photo even when " +
+  "the card itself is clearly identifiable. Modern cards (2023+, lowercase 'ex'): full-bleed " +
+  "edge-to-edge art with a holo border line is 'Illustration Rare' (non-ex) or 'Ultra Rare' (ex); " +
+  "the same full-bleed art plus extra glitter foil is 'Special Illustration Rare'; a normal small " +
+  "boxed-art frame with all-over foil for an ex Pokemon is 'Double Rare'; an all-gold border/" +
+  "background is 'Hyper Rare'. Older cards (2012-2022, uppercase '-EX'/'-GX'/'V'): a normal frame " +
+  "with the art breaking past its border, foil, for an EX/GX/V Pokemon is 'Rare Holo EX'/'Rare Holo " +
+  "GX'/'Rare Holo V'; a non-EX/GX/V card with foil over just the art is 'Rare Holo'; full art with a " +
+  "text bar remaining is 'Rare Ultra'; the same full art plus a gold border (or a collector number " +
+  "past the set's total) is 'Rare Secret'. Only fall back to reading a tiny rarity symbol/text for " +
+  "the plain Common/Uncommon/Rare tiers, and leave rarity blank rather than guess if that's not " +
+  "legible. The 'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
+  "must never be reported as the rarity value — it's only a clue for picking the right rarity name " +
+  "above. If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +
   "a bounding box around just that one card's pocket (not the whole page), as fractions of " +
