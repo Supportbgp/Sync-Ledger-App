@@ -653,6 +653,44 @@ Everything else found:
   altogether. EditModal's search calls now also pass `number` (via its new
   scratch field, added for Sprint 1 below) to match ScannerPanel's full
   hint set.
+- **Possessive names ("Lillie's Clefairy ex", "Cynthia's Garchomp ex") were
+  still broken after the fallback-ladder fix above — real-world retest found
+  the *hint-restored* search now returning the right card mixed in with
+  unrelated Trainer/Supporter cards literally named "Lillie"/"Cynthia".**
+  Root cause was the original apostrophe fix itself: `sanitizeForPokemonQuery`
+  replaced the apostrophe with a space, turning "Lillie's" into two tokens,
+  `"Lillie"` + `"s"`. But Elasticsearch/Lucene's English analyzer (which
+  pokemontcg.io's search is built on) applies a possessive filter that
+  strips a trailing `'s` from a token *during indexing* — the real card is
+  indexed as `["lillie","clefairy","ex"]`, never `["lillie","s","clefairy",
+  "ex"]`. That spurious `"s"` token broke the exact-phrase tier's adjacency
+  match, so every possessive-name search fell through past it to the broad
+  first-word-prefix tier (`name:Lillie*`), which has no way to distinguish
+  the searched-for Pokemon from an unrelated card that merely starts with
+  the same word. Fixed by stripping a trailing `'s`/`’s` outright (no
+  replacement character) instead of space-replacing it, mirroring the
+  indexer's own possessive filter rather than fighting it — confirmed via
+  the Elasticsearch/TCGPlayer pricing docs research below, not guessed.
+  Non-possessive apostrophes still fall through to the general
+  space-replacement rule.
+- **No image candidate was ever showing a Market Value price, even for a
+  card with real, live TCGPlayer listings (reported for Mega Gengar ex)** —
+  traced to `pokemonTcgplayerPrice` only accepting a price variant when
+  `market` or `mid` was populated. Per TCGPlayer's own pricing model
+  (confirmed via their public pricing-settings docs), `market` is an
+  aggregate of *sold* listings over the previous week and `mid` is the
+  median of that same sold set — both come back null whenever a card
+  simply hasn't sold that week, which is common for an expensive,
+  low-volume chase card even while it has real active *listings* (which is
+  what `low`/`high` reflect instead, since those are listing-based, not
+  sale-based). `pokemonTcgplayerPrice` now falls back further, in the same
+  most-reliable-first order (`market` → `mid` → average of `low`+`high` →
+  whichever of `low`/`high` alone is present), so a real listing-based
+  estimate surfaces instead of "no price data" whenever a card just hasn't
+  had a sale recently. Scoped to Pokemon only, matching every other
+  provider-specific fix in this doc — Scryfall/YGOPRODeck/Lorcast/the
+  Egman-backed games each report a single flat price field with no
+  equivalent sold-vs-listed split to fall back through.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

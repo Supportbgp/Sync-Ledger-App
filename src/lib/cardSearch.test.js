@@ -136,6 +136,20 @@ describe('searchPokemon', () => {
     expect(q).not.toContain('’');
   });
 
+  it('strips a possessive "\'s" outright rather than replacing it with a space — a spurious "s" token broke the exact-phrase tier\'s match against the real (possessive-stripped) index, and fell through to the broad prefix tier where it picked up unrelated cards like the "Lillie" Trainer/Supporter card', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ data: [] }));
+    await searchPokemon("Lillie's Clefairy ex");
+    const q = decodeURIComponent(global.fetch.mock.calls[0][0]);
+    expect(q).toContain('name:"Lillie Clefairy ex"');
+    expect(q).not.toContain('Lillie s');
+
+    global.fetch.mockClear();
+    await searchPokemon("Cynthia's Garchomp ex");
+    const q2 = decodeURIComponent(global.fetch.mock.calls[0][0]);
+    expect(q2).toContain('name:"Cynthia Garchomp ex"');
+    expect(q2).not.toContain('Cynthia s');
+  });
+
   it('tries set+number together first when both hints are given, stripping a "/total" denominator', async () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({
       data: [{ name: "Lillie's Clefairy ex", set: { name: 'Ascended Heroes' }, number: '280', images: { large: 'https://x/clefairy.jpg' } }],
@@ -226,6 +240,28 @@ describe('searchPokemon', () => {
     }));
     const results = await searchPokemon('Mega Froslass ex', '', 'Mega Attack Rare');
     expect(results[0].url).toBe('https://x/mar.jpg');
+  });
+
+  it('falls back to a listing-based (low/high) price when a low-volume card has no sold-listing (market/mid) data yet — real report: a Mega ex with real active listings still showing no price', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{
+        name: 'Mega Gengar ex', number: '1', images: { large: 'https://x/gengar.jpg' },
+        tcgplayer: { url: 'https://tcg/gengar', prices: { holofoil: { market: null, mid: null, low: 40, high: 120 } } },
+      }],
+    }));
+    const results = await searchPokemon('Mega Gengar ex');
+    expect(results[0].price).toBe(80); // average of low/high
+  });
+
+  it('prefers mid over a low/high average, and market over mid, when more than one is present', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{
+        name: 'Mega Gengar ex', number: '1', images: { large: 'https://x/gengar.jpg' },
+        tcgplayer: { url: 'https://tcg/gengar', prices: { holofoil: { market: null, mid: 95, low: 40, high: 120 } } },
+      }],
+    }));
+    const results = await searchPokemon('Mega Gengar ex');
+    expect(results[0].price).toBe(95);
   });
 });
 

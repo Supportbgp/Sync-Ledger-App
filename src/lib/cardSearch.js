@@ -111,13 +111,29 @@ export async function searchScryfall(name, rarityHint) {
 // code, e.g. "V \- SWSH204") — so instead of trusting their parser to honor
 // an escape, just replace the special character with a space. It's a fuzzy
 // image lookup, not an exact-match field, so losing the literal punctuation
-// costs nothing. Straight and curly apostrophes are included too — a name
-// like "Lillie's Clefairy ex" reproduced consistent search failures
-// (every field-hint combination, not just one) in real-world testing, which
-// pointed at the one thing every query for that card had in common rather
-// than a data-availability gap.
+// costs nothing.
+//
+// Possessive apostrophes ("Lillie's", "Cynthia's") get their own rule, and
+// specifically NOT the space-replacement above: Elasticsearch/Lucene's
+// English analyzer applies a possessive filter that strips a trailing 's
+// from a token during indexing, so the real card is indexed as
+// ["lillie","clefairy","ex"], never ["lillie","s","clefairy","ex"].
+// Replacing the apostrophe with a space (as the very first fix here did)
+// inserts that extra "s" token, which breaks the exact-phrase tier's
+// adjacency match — confirmed by the exact failure pattern real-world
+// testing reported: possessive-name searches either found nothing, or fell
+// all the way through to the broad first-word-prefix tier and picked up
+// unrelated cards sharing just that first word (a "Lillie" Trainer/Supporter
+// card matching a "Lillie's Clefairy ex" search). Stripping "'s"/"’s"
+// outright, with no replacement character, mirrors the indexer's own
+// possessive filter instead of fighting it. Any other (non-possessive)
+// apostrophe still falls through to the general space-replacement below.
 function sanitizeForPokemonQuery(s) {
-  return s.replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s
+    .replace(/['’]s\b/gi, '')
+    .replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // A printed number is usually shown as "280/217" (this print's number over
@@ -133,13 +149,30 @@ function sanitizePokemonNumber(s) {
 // (normal/holofoil/reverseHolofoil/1st-edition combos), not one flat field —
 // take the first variant that's actually present, in roughly most-to-least
 // common order, rather than guessing every card has the same one.
+//
+// Within a variant, the four sub-fields aren't interchangeable: per
+// TCGPlayer's own pricing docs, `market` is an aggregate of *sold* listings
+// over the previous week, while `mid`/`low`/`high` are drawn from *current*
+// listings. A real, expensive, low-volume chase card (a Mega ex was the
+// real-world report) can easily have zero completed sales in a given week —
+// `market` (and often `mid`, the median of those same sales) comes back
+// null — while still having real active TCGPlayer listings, which is
+// exactly what `low`/`high` reflect. Only bailing out at market/mid meant
+// reporting "no price data" for a card that visibly has real listings.
+// Falling back further, in the same most-reliable-first order, surfaces a
+// real listing-based estimate instead.
 const POKEMON_PRICE_VARIANTS = ["normal", "holofoil", "reverseHolofoil", "1stEditionNormal", "1stEditionHolofoil"];
 function pokemonTcgplayerPrice(c) {
   const prices = c.tcgplayer && c.tcgplayer.prices;
   if (!prices) return null;
   for (const variant of POKEMON_PRICE_VARIANTS) {
     const p = prices[variant];
-    if (p && (p.market != null || p.mid != null)) return p.market ?? p.mid;
+    if (!p) continue;
+    if (p.market != null) return p.market;
+    if (p.mid != null) return p.mid;
+    if (p.low != null && p.high != null) return (p.low + p.high) / 2;
+    if (p.low != null) return p.low;
+    if (p.high != null) return p.high;
   }
   return null;
 }
