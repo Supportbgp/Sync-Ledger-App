@@ -1194,8 +1194,24 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
      mounted in select mode — the concrete case being Rarity's options
      depending on the Game field, which staff can change after Rarity is
      already showing a dropdown for a different game.
-  3. **Condition dropdown**, same pattern, sourced from the tiers already
-     in `DEFAULT_CONDITION_MULTIPLIERS`/Pricing Settings (NM/LP/MP/HP/DMG).
+  ~~3. Condition dropdown~~ — done. Same `SelectWithCustom` pattern as
+     Rarity above. Options are the five tiers' full names ("Near Mint",
+     "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"),
+     not the short codes — each is already a recognized
+     `canonicalizeCondition` alias for its tier (a test asserts this
+     round-trip explicitly, so the dropdown can never offer a name the app
+     itself wouldn't recognize), and full names read better than a bare
+     code in a plain-text context like `CatalogTable`'s subtitle line. New
+     `CONDITION_TIERS`/`CONDITION_OPTIONS` in `cardUtils.js` are the single
+     source for these names — `SettingsModal`'s per-tier multiplier rows
+     (which need the short codes alongside the names, e.g. "Lightly Played
+     (LP)") now derive their labels from `CONDITION_TIERS` too instead of
+     keeping a second hardcoded copy that could drift out of sync. Unlike
+     Rarity, `CONDITION_OPTIONS` is never empty (fixed, game-independent
+     list of 5), so the free-text escape hatch only opens for a value
+     that's already a custom/legacy one — notably including plain "NM"-
+     style short codes on existing items, since the dropdown's options are
+     the full names, not the codes.
   4. **Printing/finish ("foil") dropdown** — UI only, no scan-side
      recognition; explicitly decided not to have the model guess foil type,
      since it's not reliable enough to be worth it. Manual/optional field,

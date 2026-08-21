@@ -161,6 +161,34 @@ describe('EditModal — Rarity picker', () => {
   });
 });
 
+describe('EditModal — Condition picker', () => {
+  it('shows Condition as a dropdown of the five recognized tiers for a brand-new item', () => {
+    render(<EditModal card={null} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const condition = screen.getByLabelText('Condition');
+    expect(condition.tagName).toBe('SELECT');
+    expect(screen.getByRole('option', { name: 'Lightly Played' })).toBeInTheDocument();
+  });
+
+  it('starts in free-text mode for an existing item whose condition is a short code not in the dropdown list (e.g. "NM")', () => {
+    render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const condition = screen.getByLabelText('Condition');
+    expect(condition.tagName).toBe('INPUT');
+    expect(condition.value).toBe('NM');
+  });
+
+  it('picking a condition from the dropdown feeds into the Market Value calculation', () => {
+    render(
+      <EditModal
+        card={baseCard({ condition: '', basePrice: 100 })}
+        catalog={[]} locations={[]} multipliers={{ LP: 85, MP: 65, HP: 45, DMG: 25 }}
+        onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Condition'), { target: { value: 'Lightly Played' } });
+    expect(screen.getByText('$85.00')).toBeInTheDocument();
+  });
+});
+
 describe('EditModal — per-location channel defaults', () => {
   const catalog = [
     { location: 'Binder A', posChannel: true, tcgplayerChannel: false, collectrChannel: true },
