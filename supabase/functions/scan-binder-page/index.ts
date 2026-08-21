@@ -65,7 +65,7 @@ const DETECT_CARDS_TOOL = {
             },
             number: {
               type: "string",
-              description: "The printed collector number for this exact print, read from near the set symbol at the bottom of the card — e.g. '280' or '280/217' if a total-count denominator is shown. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name), so look closely for it even if you're unsure of the set or rarity. Used only to narrow an image search, never saved as-is.",
+              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). Used only to narrow an image search, never saved as-is.",
             },
             rarity: {
               type: "string",
@@ -172,9 +172,13 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "as printed, the game it's from, the set/expansion if you can tell, its printed collector " +
   "number if legible, its rarity if you can tell from printed text or a rarity symbol, " +
   "whether it looks foil/holo, its rough grid position, and how confident you are. A single " +
-  "card name can have many different prints (alternate arts, different rarities, etc.) that " +
-  "only the set, number, and rarity actually tell apart, so look closely for those even when " +
-  "you're confident about the name. For set, prefer the specific expansion name over the " +
+  "card name can have many different prints (alternate arts, different rarities, and — for a " +
+  "serialized card — even physically distinct one-of-one copies) that only the set, number, " +
+  "and rarity actually tell apart, so look closely for those even when you're confident about " +
+  "the name. The collector number's location on the card varies by game: Pokemon prints it " +
+  "near the set symbol at the bottom; Magic prints it in the small bottom-left corner text " +
+  "instead, alongside a rarity letter and language code (e.g. '0744 LTR • EN' means collector " +
+  "number '0744' — keep leading zeros exactly as printed). For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
   "be read. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
