@@ -1304,16 +1304,16 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
-## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana + SWU + Riftbound done; Gundam pending)
+## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana + SWU + Riftbound + Gundam done)
 
 A new multi-sprint initiative, one sprint per game, bringing every other
 supported game up to the same depth of feature support Pokemon already has
 (curated Rarity/Printing vocab, collector-number disambiguation, search
 reliability hardening, scanner prompt tuning) — confirmed with the user as
 **full parity**, not just "add the dropdowns." Order: Magic first, then
-Yugioh, then One Piece, then Lorcana, then SWU, then Riftbound (all done
-below); Gundam is last, in an order not otherwise decided (Sports Singles
-is excluded — it has no card database to integrate against at all, a
+Yugioh, then One Piece, then Lorcana, then SWU, then Riftbound, then
+Gundam (all done below) — completing the initiative (Sports Singles is
+excluded — it has no card database to integrate against at all, a
 documented drawback, not an oversight).
 
 - **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
@@ -1797,8 +1797,73 @@ documented drawback, not an oversight).
     `searchRiftbound` once that function accepted it; adding Riftbound's
     entries to `cardUtils.js` was enough to light up the same curated
     dropdowns every other parity-complete game already had.
-- **Remaining game, not yet started**: Gundam — same treatment (real
-  vocabulary research first, then wiring), completing this initiative.
+- **Gundam (Sprint 7) — done. Completes this initiative.** Real research
+  first (community rarity guides for the letter-code system, cross-
+  referenced for consistency, since Egman's deckbuilder API itself has no
+  public docs — the shape of its response was already confirmed in the
+  One Piece sprint), then wired through the same places every other
+  parity-complete game already uses:
+  - **Structural finding, same discipline as Riftbound's sprint**: Gundam
+    prints an actual letter code (not a visual style to guess from) next
+    to the collector number — confirmed via multiple sources as C/U/R/LR/
+    SP/P — but the code's LOCATION is near the top-right of the card,
+    unlike every other game in this doc so far, which print theirs near
+    the bottom. The collector code itself follows the same
+    `<set letters>-<number>` format as One Piece/Riftbound (e.g.
+    `GD01-001`), so `egmanQuery`'s existing numberHint matching (suffix
+    after the last dash) needed no changes to work for this game too.
+  - `RARITY_OPTIONS_BY_GAME.Gundam` (`cardUtils.js`): six real, confirmed
+    rarity codes mapped to full names — `Common`/`Uncommon`/`Rare`/
+    `Legend Rare`/`Special`/`Promo`. `Special` (`SP`) is confirmed to be
+    its own top-level rarity code (grouped with C/U/R/LR/P as one of the
+    game's "official rarity abbreviations" by research), not a printing
+    overlay — despite the name inviting confusion with other games'
+    "Special" values, this one specifically means a premium alt-art
+    REPRINT of an existing card that keeps that card's original number.
+  - **Deliberately excludes the `+`/`++` alt-art suffix system** (e.g.
+    `C+`, `LR++`) from rarity — confirmed via research to be an overlay
+    applied on TOP of any of the six rarities above (an alt-art `LR+`
+    still plays as, and shares its card number with, the base `LR` — only
+    the art/foil differs), the exact same rarity-vs-finish split as One
+    Piece's star-marked Parallel/Alternate Art overlay.
+  - `PRINTING_OPTIONS_BY_GAME.Gundam`: `["Normal", "Alternate Art",
+    "Alternate Art (Case Hit)"]`. Unlike some other exclusions in this
+    doc (Pokemon's Poke Ball patterns, SWU's Serialized/promo variants),
+    both alt-art tiers here are kept as their own curated entries rather
+    than collapsed or excluded — research confirmed `+` and `++` are a
+    real, stable, non-expanding pair present in every set (not a
+    per-set-growing vocabulary), and `++` is confirmed to use a visually
+    distinct GOLD foil treatment rather than just being a rarer copy of
+    the same `+` look, the same "real, confirmed, evergreen distinction
+    earns its own entry" bar Pokemon's Hyper Rare/SWU's Prestige tiers
+    already cleared.
+  - **`searchGundam` (`cardSearch.js`) gained a `numberHint` param**
+    (previously only `name, setHint, rarityHint`) — same story as
+    Riftbound's own sprint: the shared `egmanQuery`/`card-lookup-proxy`
+    infrastructure (numberHint matching, retry-on-5xx, structured fields)
+    already supported this generically since the One Piece sprint, so
+    completing this initiative only needed the one missing client-side
+    link plus the curated vocab and scan-binder-page prompt work — no
+    changes to `card-lookup-proxy`, `egmanQuery`, or `fetchWithRetry`
+    were needed at all.
+  - **`scan-binder-page`'s number/set/rarity guidance now branches for
+    Gundam too** — reads the letter code directly (same "exact printed
+    code, not a visual guess" treatment as One Piece), explicitly noting
+    the code's unusual top-right location for this game, and explicitly
+    noting that a `+`/`++` suffix doesn't change which of the six rarity
+    values to report. **Requires redeploying `scan-binder-page`** —
+    schema/prompt changes are server-side.
+  - `EditModal`/`ScannerPanel` needed no changes at all — both already
+    passed `number`/`rarity` generically to every game via
+    `searchCardImage`, which already forwarded `numberHint` through to
+    `searchGundam` once that function accepted it; adding Gundam's
+    entries to `cardUtils.js` was enough to light up the same curated
+    dropdowns every other parity-complete game already had.
+- **Every supported game with a real card database now has full parity**
+  — Magic, Pokemon, Yugioh, Lorcana, One Piece, SWU, Riftbound, and
+  Gundam. Only Sports Singles remains without curated Rarity/Printing
+  vocab, and that's permanent by design (no card database exists for it
+  to research against), not a remaining sprint.
 
 ## Scanner: merging duplicate physical copies into a quantity
 

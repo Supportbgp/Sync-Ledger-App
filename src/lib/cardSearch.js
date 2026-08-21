@@ -557,8 +557,11 @@ export async function searchRiftbound(name, setHint, rarityHint, numberHint) {
   return await proxyQuery('riftbound', name.trim(), setHint, rarityHint, numberHint);
 }
 
-export async function searchGundam(name, setHint, rarityHint) {
-  return await proxyQuery('gundam', name.trim(), setHint, rarityHint);
+// numberHint maps to the printed card_code's suffix, same as One Piece/
+// Riftbound (e.g. "001" from "GD01-001") — egmanQuery already supports
+// this generically; Gundam just never passed it through until now.
+export async function searchGundam(name, setHint, rarityHint, numberHint) {
+  return await proxyQuery('gundam', name.trim(), setHint, rarityHint, numberHint);
 }
 
 // setHint/rarityHint are applied server-side in card-lookup-proxy as a
@@ -708,7 +711,7 @@ export async function searchCardImage(game, name, setHint, rarityHint, numberHin
   if (game === "Lorcana") return await searchLorcana(name, setHint, rarityHint, numberHint);
   if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint, numberHint);
   if (game === "Riftbound") return await searchRiftbound(name, setHint, rarityHint, numberHint);
-  if (game === "Gundam") return await searchGundam(name, setHint, rarityHint);
+  if (game === "Gundam") return await searchGundam(name, setHint, rarityHint, numberHint);
   if (game === "SWU") return await searchSwu(name, setHint, rarityHint, numberHint);
   return null; // null (not []) signals "not set up for this game" vs. a real empty result
 }
