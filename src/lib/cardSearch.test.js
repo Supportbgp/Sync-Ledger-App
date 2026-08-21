@@ -447,6 +447,75 @@ describe('searchYugioh', () => {
     expect(decodeURIComponent(global.fetch.mock.calls[1][0])).toContain('Blue-Eyes White Dragon');
     expect(results[0].url).toBe('https://x/bewd.jpg');
   });
+
+  it('reports a real card_sets rarity/set label instead of leaving them blank', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{
+        name: 'Tornado Dragon',
+        card_images: [{ image_url: 'https://x/tornado.jpg' }],
+        card_sets: [{ set_name: 'Battles of Legend: Relentless Revenge', set_code: 'BLRR-EN084', set_rarity: 'Secret Rare', set_price: '4.08' }],
+      }],
+    }));
+    const results = await searchYugioh('Tornado Dragon');
+    expect(results[0]).toMatchObject({ rarity: 'Secret Rare', set: 'Battles of Legend: Relentless Revenge', price: 4.08 });
+  });
+
+  it('picks the card_sets entry matching numberHint (the printed set code) over the first one, since it is the strongest signal', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{
+        name: 'Tornado Dragon',
+        card_images: [{ image_url: 'https://x/tornado.jpg' }],
+        card_sets: [
+          { set_name: 'Battles of Legend: Relentless Revenge', set_code: 'BLRR-EN084', set_rarity: 'Secret Rare', set_price: '4.08' },
+          { set_name: 'Duel Devastator', set_code: 'DUDE-EN019', set_rarity: 'Ultra Rare', set_price: '1.4' },
+        ],
+      }],
+    }));
+    const results = await searchYugioh('Tornado Dragon', '', '', 'DUDE-EN019');
+    expect(results[0]).toMatchObject({ rarity: 'Ultra Rare', set: 'Duel Devastator', price: 1.4 });
+  });
+
+  it('falls back to setHint, then rarityHint, then the first entry, when numberHint does not match anything', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{
+        name: 'Tornado Dragon',
+        card_images: [{ image_url: 'https://x/tornado.jpg' }],
+        card_sets: [
+          { set_name: 'Battles of Legend: Relentless Revenge', set_code: 'BLRR-EN084', set_rarity: 'Secret Rare', set_price: '4.08' },
+          { set_name: 'Duel Devastator', set_code: 'DUDE-EN019', set_rarity: 'Ultra Rare', set_price: '1.4' },
+        ],
+      }],
+    }));
+    const results = await searchYugioh('Tornado Dragon', 'Duel Devastator', '', '');
+    expect(results[0]).toMatchObject({ rarity: 'Ultra Rare', set: 'Duel Devastator' });
+  });
+
+  it('retries once on a transient 5xx, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
+        .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Blue-Eyes White Dragon', card_images: [{ image_url: 'https://x/bewd.jpg' }] }] }));
+
+      const promise = searchYugioh('Blue-Eyes White Dragon');
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(results[0].url).toBe('https://x/bewd.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns an empty array (not a throw) on a persistent non-5xx failure — this API\'s "no results" signal is not confirmed, so it is not treated as an error', async () => {
+    // A single-word name so there's no "drop the last word" fallback tier
+    // to also account for — isolates this test to the one query's status
+    // handling.
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({}) });
+    const results = await searchYugioh('Nonexistentcardxyz');
+    expect(results).toEqual([]);
+  });
 });
 
 describe('searchLorcana', () => {

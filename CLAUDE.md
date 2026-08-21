@@ -1304,16 +1304,16 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
-## Per-game feature parity (Magic Sprint 1 done; other games pending)
+## Per-game feature parity (Magic + Yugioh done; other games pending)
 
 A new multi-sprint initiative, one sprint per game, bringing every other
 supported game up to the same depth of feature support Pokemon already has
 (curated Rarity/Printing vocab, collector-number disambiguation, search
 reliability hardening, scanner prompt tuning) — confirmed with the user as
-**full parity**, not just "add the dropdowns." Order: Magic first (done
-below), then the rest in an order not yet decided (Sports Singles is
-excluded — it has no card database to integrate against at all, a
-documented drawback, not an oversight).
+**full parity**, not just "add the dropdowns." Order: Magic first, then
+Yugioh (both done below); the rest in an order not yet decided (Sports
+Singles is excluded — it has no card database to integrate against at all,
+a documented drawback, not an oversight).
 
 - **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
   confirmed via its type definitions/blog posts, not guessed), then wired
@@ -1395,7 +1395,78 @@ documented drawback, not an oversight).
     `RARITY_OPTIONS_BY_GAME`/`PRINTING_OPTIONS_BY_GAME` per the selected
     game, so adding Magic's entries to `cardUtils.js` was enough to light
     up the same dropdowns Pokemon already had.
-- **Remaining games, not yet started**: Yugioh, Lorcana, One Piece, SWU,
+- **Yugioh (Sprint 2) — done.** Real research first (YGOPRODeck's own API
+  guide/a live response sample, plus community rarity guides for tiers a
+  single sample didn't happen to include), then wired through the same
+  places Pokemon/Magic already use:
+  - **Structural finding that shaped everything else below**: unlike
+    Scryfall/pokemontcg.io, a Yu-Gi-Oh card is ONE database entry covering
+    every printing — a reprint doesn't get its own card object, it's just
+    another entry in that one card's own `card_sets` array (each with its
+    own `set_name`/`set_code`/`set_rarity`/`set_price`). So there's no
+    "wrong print returned" problem to fix the way Magic/Pokemon have (a
+    fuzzy name search already finds the right card); the real
+    disambiguation need is picking WHICH of that one confirmed card's
+    `card_sets` entries to surface a price/rarity/set from, not which card.
+    This meaningfully narrowed this sprint's scope versus Magic's.
+  - `RARITY_OPTIONS_BY_GAME.Yugioh` (`cardUtils.js`): thirteen real, common
+    tiers (Common through Quarter Century Secret Rare) confirmed against a
+    real `card_sets[].set_rarity` sample ("Secret Rare"/"Ultra Rare" as
+    exact Title Case strings) plus community rarity guides for the higher
+    tiers. Deliberately excludes Parallel Rare variants (Duel
+    Terminal-exclusive) and region-specific OCG-only tiers — same
+    "ever-expanding niche vocabulary belongs in the free-text escape hatch"
+    call as Pokemon's Poke Ball pattern exclusion.
+  - `PRINTING_OPTIONS_BY_GAME.Yugioh`: `1st Edition`/`Unlimited Edition`/
+    `Limited Edition` — confirmed via Yugipedia's edition pages and
+    TCGPlayer's own price-guide edition options. Unlike Magic/Pokemon,
+    rarity already implies a Yu-Gi-Oh print's foil treatment (an Ultra Rare
+    is always name+art foil, full stop) — there's no independent foil/
+    nonfoil axis to capture here. Edition is the real, separate printing
+    distinction instead, and it's an evergreen 3-value list, not a
+    per-set-expanding one, so no exclusion-list caveat is needed.
+  - **`searchYugioh`/`ygoQuery` (`cardSearch.js`) gained `setHint`/
+    `rarityHint`/`numberHint` params** (previously took only `name`).
+    `numberHint` maps to the printed set code (e.g. `LOB-005`, visible
+    bottom-left on every real card) — a near-global unique key, so it's
+    tried first; `setHint`/`rarityHint` are softer fallbacks. All three are
+    soft, local, best-effort matches against the card's own already-
+    returned `card_sets` array (`pickYugiohSetEntry`) — never a server-side
+    filter — so a wrong/mismatched hint can never zero out a real result,
+    same discipline as `preferRarity`. A confirmed pick's `set`/`rarity` now
+    also back-fill the item's own fields, same Sprint-1-era backfill
+    Magic/Pokemon already had (no `number` backfill — Yu-Gi-Oh's set code
+    is tied to one specific printing, not a stable "the item's own number"
+    the way Magic/Pokemon's collector number is).
+  - **Deliberately stayed off `tcgplayer_data=yes`** — that mode
+    additionally unlocks `set_edition`/`set_url` (which would otherwise
+    backfill Printing and provide a listingUrl), but YGOPRODeck's own docs
+    warn TCGplayer's Set Name/Rarity data under that mode "have occasionally
+    made up Rarity names in the past and don't always conform to correct
+    Card Set Names." Since accurate Set/Rarity backfill matters more than
+    an extra listing link, this sticks with the default (reliable) internal
+    data — no listingUrl for Yugioh today; the existing game-agnostic
+    manual TCGPlayer search link already covers that gap the same way it
+    does for every other provider that lacks one.
+  - **Reliability**: `ygoQuery` now retries once on a genuine 5xx (same
+    lighter 1-retry pattern as Scryfall — no confirmed flakiness report for
+    this API either). Unlike Scryfall's confirmed-404 or pokemontcg.io's
+    live-tested behavior, this API's exact "no results" status code isn't
+    confirmed — rather than guess, a persistent non-5xx failure still
+    returns `[]` (the original behavior) instead of throwing, so as not to
+    misreport a real "no matches" as an error on unconfirmed information.
+  - **`scan-binder-page`'s number/rarity guidance now branches for Yu-Gi-Oh
+    too** — the printed set code's location/format (e.g. `LOB-005`, a
+    global unique key, unlike a bare number), and rarity guidance based on
+    WHERE the foil treatment sits (name-only/art-only/both/embossed/
+    diagonal-rainbow/gold/ghostly, for Common through Ghost Rare) rather
+    than overall art style. The five rarest tiers (Platinum Secret Rare
+    through Quarter Century Secret Rare) are explicitly called out as
+    visually similar enough to each other that the model should leave
+    rarity blank rather than guess between them without a very clear photo.
+    **Requires redeploying `scan-binder-page`** — schema/prompt changes are
+    server-side.
+- **Remaining games, not yet started**: Lorcana, One Piece, SWU,
   Riftbound, Gundam — each gets the same treatment (real vocabulary
   research first, then wiring), one sprint at a time.
 

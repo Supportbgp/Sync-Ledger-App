@@ -65,7 +65,7 @@ const DETECT_CARDS_TOOL = {
             },
             number: {
               type: "string",
-              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). Used only to narrow an image search, never saved as-is.",
+              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). Used only to narrow an image search, never saved as-is.",
             },
             rarity: {
               type: "string",
@@ -86,6 +86,26 @@ const DETECT_CARDS_TOOL = {
                 "sheet cards like Vintage Masters' Power Nine — also extremely rare). Leave this blank if the " +
                 "symbol's color genuinely isn't legible in the photo rather than guessing from the card's " +
                 "power level, price, or how good it looks — none of those indicate rarity. " +
+                "FOR YU-GI-OH: judge from WHERE the foil/holo treatment appears, not overall art style. " +
+                "'Common' = no foil anywhere, plain printed name and art. " +
+                "'Rare' = ONLY the card's name is foil/holographic; the artwork itself is flat, non-foil. " +
+                "'Super Rare' = the opposite: ONLY the artwork is foil/holographic; the name is plain flat " +
+                "text. " +
+                "'Ultra Rare' = BOTH the name AND the artwork are foil/holographic. " +
+                "'Ultimate Rare' = same foil coverage as Ultra Rare, PLUS the art/name/border has a raised, " +
+                "3D-embossed texture visible at an angle — look for a relief/textured surface, not just flat " +
+                "foil shine. " +
+                "'Secret Rare' = a diagonal-line rainbow/prismatic holographic pattern over the card's name " +
+                "(often the art too), distinct from Ultra Rare's plainer foil. " +
+                "'Gold Rare' = the card's name is printed in a solid gold-colored foil (not rainbow/silver). " +
+                "'Ghost Rare' = the art has a pale, washed-out, almost-translucent silvery-holographic look " +
+                "quite different from every rarity above — described as 'ghostly'. " +
+                "Only report 'Platinum Secret Rare', 'Prismatic Secret Rare', \"Collector's Rare\", " +
+                "'Starlight Rare', or 'Quarter Century Secret Rare' if a printed rarity marker or an unmistakable " +
+                "full-card rainbow/holographic treatment covering the ENTIRE card front (border included, not " +
+                "just name/art) is clearly visible — these several tiers look similar to each other in a " +
+                "binder-page photo and are easy to misidentify, so leave this field blank rather than guess " +
+                "between them if the photo isn't clearly good enough to be confident. " +
                 "FOR POKEMON: it has used two rarity-naming systems by " +
                 "era — use whichever era the card's overall art style/set matches: " +
                 "MODERN cards (2023-present, Scarlet & Violet era, 'ex' lowercase suffix): " +
@@ -139,8 +159,8 @@ const DETECT_CARDS_TOOL = {
                 "Rare' requires noticing the 'ex' suffix in the name). " +
                 "FOR EVERY OTHER GAME: leave this field blank unless an exact rarity tier name is legibly " +
                 "printed on the card itself (e.g. a printed 'Rare'/'Secret Rare' marker) — visual-style-based " +
-                "guessing has only been worked out and verified for Magic and Pokemon above; don't extend " +
-                "either game's rules to a different game's cards. " +
+                "guessing has only been worked out and verified for Magic, Pokemon, and Yu-Gi-Oh above; don't " +
+                "extend any of those games' rules to a different game's cards. " +
                 "Narrows an image/price search among same-name/same-set prints that differ by rarity, and " +
                 "becomes the item's initial saved Rarity value on this guess (staff can correct it in the " +
                 "review queue or later in the catalog, same as any other field).",
@@ -178,7 +198,9 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "the name. The collector number's location on the card varies by game: Pokemon prints it " +
   "near the set symbol at the bottom; Magic prints it in the small bottom-left corner text " +
   "instead, alongside a rarity letter and language code (e.g. '0744 LTR • EN' means collector " +
-  "number '0744' — keep leading zeros exactly as printed). For set, prefer the specific expansion name over the " +
+  "number '0744' — keep leading zeros exactly as printed); Yu-Gi-Oh prints a full set code there " +
+  "instead of a bare number (e.g. 'LOB-005') — report it exactly as printed, letters and hyphen " +
+  "included. For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
   "be read. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
@@ -186,7 +208,17 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "no symbol), silver is 'Uncommon', gold is 'Rare', red-orange is 'Mythic Rare', purple is " +
   "'Special' (Time Spiral timeshifted cards only), and a glowing/prismatic mythic symbol is 'Bonus' " +
   "(bonus-sheet cards like Vintage Masters' Power Nine) — leave it blank if the color truly isn't " +
-  "legible rather than guessing from how good or powerful the card looks. For rarity on a Pokemon " +
+  "legible rather than guessing from how good or powerful the card looks. For rarity on a " +
+  "Yu-Gi-Oh card, judge from WHERE the foil/holo treatment sits, not overall art style: no foil " +
+  "anywhere is 'Common'; foil on the name only (flat art) is 'Rare'; foil on the art only (flat " +
+  "name) is 'Super Rare'; foil on BOTH name and art is 'Ultra Rare'; the same plus a raised, " +
+  "embossed 3D texture is 'Ultimate Rare'; a diagonal rainbow holographic pattern over the name is " +
+  "'Secret Rare'; a solid gold-colored name is 'Gold Rare'; a pale, washed-out, near-translucent " +
+  "holographic art look is 'Ghost Rare'. Only report 'Platinum Secret Rare', 'Prismatic Secret " +
+  "Rare', \"Collector's Rare\", 'Starlight Rare', or 'Quarter Century Secret Rare' if the entire " +
+  "card front (border included) is unmistakably rainbow/holographic — these look similar to each " +
+  "other and to plain Secret Rare in a photo, so leave rarity blank rather than guess between them " +
+  "if you're not confident. For rarity on a Pokemon " +
   "card, judge PRIMARILY from the card's overall visual style, matching one of " +
   "Pokemon's real rarity names exactly (not a description) — how much of the card front is " +
   "illustration vs. a normal colored border/text box, whether the border itself is a foil/metallic " +
@@ -210,7 +242,7 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "legible. The 'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
   "must never be reported as the rarity value — it's only a clue for picking the right rarity name " +
   "above. For every other game, leave rarity blank unless an exact tier name is legibly printed on " +
-  "the card itself — the visual-style guessing above is only verified for Magic and Pokemon. " +
+  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, and Pokemon. " +
   "If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +

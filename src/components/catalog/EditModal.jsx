@@ -422,7 +422,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <div className="field-group">
                 <label>Number</label>
                 <input
-                  type="text" placeholder="Optional — e.g. 150, or 280/217" value={number}
+                  type="text" placeholder="Optional — e.g. 150, 280/217, or LOB-005" value={number}
                   title="Not saved to the catalog — a scratch field. Narrows Find stock image/Find market price below, same as Set/Rarity; picking a confirmed candidate there fills this back in from that print's real data."
                   onChange={(e) => setNumber(e.target.value)}
                 />
