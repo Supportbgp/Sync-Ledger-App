@@ -27,17 +27,59 @@ function parseTrailingCollectorNumber(name) {
   return { name: name.slice(0, m.index).trim(), collectorNumber: m[1] };
 }
 
-async function scryfallQuery(q) {
+// Scryfall's own pricing model (confirmed via its API blog post announcing
+// the finishes field, 2021-09-02): a print's `prices` object carries up to
+// four independent USD fields — usd (nonfoil), usd_foil, usd_etched, and
+// usd_glossy — not one flat price. A foil-only or etched-only print (a
+// Secret Lair drop, most often) can have a null `usd` while still carrying
+// a real price under one of the others. Falls back through them in
+// nonfoil-first order — same "most-common baseline first" reasoning as
+// Pokemon's POKEMON_PRICE_VARIANTS fallback — so a real print isn't
+// reported as "no price data" just because it never had a plain nonfoil
+// version.
+function scryfallPrice(c) {
+  const p = c.prices;
+  if (!p) return null;
+  if (p.usd != null) return Number(p.usd);
+  if (p.usd_foil != null) return Number(p.usd_foil);
+  if (p.usd_etched != null) return Number(p.usd_etched);
+  if (p.usd_glossy != null) return Number(p.usd_glossy);
+  return null;
+}
+
+// Confirmed live (not guessed): Scryfall's /cards/search returns HTTP 404
+// with an error object specifically to mean "zero cards matched this
+// query" — its normal, expected response for a query that's simply too
+// narrow, not a failure. Treating it as an error (like every other non-ok
+// status) would make every legitimately-empty search tier below look like
+// "the database is down," which it isn't. A real 5xx gets a short retry —
+// Scryfall's public API has no confirmed flakiness report the way
+// pokemontcg.io's does (see that function's own retry comment), so this is
+// deliberately a lighter, 1-retry safety net rather that copying Pokemon's
+// aggressive 4-attempt backoff wholesale — and still throws (rather than
+// silently returning []) if it doesn't recover, so a real outage surfaces
+// as an honest "couldn't reach the database" instead of a misleading "no
+// matches."
+const SCRYFALL_RETRY_DELAYS_MS = [500];
+async function scryfallQuery(q, attempt = 0) {
   const res = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}`);
-  if (!res.ok) return [];
+  if (res.status === 404) return [];
+  if (!res.ok) {
+    if (res.status >= 500 && attempt < SCRYFALL_RETRY_DELAYS_MS.length) {
+      await new Promise((r) => setTimeout(r, SCRYFALL_RETRY_DELAYS_MS[attempt]));
+      return scryfallQuery(q, attempt + 1);
+    }
+    throw new Error(`Scryfall returned ${res.status}`);
+  }
   const data = await res.json();
   return (data.data || []).slice(0, 6).map(c => ({
     url: (c.image_uris && c.image_uris.normal) || (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris && c.card_faces[0].image_uris.normal),
     label: `${c.name} (${c.set_name}) #${c.collector_number}`,
-    // NM (near-mint) market price in USD — this exact print's price, not a
-    // generic name-based lookup, since it's the same card object the image
-    // came from. Used as the Market Value feature's reference price.
-    price: c.prices && c.prices.usd ? Number(c.prices.usd) : null,
+    // NM (near-mint, nonfoil-first) market price in USD — this exact
+    // print's price, not a generic name-based lookup, since it's the same
+    // card object the image came from. Used as the Market Value feature's
+    // reference price.
+    price: scryfallPrice(c),
     // A direct link to this exact print's real TCGPlayer listing — the
     // NM-price-times-multiplier estimate can be badly wrong for high-value
     // outliers (a flat percentage is a population average, not this card's
@@ -45,6 +87,11 @@ async function scryfallQuery(q) {
     // current per-condition listings before pricing anything expensive.
     listingUrl: c.purchase_uris && c.purchase_uris.tcgplayer,
     rarity: c.rarity || '',
+    // Structured (not just baked into the label), same as Pokemon's
+    // candidates — lets a confirmed pick back-fill the item's own Set/
+    // Number fields (see selectCandidate in EditModal.jsx).
+    set: c.set_name || '',
+    number: c.collector_number || '',
   })).filter(r => r.url);
 }
 
@@ -75,30 +122,92 @@ function preferRarity(results, rarityHint) {
   return matched.length ? [...matched, ...rest] : results;
 }
 
-export async function searchScryfall(name, rarityHint) {
+// A printed Magic collector number is occasionally typed with a leading "#"
+// or (staff muscle memory from Pokemon's "280/217" style) a trailing
+// "/<set total>" — neither of which Scryfall's number: operator expects.
+function sanitizeMagicNumber(s) {
+  return String(s).trim().replace(/^#/, '').split('/')[0].trim();
+}
+
+export async function searchScryfall(name, setHint, rarityHint, numberHint) {
   const trimmed = name.trim();
-  let results = await scryfallQuery(trimmed);
-  if (results.length) return preferRarity(results, rarityHint);
-
-  const { name: withoutNumber, collectorNumber } = parseTrailingCollectorNumber(trimmed);
+  const { name: withoutNumber, collectorNumber: parsedNumber } = parseTrailingCollectorNumber(trimmed);
   const cleanName = stripTrailingParens(withoutNumber);
-  if (!cleanName) return results;
+  // setHint is deliberately unused here. Scryfall's set:/s:/e:/edition:
+  // operators only match a print's 3-4 letter SET CODE, not its full set
+  // name (confirmed via Scryfall's own syntax docs/examples — "e:ktk", not
+  // "e:Khans of Tarkir") — and this app's Set field holds whatever free
+  // text staff typed or the scanner read off the card, almost always a full
+  // name, not a code. There's no lookup in this app from set name to set
+  // code, so turning setHint into a set: filter would risk silently zeroing
+  // out a correct match on a mismatch it can't detect — the same
+  // "don't guess an external platform's exact capability" call made
+  // elsewhere in this file (see setHint's own use for the Egman-backed
+  // games, where it's safe specifically because those responses carry a
+  // real card_code field to match against). Accepted as a parameter anyway
+  // so every entry in searchCardImage's dispatch table has the same
+  // (name, setHint, rarityHint, numberHint) shape.
+  const collectorNumber = (numberHint ? sanitizeMagicNumber(numberHint) : '') || parsedNumber;
 
+  // An explicit or name-embedded collector number is the strongest
+  // disambiguator a Magic print has — same-name reprints (extended art,
+  // showcase, borderless, judge promos…) are common, and unlike Pokemon's
+  // scanner-guessed set/number, a Number staff actually typed in is
+  // trustworthy enough to try first rather than as a last resort.
   if (collectorNumber) {
-    // Try the number as printed, then with leading zeros stripped — Scryfall
-    // stores it either way depending on the set.
-    results = await scryfallQuery(`!"${cleanName}" number:${collectorNumber}`);
-    if (results.length) return preferRarity(results, rarityHint);
+    const base = cleanName || trimmed;
     const unpadded = collectorNumber.replace(/^0+/, '') || collectorNumber;
-    if (unpadded !== collectorNumber) {
-      results = await scryfallQuery(`!"${cleanName}" number:${unpadded}`);
-      if (results.length) return preferRarity(results, rarityHint);
+    const numberVariants = unpadded !== collectorNumber ? [collectorNumber, unpadded] : [collectorNumber];
+    try {
+      // Exact-name match first (`!"..."` requires the name to equal `base`
+      // precisely) — fast and precise when the scan's name is dead-on.
+      for (const num of numberVariants) {
+        const results = await scryfallQuery(`!"${base}" number:${num}`);
+        if (results.length) return preferRarity(results, rarityHint);
+      }
+      // Real-world report: a scan read "Sauron, Dark Lord" for the actual
+      // "Sauron, the Dark Lord" — a small dropped word that made every
+      // exact-name+number query above return nothing, silently losing the
+      // number constraint entirely and falling through to the fully
+      // unscoped broad-name tier below, which landed on a different
+      // (wrong) print with no numeric narrowing left at all. A vision
+      // model's OCR drops small connecting words like this often enough
+      // that requiring exact name equality here is too strict — this
+      // second pass keeps the SAME number constraint but drops the exact-
+      // match requirement on the name (bare, unquoted terms — the same
+      // loose matching the broad tier below already relies on, which is
+      // exactly why that tier still found *a* "Sauron" card despite the
+      // missing "the"), so the number keeps doing its real disambiguating
+      // work instead of being abandoned at the first sign of an
+      // imperfectly-transcribed name.
+      for (const num of numberVariants) {
+        const results = await scryfallQuery(`${base} number:${num}`);
+        if (results.length) return preferRarity(results, rarityHint);
+      }
+    } catch {
+      // A persistent failure on this one narrow query shouldn't abort the
+      // whole search — fall through to the broader tiers below, same
+      // per-tier isolation searchPokemon uses for the identical reason.
     }
   }
-  if (cleanName !== trimmed) {
+
+  const hasBroaderTier = cleanName && cleanName !== trimmed;
+  let results = [];
+  try {
+    results = await scryfallQuery(trimmed);
+    if (results.length) return preferRarity(results, rarityHint);
+  } catch (err) {
+    if (!hasBroaderTier) throw err;
+    results = [];
+  }
+
+  if (hasBroaderTier) {
     // No exact print match — surface every print of the base card (there may
     // be several, which is exactly the case that got us here) so staff can
-    // pick the right one visually from the candidate grid.
+    // pick the right one visually from the candidate grid. This really is
+    // the last tier now, so its failure is allowed to propagate — a
+    // genuinely unreachable API still reports as an error rather than a
+    // misleading "no matches."
     results = await scryfallQuery(cleanName);
   }
   return preferRarity(results, rarityHint);
@@ -433,7 +542,7 @@ export function tcgplayerSearchUrl(name, set) {
 // function simply ignores the extra argument.
 export async function searchCardImage(game, name, setHint, rarityHint, numberHint) {
   if (!name) return [];
-  if (game === "Magic") return await searchScryfall(name, rarityHint);
+  if (game === "Magic") return await searchScryfall(name, setHint, rarityHint, numberHint);
   if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint, numberHint);
   if (game === "Yugioh") return await searchYugioh(name);
   if (game === "Lorcana") return await searchLorcana(name);

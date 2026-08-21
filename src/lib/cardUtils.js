@@ -70,14 +70,15 @@ export const GAME_TAG_CLASS = {
   Gundam: "tag-gundam",
 };
 
-// Suggestions for the Rarity field's <datalist> (EditModal/ScannerPanel) — a
-// text input with autocomplete, not a hard <select>, since Rarity is never
-// saved and staff should still be able to type something that isn't listed.
-// Values are real rarity strings pokemontcg.io's own data uses (verified
-// directly against pokemon-tcg-data on GitHub, not guessed), grouped by era
-// so the same free-text field works whether the card in hand is a brand new
-// pull or something from a binder that's years old. Games with no entry
-// here just get no suggestions — the field still works as plain free text.
+// Suggestions for the Rarity field (a select-plus-escape-hatch picker via
+// SelectWithCustom, EditModal/ScannerPanel) — Rarity is a real saved catalog
+// attribute (see phase7_rarity_column.sql), but the curated list here is
+// just suggestions, not a hard constraint on what can be saved. Values are
+// real rarity strings each game's own card database uses (verified, not
+// guessed — Pokemon's grouped by era against pokemon-tcg-data on GitHub;
+// Magic's against Scryfall's own confirmed `rarity` field values). Games
+// with no entry here just get no suggestions — the field still works as
+// plain free text via the picker's escape hatch.
 export const RARITY_OPTIONS_BY_GAME = {
   Pokemon: [
     "Common", "Uncommon", "Rare", "Rare Holo",
@@ -92,6 +93,17 @@ export const RARITY_OPTIONS_BY_GAME = {
     // Older (2012-2022, uppercase "-EX"/"-GX"/"V")
     "Rare Holo EX", "Rare Holo GX", "Rare Holo V", "Rare Ultra", "Rare Secret",
   ],
+  // Scryfall's `rarity` field takes exactly these six values (confirmed via
+  // its own API type definitions, not guessed) — "Mythic Rare" is the
+  // colloquial/WotC name for the API's plain "mythic"; the other five are
+  // used as-is. Special/Bonus are real, still-current values, not legacy-
+  // only: Special is for timeshifted cards (has its own purple rarity
+  // symbol; sorts above Rare, below Mythic); Bonus is for a "glowing"
+  // mythic-style symbol used on bonus-sheet cards like Vintage Masters'
+  // Power Nine (sorts as the rarest tier, above Mythic). Both rare enough
+  // in a real shop's binders that an exact pick beats forcing free text
+  // every time one comes in.
+  Magic: ["Common", "Uncommon", "Rare", "Mythic Rare", "Special", "Bonus"],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -117,6 +129,26 @@ export const RARITY_OPTIONS_BY_GAME = {
 //   Including it here would have been a real modeling mistake.
 export const PRINTING_OPTIONS_BY_GAME = {
   Pokemon: ["Normal", "Holofoil", "Reverse Holofoil", "1st Edition Normal", "1st Edition Holofoil"],
+  // Scryfall's `finishes` field (confirmed via its own API blog post
+  // announcing it, not guessed) is the actual, complete list of Magic
+  // finish/printing values: nonfoil, foil, etched, and glossy — pricing
+  // (scryfallPrice in cardSearch.js) reads by these same four names.
+  //
+  // Deliberately excludes frame/border TREATMENTS — Showcase, Extended Art,
+  // Borderless, Full Art, etc. (Scryfall's separate `frame_effects` field) —
+  // even though they look like finish variants at a glance. Same modeling
+  // trap as Pokemon's "Shadowless" exclusion above: a treatment is a
+  // different ATTRIBUTE of the same finish (a Showcase card can independently
+  // be foil or nonfoil), not a finish itself, and TCGPlayer lists them as
+  // their own product line/title variant rather than a finish dropdown
+  // value. Belongs in the Set/Notes fields (already free text) if it needs
+  // recording at all, not here. Marketing-only finish names seen on real
+  // product (Secret Lair's "Rainbow Foil", "Surge Foil", "gold-etched") are
+  // also left out — they're presentation names for finishes Magic's own API
+  // already tracks as plain "foil"/"etched", not additional API-level
+  // values, so adding them would just be duplicate vocabulary for the same
+  // four real options.
+  Magic: ["Nonfoil", "Foil", "Etched", "Glossy"],
 };
 
 export function normalizeCard(c) {

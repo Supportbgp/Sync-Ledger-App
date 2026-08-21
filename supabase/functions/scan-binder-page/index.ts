@@ -65,7 +65,7 @@ const DETECT_CARDS_TOOL = {
             },
             number: {
               type: "string",
-              description: "The printed collector number for this exact print, read from near the set symbol at the bottom of the card — e.g. '280' or '280/217' if a total-count denominator is shown. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name), so look closely for it even if you're unsure of the set or rarity. Used only to narrow an image search, never saved as-is.",
+              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). Used only to narrow an image search, never saved as-is.",
             },
             rarity: {
               type: "string",
@@ -74,7 +74,19 @@ const DETECT_CARDS_TOOL = {
                 "or blurry to trust in an ordinary binder-page photo. A photo good enough to identify the card " +
                 "at all is usually good enough to judge its overall visual style. Report EXACTLY one of the " +
                 "values below (they match this game's real rarity database) based on which visual description " +
-                "fits, or an empty string if none clearly apply. Pokemon has used two rarity-naming systems by " +
+                "fits, or an empty string if none clearly apply. " +
+                "FOR MAGIC: rarity is shown by the small expansion/set symbol's COLOR, printed on the right " +
+                "edge of the type line (the line naming the card's type, directly above the rules text box) — " +
+                "not by overall art style the way Pokemon works below. Report exactly one of: 'Common' (a " +
+                "black or white symbol — also report 'Common' for a basic land, which prints no symbol at " +
+                "all), 'Uncommon' (a silver symbol), 'Rare' (a gold symbol), 'Mythic Rare' (a red-orange " +
+                "symbol — this tier didn't exist before 2008, so a pre-2008-looking card can never be this), " +
+                "'Special' (a purple symbol — used only on Time Spiral's 'timeshifted' cards, extremely rare " +
+                "to see at all), or 'Bonus' (a glowing/prismatic version of the mythic symbol, used on bonus- " +
+                "sheet cards like Vintage Masters' Power Nine — also extremely rare). Leave this blank if the " +
+                "symbol's color genuinely isn't legible in the photo rather than guessing from the card's " +
+                "power level, price, or how good it looks — none of those indicate rarity. " +
+                "FOR POKEMON: it has used two rarity-naming systems by " +
                 "era — use whichever era the card's overall art style/set matches: " +
                 "MODERN cards (2023-present, Scarlet & Violet era, 'ex' lowercase suffix): " +
                 "'Double Rare' = normal small boxed artwork (NOT full art) for an 'ex' Pokemon, with an all-over " +
@@ -124,8 +136,14 @@ const DETECT_CARDS_TOOL = {
                 "IMPORTANT: never report a Pokemon card's type/subtype printed in its name area — 'ex', 'EX', " +
                 "'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, even though they're a required " +
                 "clue for several of the values above (e.g. telling 'Illustration Rare' apart from 'Ultra " +
-                "Rare' requires noticing the 'ex' suffix in the name). Used only to narrow an image search " +
-                "among same-name/same-set prints that differ by rarity, never saved as-is.",
+                "Rare' requires noticing the 'ex' suffix in the name). " +
+                "FOR EVERY OTHER GAME: leave this field blank unless an exact rarity tier name is legibly " +
+                "printed on the card itself (e.g. a printed 'Rare'/'Secret Rare' marker) — visual-style-based " +
+                "guessing has only been worked out and verified for Magic and Pokemon above; don't extend " +
+                "either game's rules to a different game's cards. " +
+                "Narrows an image/price search among same-name/same-set prints that differ by rarity, and " +
+                "becomes the item's initial saved Rarity value on this guess (staff can correct it in the " +
+                "review queue or later in the catalog, same as any other field).",
             },
             foil: { type: "boolean", description: "Whether the card appears foil/holo" },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -154,12 +172,22 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "as printed, the game it's from, the set/expansion if you can tell, its printed collector " +
   "number if legible, its rarity if you can tell from printed text or a rarity symbol, " +
   "whether it looks foil/holo, its rough grid position, and how confident you are. A single " +
-  "card name can have many different prints (alternate arts, different rarities, etc.) that " +
-  "only the set, number, and rarity actually tell apart, so look closely for those even when " +
-  "you're confident about the name. For set, prefer the specific expansion name over the " +
+  "card name can have many different prints (alternate arts, different rarities, and — for a " +
+  "serialized card — even physically distinct one-of-one copies) that only the set, number, " +
+  "and rarity actually tell apart, so look closely for those even when you're confident about " +
+  "the name. The collector number's location on the card varies by game: Pokemon prints it " +
+  "near the set symbol at the bottom; Magic prints it in the small bottom-left corner text " +
+  "instead, alongside a rarity letter and language code (e.g. '0744 LTR • EN' means collector " +
+  "number '0744' — keep leading zeros exactly as printed). For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
-  "be read. For rarity, judge PRIMARILY from the card's overall visual style, matching one of " +
+  "be read. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
+  "(right edge, just above the rules text): black/white is 'Common' (also basic lands, which have " +
+  "no symbol), silver is 'Uncommon', gold is 'Rare', red-orange is 'Mythic Rare', purple is " +
+  "'Special' (Time Spiral timeshifted cards only), and a glowing/prismatic mythic symbol is 'Bonus' " +
+  "(bonus-sheet cards like Vintage Masters' Power Nine) — leave it blank if the color truly isn't " +
+  "legible rather than guessing from how good or powerful the card looks. For rarity on a Pokemon " +
+  "card, judge PRIMARILY from the card's overall visual style, matching one of " +
   "Pokemon's real rarity names exactly (not a description) — how much of the card front is " +
   "illustration vs. a normal colored border/text box, whether the border itself is a foil/metallic " +
   "finish, and whether the Pokemon's name has an 'ex'/'EX'/'GX'/'V' suffix — rather than trying to " +
@@ -181,7 +209,9 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "the plain Common/Uncommon/Rare tiers, and leave rarity blank rather than guess if that's not " +
   "legible. The 'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
   "must never be reported as the rarity value — it's only a clue for picking the right rarity name " +
-  "above. If you can't confidently identify a specific card, " +
+  "above. For every other game, leave rarity blank unless an exact tier name is legibly printed on " +
+  "the card itself — the visual-style guessing above is only verified for Magic and Pokemon. " +
+  "If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +
   "a bounding box around just that one card's pocket (not the whole page), as fractions of " +

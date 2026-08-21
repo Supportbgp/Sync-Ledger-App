@@ -1304,6 +1304,101 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
+## Per-game feature parity (Magic Sprint 1 done; other games pending)
+
+A new multi-sprint initiative, one sprint per game, bringing every other
+supported game up to the same depth of feature support Pokemon already has
+(curated Rarity/Printing vocab, collector-number disambiguation, search
+reliability hardening, scanner prompt tuning) — confirmed with the user as
+**full parity**, not just "add the dropdowns." Order: Magic first (done
+below), then the rest in an order not yet decided (Sports Singles is
+excluded — it has no card database to integrate against at all, a
+documented drawback, not an oversight).
+
+- **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
+  confirmed via its type definitions/blog posts, not guessed), then wired
+  through the same places Pokemon already uses:
+  - `RARITY_OPTIONS_BY_GAME.Magic` (`cardUtils.js`): the six real Scryfall
+    `rarity` values — `Common`/`Uncommon`/`Rare`/`Mythic Rare`/`Special`/
+    `Bonus`. Special (timeshifted cards) and Bonus (bonus-sheet cards like
+    Vintage Masters' Power Nine) are real, current values, not legacy-only
+    — rare enough in practice that an exact pick still beats forcing free
+    text every time one shows up.
+  - `PRINTING_OPTIONS_BY_GAME.Magic`: the four real Scryfall `finishes`
+    values — `Nonfoil`/`Foil`/`Etched`/`Glossy`. Deliberately excludes
+    frame/border TREATMENTS (Showcase, Extended Art, Borderless, Full
+    Art — Scryfall's separate `frame_effects` field) and marketing-only
+    finish names (Secret Lair's "Rainbow Foil"/"Surge Foil") — same
+    modeling trap as Pokemon's "Shadowless" exclusion: a treatment is a
+    different attribute of the same finish, not a finish itself, and
+    TCGPlayer doesn't list these as finish-dropdown values either.
+  - **`searchScryfall` (`cardSearch.js`) gained `setHint`/`numberHint`
+    params**, matching `searchPokemon`'s `(name, setHint, rarityHint,
+    numberHint)` shape (previously only took `name, rarityHint` — `set`
+    was never even passed through for Magic before this). An explicit or
+    name-embedded (`"Card (1234)"`, the existing import convention)
+    collector number is now tried FIRST, before the plain name search —
+    same "number is the strongest disambiguator" priority Pokemon uses,
+    and a real change from the old behavior (which tried the plain name
+    first, falling back to a parsed number only as a last resort).
+    **`setHint` is deliberately accepted but never turned into a `set:`
+    filter** — Scryfall's `set:`/`s:`/`e:`/`edition:` operators only match
+    a 3-4 letter set CODE (confirmed via its own syntax docs/examples,
+    e.g. `e:ktk` not `e:Khans of Tarkir`), and this app's Set field holds
+    whatever free text staff typed or the scanner read, essentially always
+    a full name, not a code, with no lookup in this app from one to the
+    other. Guessing a filter here risks silently zeroing out a correct
+    match on a mismatch the code can't detect — same "don't guess an
+    external platform's exact capability" call as everywhere else in this
+    file. Accepted as a no-op parameter anyway so every game in
+    `searchCardImage`'s dispatch table shares one `(name, setHint,
+    rarityHint, numberHint)` shape.
+  - **Reliability**: `scryfallQuery` now retries once on a genuine 5xx
+    (Scryfall has no confirmed flakiness report the way pokemontcg.io
+    does, so this is a lighter 1-retry safety net, not a copy of Pokemon's
+    aggressive 4-attempt backoff) and throws on a persistent failure
+    instead of silently returning `[]` — except a 404, which Scryfall's
+    `/cards/search` uses as its real, confirmed "zero results" response,
+    not an error, so it's mapped to `[]` without retrying or throwing.
+    `searchScryfall`'s own tiers isolate a failure the same way
+    `searchPokemon`'s do: a persistent failure on the number-hint tier
+    falls through to the broad name tier instead of aborting the whole
+    search; only the last tier's failure actually propagates.
+  - **Pricing**: `scryfallPrice` now falls back through `usd` → `usd_foil`
+    → `usd_etched` → `usd_glossy` (Scryfall's real four USD price fields,
+    confirmed via its API blog post announcing them) instead of only ever
+    reading `usd` — a foil-only or etched-only print (most often a Secret
+    Lair drop) can have a null `usd` while still carrying a real price
+    under one of the others, same reasoning as Pokemon's
+    `POKEMON_PRICE_VARIANTS` fallback.
+  - Scryfall's mapped candidate objects now also carry structured `set`/
+    `number` fields (previously only baked into the label) — lets a
+    confirmed pick back-fill the item's own Set/Number/Rarity fields for
+    Magic too, the same Sprint-1-era backfill Pokemon already had.
+  - **`scan-binder-page`'s rarity guidance now branches by game** — added a
+    Magic-specific block (both in the tool schema's field description and
+    `PROMPT_TEXT`) telling the model to read the small expansion symbol's
+    COLOR on the type line, not overall visual style the way Pokemon
+    works: black/white = Common (also basic lands, which print no
+    symbol), silver = Uncommon, gold = Rare, red-orange = Mythic Rare
+    (doesn't exist pre-2008), purple = Special (Time Spiral timeshifted
+    only), glowing/prismatic = Bonus. A new catch-all line covers every
+    other game: leave rarity blank unless an exact tier name is legibly
+    printed, since the visual-guessing rules are only verified for Magic
+    and Pokemon. **Requires redeploying `scan-binder-page`**
+    (`supabase functions deploy scan-binder-page`) — schema/prompt changes
+    are server-side.
+  - `EditModal`/`ScannerPanel` needed no changes beyond a placeholder-text
+    tweak (the Number field's example was Pokemon's "280/217" format only
+    — now reads "150, or 280/217") — both already passed `number`/`rarity`
+    generically to every game via `searchCardImage`, and already rendered
+    `RARITY_OPTIONS_BY_GAME`/`PRINTING_OPTIONS_BY_GAME` per the selected
+    game, so adding Magic's entries to `cardUtils.js` was enough to light
+    up the same dropdowns Pokemon already had.
+- **Remaining games, not yet started**: Yugioh, Lorcana, One Piece, SWU,
+  Riftbound, Gundam — each gets the same treatment (real vocabulary
+  research first, then wiring), one sprint at a time.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
