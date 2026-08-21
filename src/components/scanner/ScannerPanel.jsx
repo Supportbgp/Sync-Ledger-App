@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -142,7 +142,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         setScanning(false);
         return;
       }
-      const newRows = await Promise.all(detected.map(async (card) => {
+      const detectedRows = await Promise.all(detected.map(async (card) => {
         const row = detectedToRow(card);
         // Crop this card's own real photo out of the full page image using
         // the vision model's bounding box — no second upload needed. If the
@@ -157,6 +157,14 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         }
         return row;
       }));
+      // Collapse repeat physical copies of the exact same print (matching
+      // Name + Number) into one qty-N row before review even starts — see
+      // mergeScanDuplicates for why this needs Number, not just Name, to
+      // avoid merging visually-identical-looking but genuinely distinct
+      // serialized/alt-art prints. Also means the image-fill batch below
+      // only ever searches each distinct print once, not once per physical
+      // copy.
+      const newRows = mergeScanDuplicates(detectedRows);
       setRows(newRows);
       setScanning(false);
       // Pre-fill an image guess per row, independently, without blocking the
@@ -590,6 +598,11 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
               backLabel="← Choose from the list instead"
             />
           </div>
+          <input
+            type="number" min="1" placeholder="Qty" className="sf-auto" style={{ width: '56px' }} value={row.qty}
+            title="Defaults to 1 per detected pocket — automatically bumped when this same print (matching Name + Number) was spotted more than once on this page. Edit freely."
+            onChange={(e) => onChange({ qty: Number(e.target.value) || 1 })}
+          />
           <input type="number" placeholder="Price" step="0.01" className="sf" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
           <span className={`badge confidence-${row.confidence} sf-auto`} title="How confident the scan was about this card" style={{ alignSelf: 'center' }}>
             {row.confidence}

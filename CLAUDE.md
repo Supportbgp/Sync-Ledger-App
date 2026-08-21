@@ -1399,6 +1399,56 @@ documented drawback, not an oversight).
   Riftbound, Gundam — each gets the same treatment (real vocabulary
   research first, then wiring), one sprint at a time.
 
+## Scanner: merging duplicate physical copies into a quantity
+
+Real-phone testing on a binder page with several identical promo copies
+found the Scanner leaving each detected pocket as its own qty-1 review row
+even when multiple pockets were unambiguously the same physical print —
+staff then had to notice and manually consolidate them (delete the extras,
+bump qty by hand) after every scan, "a case that's very common as
+distributions tend to vary."
+
+- **`mergeScanDuplicates` (`cardUtils.js`)** runs once, right after
+  `handleScan` builds one row per detected pocket (crops included) and
+  before the post-scan image/price auto-fill kicks off — so the auto-fill
+  batch below only ever searches each distinct print once, not once per
+  physical copy, as a free efficiency win. Two rows merge into one qty-N
+  row only when **both** their Name and their Number match exactly (case/
+  whitespace-insensitive on the name; leading zeros ignored on the number,
+  so "0451" and "451" count as the same print) — **deliberately not Name
+  alone**. Confirmed against a real photo showing why: three visually
+  near-identical serialized "The One Ring" cards on the same page each
+  carried a genuinely different collector number (each is its own
+  one-of-one print, not three copies of anything), sitting next to three
+  real physical copies of a promo that all shared one number — the same
+  "a different Number usually means a genuinely different print" signal
+  this doc already leans on everywhere else for disambiguation. A row with
+  no Number captured at all (the scan's OCR on a small, blurry corner
+  number frequently comes up empty) is left un-merged rather than guessed
+  into a group on name alone — losing a real second copy of a distinct
+  print to an incorrect merge is worse than leaving two rows that staff
+  can merge themselves. Scoped to `game` too, defensively, so a
+  same-name/same-number coincidence across two different games' cards on
+  a mixed binder page can't merge them. When rows do merge, the kept row's
+  `position` becomes a comma-joined list of every contributing pocket
+  (e.g. "row2-col1, row2-col3, row3-col1"), and its `confidence` becomes
+  the *lowest* of the merged copies' — one blurrily-detected copy among
+  several still deserves a second look, and shouldn't get hidden behind a
+  more-confident sibling that scanned first. Only every OTHER field (name/
+  game/set/rarity/photo crop/etc.) is kept from whichever row was scanned
+  first; the later duplicates' own crops are discarded since they're
+  supposed to be the same print anyway. Purely a within-this-scan review-
+  queue behavior — has nothing to do with matching a freshly scanned card
+  against something already saved in the catalog (a separate feature,
+  not built).
+- **`ScanRow` gained a Qty number input** (`ScannerPanel.jsx`, right before
+  Price) — the row data model already had a `qty` field (used verbatim by
+  `handleConfirm`), but there was previously no way to see or edit it in
+  the UI at all; every scanned row silently saved as qty 1 regardless.
+  Needed for the merge feature above to actually be visible/correctable,
+  and as a side effect now also lets staff manually bump qty on a row
+  added via "+ Add missed card" without a merge ever being involved.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
