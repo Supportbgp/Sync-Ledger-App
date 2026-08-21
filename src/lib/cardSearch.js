@@ -525,9 +525,9 @@ export async function searchYugioh(name, setHint, rarityHint, numberHint) {
 // all (Riftbound, Gundam — via Egman's deckbuilder, used with his explicit
 // go-ahead). Routed through card-lookup-proxy (a Supabase Edge Function)
 // instead, which fetches server-side where CORS doesn't apply.
-async function proxyQuery(provider, query, setHint, rarityHint) {
+async function proxyQuery(provider, query, setHint, rarityHint, numberHint) {
   const { data, error } = await supabaseClient.functions.invoke('card-lookup-proxy', {
-    body: { provider, query, setHint: setHint || '', rarityHint: rarityHint || '' },
+    body: { provider, query, setHint: setHint || '', rarityHint: rarityHint || '', numberHint: numberHint || '' },
   });
   if (error) return [];
   return data?.results || [];
@@ -541,8 +541,13 @@ async function proxyQuery(provider, query, setHint, rarityHint) {
 // idea, narrowed server-side there against a confirmed real `rarity` field
 // for these three games specifically (see card-lookup-proxy's egmanQuery) —
 // SWU has no confirmed rarity field, so it doesn't get one here either.
-export async function searchOnePiece(name, setHint, rarityHint) {
-  return await proxyQuery('onepiece', name.trim(), setHint, rarityHint);
+// numberHint (One Piece only for now) is the card's own printed collector
+// number (the digits after the dash in e.g. "OP01-001") — egmanQuery matches
+// it against the suffix of the confirmed real `card_code` field. Riftbound/
+// Gundam don't pass it yet (their own parity sprints haven't happened), so
+// it's simply omitted for those calls below rather than guessed at.
+export async function searchOnePiece(name, setHint, rarityHint, numberHint) {
+  return await proxyQuery('onepiece', name.trim(), setHint, rarityHint, numberHint);
 }
 
 export async function searchRiftbound(name, setHint, rarityHint) {
@@ -606,7 +611,7 @@ export async function searchCardImage(game, name, setHint, rarityHint, numberHin
   if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint, numberHint);
   if (game === "Yugioh") return await searchYugioh(name, setHint, rarityHint, numberHint);
   if (game === "Lorcana") return await searchLorcana(name);
-  if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint);
+  if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint, numberHint);
   if (game === "Riftbound") return await searchRiftbound(name, setHint, rarityHint);
   if (game === "Gundam") return await searchGundam(name, setHint, rarityHint);
   if (game === "SWU") return await searchSwu(name, setHint);

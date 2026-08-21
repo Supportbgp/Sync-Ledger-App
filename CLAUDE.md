@@ -1304,16 +1304,16 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
-## Per-game feature parity (Magic + Yugioh done; other games pending)
+## Per-game feature parity (Magic + Yugioh + One Piece done; other games pending)
 
 A new multi-sprint initiative, one sprint per game, bringing every other
 supported game up to the same depth of feature support Pokemon already has
 (curated Rarity/Printing vocab, collector-number disambiguation, search
 reliability hardening, scanner prompt tuning) — confirmed with the user as
 **full parity**, not just "add the dropdowns." Order: Magic first, then
-Yugioh (both done below); the rest in an order not yet decided (Sports
-Singles is excluded — it has no card database to integrate against at all,
-a documented drawback, not an oversight).
+Yugioh, then One Piece (all done below); the rest in an order not yet
+decided (Sports Singles is excluded — it has no card database to integrate
+against at all, a documented drawback, not an oversight).
 
 - **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
   confirmed via its type definitions/blog posts, not guessed), then wired
@@ -1466,9 +1466,99 @@ a documented drawback, not an oversight).
     rarity blank rather than guess between them without a very clear photo.
     **Requires redeploying `scan-binder-page`** — schema/prompt changes are
     server-side.
-- **Remaining games, not yet started**: Lorcana, One Piece, SWU,
-  Riftbound, Gundam — each gets the same treatment (real vocabulary
-  research first, then wiring), one sprint at a time.
+- **One Piece (Sprint 3) — done.** Real research first (Bandai's own
+  card-list site plus cross-referenced community rarity guides, since
+  Egman's deckbuilder API itself has no public docs to research against —
+  the shape of its response was already confirmed in an earlier sprint),
+  then wired through the same places Pokemon/Magic/Yugioh already use:
+  - **Structural finding**: a One Piece card's full printed code
+    (`<set letters>-<number>`, e.g. `OP01-001` or `ST01-001` for a starter
+    deck) is printed as ONE unit in the card's bottom-RIGHT corner, right
+    next to a short rarity letter code (e.g. `OP01-121 SEC`) — a different
+    layout from every other game done so far (Magic/Yu-Gi-Oh both use the
+    bottom-LEFT corner). An expansion NAME is rarely printed on the card
+    itself, unlike Magic/Pokemon, so the Set field's real content for this
+    game is the set-code prefix (`OP01`), not a human-readable name — matches
+    Egman's own `card_code`/`set_code` fields, which are codes, not names.
+  - `RARITY_OPTIONS_BY_GAME["One Piece"]` (`cardUtils.js`): nine real,
+    confirmed rarity codes/tiers — `Common`/`Uncommon`/`Rare`/`Super Rare`/
+    `Secret Rare`/`Leader`/`Special Rare`/`Treasure Rare`/`Manga Rare`.
+    Treasure Rare (`TR`) is English/Chinese/French-only, debuting OP-06
+    booster sets onward (Japanese releases get a different chase mechanic
+    instead); Manga Rare (`MR`) is technically always also a Secret Rare
+    under the hood, but carries its own distinct printed code and Oda-manga-
+    panel artwork, so it gets its own list entry rather than folding into
+    plain Secret Rare — same "give a nested-but-distinct tier its own
+    entry" call as several of Pokemon's tiers.
+  - **Deliberately excludes "Parallel"/"Alternate Art" from the rarity
+    list** — research confirmed these are the SAME thing (collectors and
+    TCGPlayer use both names interchangeably for a card marked with a small
+    star above its rarity code), and it's an overlay applied on top of ANY
+    of the tiers above (a Common, an SR, even a Leader can get one),
+    changing only the artwork/foil pattern, never the card's stats or the
+    base rarity itself — a genuinely separate axis, not a rarity tier, same
+    rarity-vs-finish split Yu-Gi-Oh's edition field already established
+    (just the opposite direction: Yu-Gi-Oh's separate axis is edition,
+    One Piece's is this alt-art overlay).
+  - `PRINTING_OPTIONS_BY_GAME["One Piece"]`: `["Normal", "Alternate Art"]`.
+    Like Yu-Gi-Oh, a One Piece print's base RARITY already implies its
+    default foil treatment (Common/Uncommon non-foil, Rare gets an accent
+    foil, Super Rare and above are full holo — confirmed via research), so
+    there's no independent foil/nonfoil toggle to offer; the one real
+    separate axis is the star-marked alt-art overlay described above,
+    picking one name ("Alternate Art") to avoid offering duplicate options
+    for what's confirmed to be a single real value.
+  - **`searchOnePiece` (`cardSearch.js`) gained a `numberHint` param**
+    (previously only `name, setHint, rarityHint`), matching the
+    `(name, setHint, rarityHint, numberHint)` shape every other game's
+    search function already uses. Threaded through `proxyQuery` (a new
+    `numberHint` field in the `card-lookup-proxy` invoke body) and
+    `card-lookup-proxy`'s `Deno.serve` handler down into `egmanQuery`, which
+    now accepts a `numberHint` and matches it against the confirmed real
+    `card_code` field's suffix after the last dash — accepting either a
+    bare number (`"001"`, what the scanner reports) or the full code
+    (`"OP01-001"`, what a staff member might type by hand) rather than
+    forcing a guess about which form the caller supplies. Tried before
+    setHint/rarityHint, same "number is the strongest disambiguator"
+    priority used for Pokemon/Magic/Yu-Gi-Oh — narrows the match set first
+    if it helps, and every later hint still only narrows further, never
+    resets to zero. **Riftbound/Gundam don't pass a `numberHint` yet**
+    (their own parity sprints haven't happened) — since `egmanQuery`
+    treats a missing hint as a no-op, this is a purely additive, inert
+    change for those two games today.
+  - **Reliability**: `egmanQuery`'s two `fetch` calls (cards + prices) now
+    retry once on a genuine 5xx via a new shared `fetchWithRetry` helper —
+    the same lighter 1-retry pattern already used for Scryfall/Yu-Gi-Oh (no
+    confirmed flakiness report for Egman's deckbuilder specifically, so
+    this is a safety net, not an aggressive backoff). Applies to all three
+    Egman-backed games (One Piece/Riftbound/Gundam) since it's a shared
+    function — safe for the other two since it only improves reliability on
+    a genuine server error, with zero behavior change on a normal response.
+  - **`scan-binder-page`'s number/set/rarity guidance now branches for One
+    Piece too** — told to read the full printed code in the card's
+    bottom-right corner directly (not guess from visual style, unlike
+    Magic/Pokemon): the number portion after the dash goes in the `number`
+    field, the set-letters prefix goes in the `set` field (there's usually
+    no expansion name to read instead), and the short rarity letter code
+    next to it maps exactly to the nine values above (`C`→Common,
+    `UC`→Uncommon, `R`→Rare, `SR`→Super Rare, `SEC`→Secret Rare, `L`→Leader,
+    `SP`→Special Rare, `TR`→Treasure Rare, `MR`→Manga Rare). A star above
+    the rarity code is called out as meaning "this print is also a
+    parallel/alternate-art version" without changing which rarity value to
+    report — there's no schema field yet to record that separately, same
+    "UI-only Printing dropdown, no new scan-side detection field" scope
+    limit Magic/Yu-Gi-Oh's printing/edition additions already accepted.
+    **Requires redeploying `scan-binder-page`** — schema/prompt changes are
+    server-side.
+  - `EditModal`/`ScannerPanel` needed no changes at all — both already
+    passed `number`/`rarity` generically to every game via `searchCardImage`,
+    which already forwarded `numberHint` through to `searchOnePiece` once
+    that function accepted it; adding One Piece's entries to `cardUtils.js`
+    was enough to light up the same curated dropdowns Pokemon/Magic/Yugioh
+    already had.
+- **Remaining games, not yet started**: Lorcana, SWU, Riftbound, Gundam —
+  each gets the same treatment (real vocabulary research first, then
+  wiring), one sprint at a time.
 
 ## Scanner: merging duplicate physical copies into a quantity
 

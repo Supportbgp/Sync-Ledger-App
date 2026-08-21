@@ -61,11 +61,11 @@ const DETECT_CARDS_TOOL = {
             game: { type: "string", enum: CARD_GAMES },
             set: {
               type: "string",
-              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible.",
+              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible. For One Piece specifically, an expansion NAME is rarely printed on the card itself — report the set-code prefix instead, from the same bottom-right code the number field reads (e.g. 'OP01' from 'OP01-001', or 'ST01' from a starter-deck card 'ST01-001') — this is what actually narrows a search for this game, same role a full expansion name plays for the others.",
             },
             number: {
               type: "string",
-              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). Used only to narrow an image search, never saved as-is.",
+              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). For One Piece, the card's full code (set letters + number, e.g. 'OP01-001' or 'ST01-001') is printed together in the BOTTOM-RIGHT corner, right next to the rarity letter code (e.g. 'OP01-121 SEC') — report just the number portion after the dash (e.g. '001', '121'), not the set-code prefix (that belongs in the set field below). Keep any leading zeros exactly as printed. Used only to narrow an image search, never saved as-is.",
             },
             rarity: {
               type: "string",
@@ -157,10 +157,24 @@ const DETECT_CARDS_TOOL = {
                 "'GX', 'V', 'VMAX', and 'VSTAR' are card subtypes, not rarities, even though they're a required " +
                 "clue for several of the values above (e.g. telling 'Illustration Rare' apart from 'Ultra " +
                 "Rare' requires noticing the 'ex' suffix in the name). " +
+                "FOR ONE PIECE: unlike the other games above, don't guess from visual style at all — a short " +
+                "letter code is printed directly next to the collector number in the card's BOTTOM-RIGHT " +
+                "corner (e.g. 'OP01-121 SEC' — the code after the number is the rarity). Read that exact code " +
+                "and report the matching full name: 'C' = 'Common', 'UC' = 'Uncommon', 'R' = 'Rare', " +
+                "'SR' = 'Super Rare', 'SEC' = 'Secret Rare', 'L' = 'Leader' (every Leader card, regardless of " +
+                "how common it otherwise looks, since Leader is its own tier), 'SP' = 'Special Rare', " +
+                "'TR' = 'Treasure Rare', 'MR' = 'Manga Rare' (an alternate-art Secret Rare styled after an " +
+                "Oda manga panel — report 'Manga Rare' specifically, not 'Secret Rare', if you can tell). If a " +
+                "small star (✶) appears just above this letter code, the card is a parallel/alternate-art " +
+                "version of whichever base rarity is printed — the star does NOT change which rarity value you " +
+                "report; it only means this exact card is also a parallel print (there's no separate field for " +
+                "that yet, so it's fine to leave unrecorded here). Leave rarity blank if the code genuinely " +
+                "isn't legible rather than guessing from the art or how good the card looks. " +
                 "FOR EVERY OTHER GAME: leave this field blank unless an exact rarity tier name is legibly " +
                 "printed on the card itself (e.g. a printed 'Rare'/'Secret Rare' marker) — visual-style-based " +
-                "guessing has only been worked out and verified for Magic, Pokemon, and Yu-Gi-Oh above; don't " +
-                "extend any of those games' rules to a different game's cards. " +
+                "guessing has only been worked out and verified for Magic, Pokemon, and Yu-Gi-Oh above (One " +
+                "Piece above reads an exact printed code, not a visual guess); don't extend any of those " +
+                "games' rules to a different game's cards. " +
                 "Narrows an image/price search among same-name/same-set prints that differ by rarity, and " +
                 "becomes the item's initial saved Rarity value on this guess (staff can correct it in the " +
                 "review queue or later in the catalog, same as any other field).",
@@ -200,10 +214,13 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "instead, alongside a rarity letter and language code (e.g. '0744 LTR • EN' means collector " +
   "number '0744' — keep leading zeros exactly as printed); Yu-Gi-Oh prints a full set code there " +
   "instead of a bare number (e.g. 'LOB-005') — report it exactly as printed, letters and hyphen " +
-  "included. For set, prefer the specific expansion name over the " +
+  "included; One Piece prints its full code (set letters + number, e.g. 'OP01-001') together in the " +
+  "bottom-right corner, right next to the rarity letter — report only the number portion after the " +
+  "dash (e.g. '001') as the number, and the set-letters portion (e.g. 'OP01') as the set. For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
-  "be read. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
+  "be read; One Piece rarely prints an expansion name at all, so use its set-code prefix instead (see " +
+  "above). For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
   "(right edge, just above the rules text): black/white is 'Common' (also basic lands, which have " +
   "no symbol), silver is 'Uncommon', gold is 'Rare', red-orange is 'Mythic Rare', purple is " +
   "'Special' (Time Spiral timeshifted cards only), and a glowing/prismatic mythic symbol is 'Bonus' " +
@@ -241,8 +258,16 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "the plain Common/Uncommon/Rare tiers, and leave rarity blank rather than guess if that's not " +
   "legible. The 'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
   "must never be reported as the rarity value — it's only a clue for picking the right rarity name " +
-  "above. For every other game, leave rarity blank unless an exact tier name is legibly printed on " +
-  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, and Pokemon. " +
+  "above. For rarity on a One Piece card, don't guess from visual style — read the short letter code " +
+  "printed right next to the collector number in the bottom-right corner (e.g. 'OP01-121 SEC') and map " +
+  "it exactly: C=Common, UC=Uncommon, R=Rare, SR=Super Rare, SEC=Secret Rare, L=Leader, SP=Special " +
+  "Rare, TR=Treasure Rare, MR=Manga Rare (report 'Manga Rare', not plain 'Secret Rare', if the code or " +
+  "an Oda-manga-panel art style tells you it's specifically that one). A small star above that code " +
+  "means this print is also a parallel/alternate-art version, but doesn't change which rarity value " +
+  "to report. Leave it blank if the code isn't legible rather than guessing from the art. For every " +
+  "other game, leave rarity blank unless an exact tier name is legibly printed on " +
+  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, and Pokemon " +
+  "(One Piece instead reads an exact printed code, not a visual guess). " +
   "If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +

@@ -53,6 +53,21 @@ function corsHeaders(origin) {
 // purchase_uris.tcgplayer / pokemontcg.io's tcgplayer.url). Joined back to
 // the card list by card_code, which both endpoints share.
 //
+// Retries a GET once on a 5xx before giving up — matches the light,
+// 1-retry safety net already used for Scryfall (no confirmed flakiness
+// report for this endpoint the way pokemontcg.io has one, so this isn't
+// the aggressive 4-attempt backoff that needed). A non-5xx response
+// (including a 4xx) returns immediately without retrying, same "a bad
+// request won't succeed on a second try" reasoning used elsewhere.
+async function fetchWithRetry(url, delayMs = 500) {
+  let res = await fetch(url);
+  if (!res.ok && res.status >= 500) {
+    await new Promise((r) => setTimeout(r, delayMs));
+    res = await fetch(url);
+  }
+  return res;
+}
+
 // A name-only match isn't enough: many of these games reuse the same name
 // across many separate prints (alt art, promos, base-set generics like
 // Gundam's "EX Base" cards, which share that literal name across dozens of
@@ -62,10 +77,21 @@ function corsHeaders(origin) {
 // matched against card_code/set_code/set_label to narrow to the exact
 // print. If the hint doesn't match anything (typo, or genuinely no hint),
 // we fall back to the unnarrowed name matches rather than returning empty.
-async function egmanQuery(gameSlug, name, setHint, rarityHint) {
+//
+// numberHint (One Piece only for now — Riftbound/Gundam never pass one, so
+// this is a no-op for them) is the card's own printed collector number —
+// confirmed real card_code format is "<set code>-<number>" (e.g.
+// "OP01-001"), so it's matched against the suffix after the last dash,
+// leading zeros ignored (same convention mergeScanDuplicates in
+// cardUtils.js already uses for the same reason: "0451" and "451" are the
+// same printed number). Tried before setHint/rarityHint, same "number is
+// the strongest disambiguator" priority used for Pokemon/Magic elsewhere in
+// this app — narrows first if it helps, and every later hint still only
+// narrows the result of the previous one, never replaces it with zero.
+async function egmanQuery(gameSlug, name, setHint, rarityHint, numberHint) {
   const [cardsRes, pricesRes] = await Promise.all([
-    fetch(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`),
-    fetch(`https://deckbuilder.egmanevents.com/api/prices/${gameSlug}`),
+    fetchWithRetry(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`),
+    fetchWithRetry(`https://deckbuilder.egmanevents.com/api/prices/${gameSlug}`),
   ]);
   if (!cardsRes.ok) return [];
   const cards = await cardsRes.json();
@@ -75,6 +101,24 @@ async function egmanQuery(gameSlug, name, setHint, rarityHint) {
   const nameNeedle = name.toLowerCase();
   let matches = (Array.isArray(cards) ? cards : [])
     .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
+
+  if (numberHint) {
+    // Accepts either a bare collector number ("001", matching card_code's
+    // suffix after the last dash — what the scanner reports) or the full
+    // printed code ("OP01-001", what a staff member might type by hand) —
+    // whichever form the hint is in, don't force a guess about which one
+    // this caller happened to supply.
+    const needle = numberHint.trim().toLowerCase();
+    const numNeedle = needle.replace(/^0+/, "") || "0";
+    const narrowed = matches.filter((c) => {
+      const code = (c.card_code || "").toLowerCase();
+      if (needle.includes("-") && code.includes(needle)) return true;
+      const suffix = code.includes("-") ? code.split("-").pop() : code;
+      const num = suffix.replace(/^0+/, "") || "0";
+      return num === numNeedle;
+    });
+    if (narrowed.length) matches = narrowed;
+  }
 
   if (setHint) {
     const codeNeedle = setHint.toLowerCase();
@@ -119,9 +163,9 @@ async function egmanQuery(gameSlug, name, setHint, rarityHint) {
 // returns the normalized candidate shape the client already expects from
 // cardSearch.js: { url, label }[].
 const PROVIDERS = {
-  onepiece: (query, setHint, rarityHint) => egmanQuery('optcg', query, setHint, rarityHint),
-  riftbound: (query, setHint, rarityHint) => egmanQuery('riftbound', query, setHint, rarityHint),
-  gundam: (query, setHint, rarityHint) => egmanQuery('gundam', query, setHint, rarityHint),
+  onepiece: (query, setHint, rarityHint, numberHint) => egmanQuery('optcg', query, setHint, rarityHint, numberHint),
+  riftbound: (query, setHint, rarityHint, numberHint) => egmanQuery('riftbound', query, setHint, rarityHint, numberHint),
+  gundam: (query, setHint, rarityHint, numberHint) => egmanQuery('gundam', query, setHint, rarityHint, numberHint),
 
   // api.swu-db.com (not www. — that host 404s, the docs page and the API
   // itself live on different subdomains). Confirmed CORS-blocked and now
@@ -133,7 +177,7 @@ const PROVIDERS = {
   // examples like `set:sor`/`c=3`, not a documented way to combine a name
   // filter with a set filter, and guessing at that syntax risks breaking
   // the name search that already works.
-  swu: async (query, _setHint, _rarityHint) => {
+  swu: async (query, _setHint, _rarityHint, _numberHint) => {
     const res = await fetch(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
     if (!res.ok) return [];
     const data = await res.json();
@@ -152,14 +196,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { provider, query, setHint, rarityHint } = await req.json();
+    const { provider, query, setHint, rarityHint, numberHint } = await req.json();
     if (!provider || !PROVIDERS[provider]) {
       return json({ error: `Unknown provider: ${provider}` }, 400, headers);
     }
     if (!query || typeof query !== "string") {
       return json({ error: "Missing query" }, 400, headers);
     }
-    const results = await PROVIDERS[provider](query, setHint || "", rarityHint || "");
+    const results = await PROVIDERS[provider](query, setHint || "", rarityHint || "", numberHint || "");
     return json({ results }, 200, headers);
   } catch (err) {
     return json({ error: String(err) }, 500, headers);

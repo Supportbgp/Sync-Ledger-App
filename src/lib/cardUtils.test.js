@@ -132,8 +132,18 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(yugioh.some(o => /parallel/i.test(o))).toBe(false);
   });
 
+  it('lists the real One Piece rarity codes (mapped to full names), no duplicates, excluding Parallel/Alternate Art (a separate printing overlay, not a rarity tier)', () => {
+    const onePiece = RARITY_OPTIONS_BY_GAME['One Piece'];
+    expect(onePiece).toEqual([
+      'Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare',
+      'Leader', 'Special Rare', 'Treasure Rare', 'Manga Rare',
+    ]);
+    expect(new Set(onePiece).size).toBe(onePiece.length);
+    expect(onePiece.some(o => /parallel|alternate art/i.test(o))).toBe(false);
+  });
+
   it('has no entry for a game whose rarities have not been researched yet', () => {
-    expect(RARITY_OPTIONS_BY_GAME['One Piece']).toBeUndefined();
+    expect(RARITY_OPTIONS_BY_GAME.Riftbound).toBeUndefined();
   });
 });
 
@@ -236,8 +246,12 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
     expect(PRINTING_OPTIONS_BY_GAME.Yugioh).toEqual(['1st Edition', 'Unlimited Edition', 'Limited Edition']);
   });
 
+  it('offers Normal/Alternate Art for One Piece — its rarity tier already implies foil treatment, so the real independent axis is the star-marked alt-art overlay, not a foil/nonfoil toggle', () => {
+    expect(PRINTING_OPTIONS_BY_GAME['One Piece']).toEqual(['Normal', 'Alternate Art']);
+  });
+
   it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {
-    expect(PRINTING_OPTIONS_BY_GAME['One Piece']).toBeUndefined();
+    expect(PRINTING_OPTIONS_BY_GAME.Riftbound).toBeUndefined();
   });
 });
 
