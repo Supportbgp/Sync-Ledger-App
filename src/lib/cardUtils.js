@@ -127,6 +127,11 @@ export function normalizeCard(c) {
     game: canonicalizeGame(c.game),
     condition: c.condition || "",
     printing: c.printing || "",
+    // A real catalog attribute now (was a transient, never-saved search
+    // hint before) — see phase7_rarity_column.sql. Free text, same as
+    // condition/printing; RARITY_OPTIONS_BY_GAME is just curated suggestions
+    // for the picker, not a hard constraint on what can be saved here.
+    rarity: c.rarity || "",
     qty: Number(c.qty) || 0,
     price: parseMoney(c.price),
     notes: c.notes || "",

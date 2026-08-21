@@ -70,7 +70,7 @@ export default function SelectWithCustom({
     >
       <option value="">{selectPlaceholder}</option>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
-      <option value={ADD_NEW}>{addNewLabel}</option>
+      <option value={ADD_NEW} className="select-add-new-option">{addNewLabel}</option>
     </select>
   );
 }

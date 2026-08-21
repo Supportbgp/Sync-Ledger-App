@@ -4,7 +4,7 @@ import { normalizeCard, DEFAULT_CONDITION_MULTIPLIERS } from './cardUtils.js';
 export function rowToCard(r) {
   return normalizeCard({
     sku: r.sku, name: r.name, set: r.set_name, game: r.game, condition: r.condition,
-    printing: r.printing, qty: r.qty, price: r.price, notes: r.notes,
+    printing: r.printing, rarity: r.rarity, qty: r.qty, price: r.price, notes: r.notes,
     imageUrl: r.image_data ? "local" : (r.image_url || ""),
     imageData: r.image_data || "",
     itemType: r.item_type, grader: r.grader, grade: r.grade, certNumber: r.cert_number,
@@ -22,7 +22,7 @@ export function rowToCard(r) {
 function cardToRow(c) {
   return {
     sku: c.sku, name: c.name, set_name: c.set, game: c.game, condition: c.condition,
-    printing: c.printing, qty: c.qty, price: c.price, notes: c.notes,
+    printing: c.printing, rarity: c.rarity, qty: c.qty, price: c.price, notes: c.notes,
     image_url: (c.imageUrl && c.imageUrl.startsWith('http')) ? c.imageUrl : '',
     image_data: c.imageUrl === 'local' ? (c.imageData || '') : '',
     item_type: c.itemType, grader: c.grader, grade: c.grade, cert_number: c.certNumber,

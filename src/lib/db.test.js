@@ -41,7 +41,8 @@ describe('rowToCard', () => {
   it('maps snake_case DB columns to the camelCase card shape', () => {
     const row = {
       sku: 'sku-1', name: 'Charizard', set_name: 'Base Set', game: 'Pokemon', condition: 'NM',
-      printing: 'Holo', qty: 3, price: 45, notes: '', image_url: 'https://example.com/a.jpg', image_data: '',
+      printing: 'Holo', rarity: 'Special Illustration Rare', qty: 3, price: 45, notes: '',
+      image_url: 'https://example.com/a.jpg', image_data: '',
       item_type: 'single', grader: '', grade: '', cert_number: '', sold: false, source_url: '', location: 'Binder A',
       last_updated: '2026-01-01T00:00:00.000Z', pos_synced: true, tcgplayer_synced: false, collectr_synced: false,
       pos_channel: true, tcgplayer_channel: true, collectr_channel: true, base_price: 50,
@@ -50,6 +51,7 @@ describe('rowToCard', () => {
     const card = rowToCard(row);
     expect(card.sku).toBe('sku-1');
     expect(card.set).toBe('Base Set');
+    expect(card.rarity).toBe('Special Illustration Rare');
     expect(card.imageUrl).toBe('https://example.com/a.jpg');
     expect(card.basePrice).toBe(50);
     expect(card.activeImage).toBe('stock');
@@ -87,6 +89,7 @@ describe('dbUpsertCard (cardToRow via the real call)', () => {
     tableResults.catalog = { data: null, error: null };
     const card = {
       sku: 'sku-1', name: 'Charizard', set: 'Base Set', game: 'Pokemon', condition: 'NM', printing: 'Holo',
+      rarity: 'Special Illustration Rare',
       qty: 3, price: 45, notes: '', imageUrl: 'local', imageData: 'data:image/jpeg;base64,abc',
       itemType: 'single', grader: '', grade: '', certNumber: '', sold: false, sourceUrl: '', location: 'Binder A',
       lastUpdated: Date.parse('2026-01-01T00:00:00.000Z'),
@@ -105,6 +108,7 @@ describe('dbUpsertCard (cardToRow via the real call)', () => {
     expect(sentRow.image_data).toBe('data:image/jpeg;base64,abc');
     expect(sentRow.base_price).toBe(50);
     expect(sentRow.active_image).toBe('photo');
+    expect(sentRow.rarity).toBe('Special Illustration Rare');
     expect(toast).not.toHaveBeenCalled();
   });
 

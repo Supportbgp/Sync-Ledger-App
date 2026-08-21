@@ -34,6 +34,11 @@ describe('SelectWithCustom', () => {
     expect(onChange).toHaveBeenLastCalledWith('');
   });
 
+  it('marks the "add new" option for its own distinct background styling', () => {
+    render(<SelectWithCustom options={['A', 'B']} value="" onChange={vi.fn()} ariaLabel="Thing" addNewLabel="+ Add new…" />);
+    expect(screen.getByRole('option', { name: '+ Add new…' })).toHaveClass('select-add-new-option');
+  });
+
   it('forces the free-text escape hatch open if options disappear out from under an already-mounted select (e.g. Rarity options depending on Game)', () => {
     const { rerender } = render(<SelectWithCustom options={['A', 'B']} value="" onChange={vi.fn()} ariaLabel="Thing" />);
     expect(screen.getByLabelText('Thing').tagName).toBe('SELECT');

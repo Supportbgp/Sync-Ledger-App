@@ -29,6 +29,7 @@ function initForm(card) {
     set: card?.set || "",
     condition: card?.condition || "",
     printing: card?.printing || "",
+    rarity: card?.rarity || "",
     sku: card?.sku || "",
     location: card?.location || "",
     isSlab: card?.itemType === "slab",
@@ -52,15 +53,16 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
-  // Best-guess/scratch fields only, same as ScannerPanel's row.rarity/
-  // row.number — never saved to the catalog directly. Narrow Find stock
-  // image/Find market price below, and selectCandidate fills these back in
-  // from a confirmed pick's own real data. If one of these is actively
-  // steering the search wrong, clearing it and re-clicking the search
-  // button does the same thing a separate "search by name only" button
-  // used to (removed — redundant once the retry budget and the manual
-  // TCGPlayer link covered what it was for).
-  const [rarity, setRarity] = useState("");
+  // Number is a best-guess/scratch field only, same as ScannerPanel's
+  // row.number — never saved to the catalog directly, just narrows Find
+  // stock image/Find market price below (selectCandidate fills it back in
+  // from a confirmed pick's own real data). Rarity used to be scratch-only
+  // too, but is now a real saved field (form.rarity, below) — it still
+  // does the same job of narrowing those searches, it just also persists.
+  // If either is actively steering a search wrong, clearing it and
+  // re-clicking the search button does the same thing a separate "search
+  // by name only" button used to (removed — redundant once the retry
+  // budget and the manual TCGPlayer link covered what it was for).
   const [number, setNumber] = useState("");
 
   // For a brand-new item, follow whatever channels the same binder/case
@@ -141,7 +143,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("image");
     setActiveSearch("image");
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), form.rarity.trim(), number.trim());
       if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
       } else if (!results.length) {
@@ -169,7 +171,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     setCandidateMode("price");
     setActiveSearch("price");
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), form.rarity.trim(), number.trim());
       if (results === null) {
         setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
       } else if (!results.length) {
@@ -197,7 +199,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     // exact print, same as an image-search pick.
     if (candidateSet) set('set', candidateSet);
     if (candidateNumber) setNumber(candidateNumber);
-    if (candidateRarity) setRarity(candidateRarity);
+    if (candidateRarity) set('rarity', candidateRarity);
 
     if (candidateMode === "price") {
       // Deliberately leaves both images alone — this path exists specifically
@@ -273,6 +275,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
       set: form.set.trim(),
       condition: form.condition.trim(),
       printing: form.printing.trim(),
+      rarity: form.rarity.trim(),
       qty: form.qty,
       price: form.price,
       basePrice: form.basePrice,
@@ -429,10 +432,10 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <label>Rarity</label>
               <SelectWithCustom
                 options={RARITY_OPTIONS_BY_GAME[form.game] || []}
-                value={rarity}
-                onChange={setRarity}
+                value={form.rarity}
+                onChange={(v) => set('rarity', v)}
                 ariaLabel="Rarity"
-                title="Not saved to the catalog — a scratch field. Narrows Find stock image/Find market price below for cards that reprint the same name/set at different rarities. Pick a suggestion or enter your own."
+                title="Narrows Find stock image/Find market price below for cards that reprint the same name/set at different rarities, and is now saved as a catalog attribute. Pick a suggestion or enter your own."
                 selectPlaceholder="— Select a rarity —"
                 addNewLabel="+ Enter a different rarity…"
                 customPlaceholder="Optional — narrows image/price search"

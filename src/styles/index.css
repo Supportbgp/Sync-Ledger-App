@@ -218,6 +218,16 @@
       font-family: 'Inter', sans-serif;
     }
 
+    /* SelectWithCustom's "+ Add new…"/"+ Enter a different…" option, shown
+       at the bottom of every Rarity/Condition/Printing/Location dropdown —
+       a distinct background sets it apart from the real, selectable values
+       above it. Native <option> styling has patchy cross-browser support
+       (some OS-native dropdown renderers ignore it), but it's a harmless,
+       no-cost attempt where it does work. */
+    .select-add-new-option {
+      background-color: #f2f2f2;
+    }
+
     input:focus,
     select:focus,
     textarea:focus {
