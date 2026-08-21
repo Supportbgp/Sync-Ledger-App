@@ -148,6 +148,13 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(new Set(lorcana).size).toBe(lorcana.length);
   });
 
+  it('lists the four SWU pull-structure rarities plus the real "Special" value, excluding Hyperspace/Showcase/Prestige (a separate finish axis)', () => {
+    const swu = RARITY_OPTIONS_BY_GAME.SWU;
+    expect(swu).toEqual(['Common', 'Uncommon', 'Rare', 'Legendary', 'Special']);
+    expect(new Set(swu).size).toBe(swu.length);
+    expect(swu.some(o => /hyperspace|showcase|prestige/i.test(o))).toBe(false);
+  });
+
   it('has no entry for a game whose rarities have not been researched yet', () => {
     expect(RARITY_OPTIONS_BY_GAME.Riftbound).toBeUndefined();
   });
@@ -258,6 +265,12 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
 
   it('offers Normal/Foil for Lorcana — unlike Yu-Gi-Oh/One Piece, rarity and finish are genuinely independent here (every non-Enchanted rarity has both a foil and non-foil printing)', () => {
     expect(PRINTING_OPTIONS_BY_GAME.Lorcana).toEqual(['Normal', 'Foil']);
+  });
+
+  it('offers the six real SWU treatment names, excluding promo/distribution-specific variants like Serialized or Judge Promo', () => {
+    const swu = PRINTING_OPTIONS_BY_GAME.SWU;
+    expect(swu).toEqual(['Normal', 'Foil', 'Hyperspace', 'Hyperspace Foil', 'Showcase', 'Prestige']);
+    expect(swu.some(o => /serial|promo|judge|convention/i.test(o))).toBe(false);
   });
 
   it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {

@@ -181,10 +181,21 @@ const DETECT_CARDS_TOOL = {
                 "often handed out at events or store exclusives) rather than a normal numbered set, report " +
                 "'Promo' regardless of what shape appears. Leave this blank if the symbol's shape genuinely " +
                 "isn't legible rather than guessing from the card's power level or how good it looks. " +
+                "FOR STAR WARS: UNLIMITED (SWU): read the small gemstone/star symbol near the bottom of the " +
+                "card, next to the collector number. Report exactly one of: 'Common' (a grey or clear " +
+                "gemstone), 'Uncommon' (a green gemstone), 'Rare' (a blue gemstone), or 'Legendary' (a gold " +
+                "or yellow STAR shape — not a gemstone, the one shape break in this pattern). Leave this " +
+                "blank rather than guess if the symbol's color/shape isn't legible, and also leave it blank " +
+                "for a card that doesn't clearly match one of those four looks (e.g. a suspected 'Special' " +
+                "rarity slot card) — that fifth tier has no confirmed distinct visual marker to go by, so " +
+                "guessing at it would be worse than leaving it for staff to set by hand. A premium foil/art " +
+                "treatment (Hyperspace, Showcase, Prestige) does NOT change which of the four values above to " +
+                "report — those are a separate treatment layered on top of a card's own base rarity, not a " +
+                "rarity themselves. " +
                 "FOR EVERY OTHER GAME: leave this field blank unless an exact rarity tier name is legibly " +
                 "printed on the card itself (e.g. a printed 'Rare'/'Secret Rare' marker) — visual-style-based " +
-                "guessing has only been worked out and verified for Magic, Pokemon, Yu-Gi-Oh, and Lorcana above " +
-                "(One Piece above reads an exact printed code, not a visual guess); don't extend any of those " +
+                "guessing has only been worked out and verified for Magic, Pokemon, Yu-Gi-Oh, Lorcana, and " +
+                "SWU above (One Piece above reads an exact printed code, not a visual guess); don't extend any of those " +
                 "games' rules to a different game's cards. " +
                 "Narrows an image/price search among same-name/same-set prints that differ by rarity, and " +
                 "becomes the item's initial saved Rarity value on this guess (staff can correct it in the " +
@@ -285,10 +296,16 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "holographic finish across the whole card is 'Enchanted' (the rarest tier — looks distinctly " +
   "different from the others, never just plain foil). If the card is from an unnumbered promotional " +
   "release rather than a normal numbered set, report 'Promo' instead regardless of the shape shown. " +
+  "For rarity on a Star Wars: Unlimited (SWU) card, read the gemstone/star symbol near the collector " +
+  "number: grey/clear gemstone is 'Common'; green gemstone is 'Uncommon'; blue gemstone is 'Rare'; a " +
+  "gold/yellow STAR (not a gemstone) is 'Legendary'. A premium foil/art treatment (Hyperspace, " +
+  "Showcase, Prestige) doesn't change this value — it's a separate layered treatment, not a rarity. " +
+  "Leave it blank for a card that doesn't clearly match one of those four looks (e.g. a suspected " +
+  "'Special'-rarity card) rather than guessing, since that fifth tier has no confirmed visual marker. " +
   "For every " +
   "other game, leave rarity blank unless an exact tier name is legibly printed on " +
-  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, Pokemon, and " +
-  "Lorcana (One Piece instead reads an exact printed code, not a visual guess). " +
+  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, Pokemon, " +
+  "Lorcana, and SWU (One Piece instead reads an exact printed code, not a visual guess). " +
   "If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +

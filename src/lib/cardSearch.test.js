@@ -625,6 +625,12 @@ describe('proxy-backed searches (One Piece / Riftbound / Gundam / SWU)', () => {
     expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider, query: 'Some Card', setHint: '', rarityHint: '', numberHint: '' } });
   });
 
+  it('forwards setHint/rarityHint for SWU (applied server-side as a soft narrowing filter, not a query operator)', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchSwu('Vader', 'Spark of Rebellion', 'Legendary');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'swu', query: 'Vader', setHint: 'Spark of Rebellion', rarityHint: 'Legendary', numberHint: '' } });
+  });
+
   it('returns an empty array (not an error) when the proxy call fails', async () => {
     invokeMock.mockResolvedValueOnce({ data: null, error: { message: 'network' } });
     const results = await searchOnePiece('Luffy');

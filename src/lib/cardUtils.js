@@ -153,6 +153,26 @@ export const RARITY_OPTIONS_BY_GAME = {
   // (verified against a real sample: an entire promo set's cards all
   // reported `"rarity": "Promo"`, not one of the six tiers above).
   Lorcana: ["Common", "Uncommon", "Rare", "Super Rare", "Legendary", "Enchanted", "Promo"],
+  // Star Wars: Unlimited's four pull-structure rarities, each with its own
+  // distinct gemstone symbol/color at the bottom of the card (confirmed via
+  // multiple community rarity guides): grey/clear (Common), green
+  // (Uncommon), blue (Rare), and a gold/yellow STAR — not a gemstone, the
+  // one shape break in the pattern — for Legendary. Plus "Special", a real
+  // fifth value confirmed directly against a real API response sample
+  // (swuapi.com's own docs quote the API's `rarity` field as accepting it)
+  // and independently corroborated by community sources describing a
+  // distinct "Special" rarity slot cards (including some Leaders) can have
+  // — deliberately NOT given scan-detection visual guidance in
+  // scan-binder-page below, since no confirmed distinguishing symbol/color
+  // was found for it the way the other four have one; staff can still pick
+  // it from this list by hand.
+  //
+  // Deliberately excludes Hyperspace/Showcase/Prestige — confirmed via a
+  // real swu-db.com card listing (a Rare card reporting Rarity: Rare with
+  // separate variants Original/Hyperspace/Foil/Hyperspace Foil) to be a
+  // genuinely independent finish/treatment axis layered on top of any base
+  // rarity, not a rarity tier itself — see PRINTING_OPTIONS_BY_GAME.SWU.
+  SWU: ["Common", "Uncommon", "Rare", "Legendary", "Special"],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -232,6 +252,18 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // Rarity field, this list only needs the two real, evergreen finish
   // values themselves.
   Lorcana: ["Normal", "Foil"],
+  // Same independent-axis model as Lorcana above — confirmed via a real
+  // swu-db.com card listing (see RARITY_OPTIONS_BY_GAME.SWU) that a base
+  // rarity like Rare can independently be Original, Hyperspace, Foil, or
+  // Hyperspace Foil, with Showcase and Prestige as further, rarer premium
+  // treatments layered the same way. These six are the real, evergreen
+  // treatment names; deliberately excludes the promo/distribution-specific
+  // variant names also seen in research (Serialized, Weekly Play Promo/
+  // Foil, Prerelease Promo, Convention Exclusive, Judge Promo) — same
+  // "ever-expanding, event-tied vocabulary belongs in the free-text escape
+  // hatch" call as Pokemon's Poke Ball pattern exclusion and Yu-Gi-Oh's
+  // Parallel Rare exclusion above.
+  SWU: ["Normal", "Foil", "Hyperspace", "Hyperspace Foil", "Showcase", "Prestige"],
 };
 
 export function normalizeCard(c) {

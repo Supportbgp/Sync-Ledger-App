@@ -558,8 +558,16 @@ export async function searchGundam(name, setHint, rarityHint) {
   return await proxyQuery('gundam', name.trim(), setHint, rarityHint);
 }
 
-export async function searchSwu(name, setHint) {
-  return await proxyQuery('swu', name.trim(), setHint);
+// setHint/rarityHint are applied server-side in card-lookup-proxy as a
+// soft, narrow-if-it-helps filter against the already-fetched results' own
+// Set/Rarity fields — not a query-string operator (see that function's own
+// comment for why: this app's Set field for SWU holds a full expansion
+// name, not the short code the API's confirmed set: operator expects,
+// same mismatch risk as Magic's setHint). numberHint is accepted for a
+// consistent dispatch shape but unused — no confirmed collector-number
+// field to narrow by.
+export async function searchSwu(name, setHint, rarityHint, numberHint) {
+  return await proxyQuery('swu', name.trim(), setHint, rarityHint, numberHint);
 }
 
 // Lorcast (api.lorcast.com) — a free, no-key, Scryfall-modeled API for Disney
@@ -698,6 +706,6 @@ export async function searchCardImage(game, name, setHint, rarityHint, numberHin
   if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint, numberHint);
   if (game === "Riftbound") return await searchRiftbound(name, setHint, rarityHint);
   if (game === "Gundam") return await searchGundam(name, setHint, rarityHint);
-  if (game === "SWU") return await searchSwu(name, setHint);
+  if (game === "SWU") return await searchSwu(name, setHint, rarityHint, numberHint);
   return null; // null (not []) signals "not set up for this game" vs. a real empty result
 }
