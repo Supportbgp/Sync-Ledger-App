@@ -6,6 +6,7 @@ import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, can
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
+import SelectWithCustom from '../SelectWithCustom.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 let nextRowId = 1;
@@ -540,16 +541,19 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
             title="Optional — the printed collector number (e.g. 280/217). The strongest signal for telling apart same-name/alt-art prints; used to narrow both the initial automatic fill and 'Find another image' below"
             onChange={(e) => onChange({ number: e.target.value })}
           />
-          <input
-            type="text" list={`rarity-options-${row.id}`} placeholder="Rarity" className="sf" value={row.rarity}
-            title="Optional — narrows both the initial automatic fill and 'Find another image' below, same as Set/Number, for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
-            onChange={(e) => onChange({ rarity: e.target.value })}
-          />
-          {/* Per-row id — a page scans several cards at once, so a shared
-              static datalist id would collide across rows. */}
-          <datalist id={`rarity-options-${row.id}`}>
-            {(RARITY_OPTIONS_BY_GAME[row.game] || []).map(r => <option key={r} value={r} />)}
-          </datalist>
+          <div className="sf">
+            <SelectWithCustom
+              options={RARITY_OPTIONS_BY_GAME[row.game] || []}
+              value={row.rarity}
+              onChange={(v) => onChange({ rarity: v })}
+              ariaLabel="Rarity"
+              title="Optional — narrows both the initial automatic fill and 'Find another image' below, same as Set/Number, for cards that reprint the same name/set at different rarities. Pick a suggestion or enter your own."
+              selectPlaceholder="— Rarity —"
+              addNewLabel="+ Enter a different rarity…"
+              customPlaceholder="Rarity"
+              backLabel="← Choose from the list instead"
+            />
+          </div>
         </div>
         <div className="scan-row-line">
           <input type="text" placeholder="Condition" className="sf" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />

@@ -1174,12 +1174,26 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
     above (tried and reverted) — confirming a candidate visually and
     trusting *that print's* real Set/Number/Rarity is a good source of
     truth for those fields regardless of how the search itself is hinted.
-  2. **Rarity as a real `<select>`, not a `<datalist>`** — the datalist's
-     browser-native filtering hides suggestions once the field already has
-     a non-matching value typed, which isn't the "always show me every
-     option" behavior wanted here. Reuse `LocationPicker`'s existing
-     select-plus-"add new" escape-hatch pattern so an unresearched rarity
-     stays enterable.
+  ~~2. Rarity as a real `<select>`, not a `<datalist>`~~ — done. The
+     datalist's browser-native filtering hid suggestions once the field
+     already had a non-matching value typed, which wasn't the "always show
+     me every option" behavior wanted here. Extracted `LocationPicker`'s
+     select-plus-"add new" escape hatch into a new shared, generic
+     `src/components/SelectWithCustom.jsx` — `LocationPicker` is now a thin
+     wrapper over it (same external prop API, unchanged for its own
+     callers), and both `EditModal`'s and `ScannerPanel`'s Rarity fields use
+     it directly with `RARITY_OPTIONS_BY_GAME[game]` as the option list.
+     Extracted rather than copy-pasted since this exact pattern is reused
+     twice more below (Condition, Foil). Two behaviors added that
+     `LocationPicker` didn't need before: (1) an empty options list (every
+     non-Pokemon game today) skips straight to the free-text input instead
+     of forcing a "+ Add new" click first, since there's nothing real to
+     select from — matters here far more than for `LocationPicker`, where
+     locations are rarely empty; (2) a `useEffect` re-opens that same
+     escape hatch if `options` shrinks to empty *after* the picker already
+     mounted in select mode — the concrete case being Rarity's options
+     depending on the Game field, which staff can change after Rarity is
+     already showing a dropdown for a different game.
   3. **Condition dropdown**, same pattern, sourced from the tiers already
      in `DEFAULT_CONDITION_MULTIPLIERS`/Pricing Settings (NM/LP/MP/HP/DMG).
   4. **Printing/finish ("foil") dropdown** — UI only, no scan-side
