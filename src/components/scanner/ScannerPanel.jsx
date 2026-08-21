@@ -26,8 +26,10 @@ function detectedToRow(card) {
     set: card.set || '',
     // Best-guess only — the vision model isn't always right about it, same
     // as name/game/set, which is why it's a plain editable field here too.
-    // Used purely to narrow the image search (see findImageCandidates);
-    // never saved to the catalog. number is the strongest of the two
+    // Narrows the image search (see findImageCandidates) same as before, but
+    // rarity is now also a real saved catalog attribute (see
+    // phase7_rarity_column.sql) — handleConfirm passes it straight through.
+    // number stays scratch-only, never saved: the strongest of the two
     // signals (a printed collector number narrows a same-name/alt-art card
     // to essentially one exact print), currently only acted on for Pokemon
     // — see searchPokemon in cardSearch.js.
@@ -286,6 +288,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       set: r.set,
       condition: r.condition,
       printing: r.printing,
+      rarity: r.rarity,
       qty: r.qty,
       price: r.price,
       basePrice: r.basePrice,

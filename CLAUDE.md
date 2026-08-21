@@ -1254,6 +1254,56 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   card can surface the English equivalent's image with no matching price
   data — no verified alternative data source yet, don't guess one).
 
+## Rarity/Condition/Printing catalog filters, Rarity persistence
+
+- **Rarity is now a real, saved catalog attribute** (`catalog.rarity`,
+  `phase7_rarity_column.sql`) — before this it only ever existed as a
+  transient scratch/search-hint field in `EditModal`/`ScannerPanel`,
+  discarded on save (confirmed by checking `normalizeCard`, `db.js`'s row
+  mapping, and the schema — none of them had a `rarity` field at all).
+  Explicitly confirmed with the user before persisting it, since "add a
+  Rarity filter" implicitly meant "start saving Rarity," a bigger change
+  than a filter alone. `EditModal`'s `rarity` state was folded into
+  `form.rarity` (previously separate from the saved `form` object
+  entirely) — it still does the same job of narrowing Find stock image/
+  Find market price, it just also persists now. `ScannerPanel`'s
+  `row.rarity` needed no such refactor (already part of the saved row
+  shape); `handleConfirm` just needed one added line to actually include
+  it. Deliberately NOT added to `catalog_public_view` (a staff-side
+  disambiguation aid, not something the public binder page needs) or to
+  `sync_queue` (unlike condition/printing, which get snapshotted onto a
+  sold ticket because they factor into pricing, rarity plays no role in
+  pricing or sync bookkeeping) — see the migration file for the reasoning.
+  **Requires running `phase7_rarity_column.sql` in the Supabase SQL Editor**
+  before this code can save/read Rarity — no code-side default masks a
+  missing column here, so skipping the migration would surface as a real
+  save error, not a silent no-op.
+- **Catalog tab gained Rarity/Condition/Printing filters, shown only once
+  a single game is selected** — an explicit ask, since these three are
+  specific enough to one game's own vocabulary (a Pokemon rarity means
+  nothing for Magic) that a combined-games list would just be noise.
+  Options come from that game's *actual* catalog values (`Array.from(new
+  Set(...))`, same pattern the existing Game/Location filters already use)
+  rather than the curated `RARITY_OPTIONS_BY_GAME`/`CONDITION_OPTIONS`/
+  `PRINTING_OPTIONS_BY_GAME` suggestion lists used for data entry — a
+  curated value nothing in the catalog has yet would just be a dead-end
+  filter, and this way any custom value staff typed through those
+  pickers' free-text escape hatch (e.g. a specific Poke Ball/Master Ball
+  pattern) shows up as a real, usable filter option too. A filter for any
+  of the three simply doesn't render if that game has zero items with a
+  value for it yet (rather than showing an empty, useless dropdown). All
+  three reset to blank whenever the Game filter itself changes (including
+  back to "all games") — a stale value from one game would otherwise
+  either mean nothing for the new game or, worse, silently zero out every
+  result with no visible explanation why.
+- **`SelectWithCustom`'s "+ Add new…" option gets a distinct `#f2f2f2`
+  background** (`.select-add-new-option` in `index.css`) to set it apart
+  from the real, selectable values above it — applies everywhere the
+  component is used (Rarity/Condition/Printing/Location). Native `<option>`
+  background styling has patchy cross-browser support (some OS-native
+  dropdown renderers ignore it), but it's a harmless, no-cost attempt
+  where it does work.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
