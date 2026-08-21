@@ -136,6 +136,31 @@ describe('EditModal — image candidate selection', () => {
   });
 });
 
+describe('EditModal — Rarity picker', () => {
+  it('shows Rarity as a dropdown of curated options for a game that has them (Pokemon)', () => {
+    render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const rarity = screen.getByLabelText('Rarity');
+    expect(rarity.tagName).toBe('SELECT');
+    expect(screen.getByRole('option', { name: 'Special Illustration Rare' })).toBeInTheDocument();
+  });
+
+  it('falls back to a plain free-text field for a game with no curated rarity list (e.g. One Piece), instead of a select with nothing real to pick', () => {
+    render(<EditModal card={baseCard({ game: 'One Piece' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByLabelText('Rarity').tagName).toBe('INPUT');
+  });
+
+  it('lets staff pick a curated rarity from the dropdown, and it narrows the next search', async () => {
+    searchCardImageMock.mockResolvedValueOnce([{ url: 'https://x/candidate.jpg', label: 'Charizard', price: 12 }]);
+    render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Rarity'), { target: { value: 'Special Illustration Rare' } });
+    fireEvent.click(screen.getByText('Find stock image'));
+    await screen.findByTitle('Charizard');
+
+    expect(searchCardImageMock).toHaveBeenLastCalledWith('Pokemon', 'Charizard', 'Base Set', 'Special Illustration Rare', '');
+  });
+});
+
 describe('EditModal — per-location channel defaults', () => {
   const catalog = [
     { location: 'Binder A', posChannel: true, tcgplayerChannel: false, collectrChannel: true },

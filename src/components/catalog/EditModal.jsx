@@ -4,6 +4,7 @@ import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, can
 import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
+import SelectWithCustom from '../SelectWithCustom.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 
@@ -426,14 +427,17 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
             <div className="field-group">
               <label>Rarity</label>
-              <input
-                type="text" list="rarity-options" placeholder="Optional — narrows image/price search" value={rarity}
-                title="Not saved to the catalog — a scratch field. Narrows Find stock image/Find market price below for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
-                onChange={(e) => setRarity(e.target.value)}
+              <SelectWithCustom
+                options={RARITY_OPTIONS_BY_GAME[form.game] || []}
+                value={rarity}
+                onChange={setRarity}
+                ariaLabel="Rarity"
+                title="Not saved to the catalog — a scratch field. Narrows Find stock image/Find market price below for cards that reprint the same name/set at different rarities. Pick a suggestion or enter your own."
+                selectPlaceholder="— Select a rarity —"
+                addNewLabel="+ Enter a different rarity…"
+                customPlaceholder="Optional — narrows image/price search"
+                backLabel="← Choose from the list instead"
               />
-              <datalist id="rarity-options">
-                {(RARITY_OPTIONS_BY_GAME[form.game] || []).map(r => <option key={r} value={r} />)}
-              </datalist>
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
