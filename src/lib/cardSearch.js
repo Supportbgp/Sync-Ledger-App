@@ -187,22 +187,29 @@ function pokemonTcgplayerPrice(c) {
   return null;
 }
 
+// Live-tested (real browser requests against api.pokemontcg.io, 2026-08-21):
+// a single query needed anywhere from 3 to 12 consecutive 5xx responses
+// before finally succeeding — the public, key-less tier is currently far
+// flakier than the "occasional transient 5xx" the original one-retry fix
+// assumed. That single retry wasn't nearly enough margin: a query that
+// would have succeeded on its 4th attempt was instead marked "empty" after
+// its 1 retry, and searchPokemon's fallback ladder moved on to a broader
+// (and often wrong-print) tier instead — direct real-world testing traced
+// this as the dominant cause of "no results"/wrong-card reports, more so
+// than the apostrophe/hint tuning done elsewhere in this file (which
+// remains a real, valid fix for genuine tokenization ambiguity — it just
+// wasn't the main driver of what was actually being seen). A 4xx (bad
+// query) still isn't retried — it won't succeed a second time.
+const POKEMON_QUERY_RETRY_DELAYS_MS = [400, 1000, 2200]; // 1 initial + 3 retries = 4 attempts total
 async function pokemonQueryUncached(q, attempt = 0) {
   // Generous cap, not the API default — Pokemon reprints the same name
   // across dozens of sets/rarities (see searchPokemon below), and a small
   // cap just cuts off whichever prints happen to sort last.
   const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=20`);
   if (!res.ok) {
-    // pokemontcg.io's public (key-less) tier is documented as prone to
-    // transient 5xx under load — retry once before giving up, rather than
-    // silently treating a real API failure as "no cards matched" (which
-    // used to mask the actual problem and let searchPokemon's fallback
-    // ladder burn through several more requests against an
-    // already-failing endpoint). A 4xx (bad query) won't succeed on retry,
-    // so only 5xx gets one.
-    if (res.status >= 500 && attempt === 0) {
-      await new Promise((r) => setTimeout(r, 600));
-      return pokemonQueryUncached(q, 1);
+    if (res.status >= 500 && attempt < POKEMON_QUERY_RETRY_DELAYS_MS.length) {
+      await new Promise((r) => setTimeout(r, POKEMON_QUERY_RETRY_DELAYS_MS[attempt]));
+      return pokemonQueryUncached(q, attempt + 1);
     }
     throw new Error(`pokemontcg.io returned ${res.status}`);
   }

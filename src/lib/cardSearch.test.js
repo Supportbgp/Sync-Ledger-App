@@ -209,7 +209,7 @@ describe('searchPokemon', () => {
     }
   });
 
-  it('gives up and throws after a second consecutive 5xx, instead of reporting "no matches"', async () => {
+  it('gives up and throws once every retry attempt is exhausted, instead of reporting "no matches"', async () => {
     vi.useFakeTimers();
     try {
       global.fetch.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
@@ -224,17 +224,38 @@ describe('searchPokemon', () => {
     }
   });
 
-  it('falls through to a broader tier when an earlier, narrower tier persistently 5xxs, instead of aborting the whole search', async () => {
+  it('falls through to a broader tier only once an earlier, narrower tier has exhausted its full retry budget (4 attempts), instead of aborting the whole search', async () => {
     vi.useFakeTimers();
     try {
       global.fetch
         .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // number-alone tier, 1st attempt
-        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // number-alone tier, retry — still fails
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // retry 1 — still fails
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // retry 2 — still fails
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }) // retry 3 — budget exhausted
         .mockResolvedValueOnce(jsonResponse({
           data: [{ name: 'Charizard', set: { name: 'Base Set' }, images: { large: 'https://x/char.jpg' } }],
-        })); // next (broader) tier succeeds
+        })); // next (broader) tier succeeds on its first attempt
 
       const promise = searchPokemon('Charizard', '', '', '999'); // numberHint, no setHint
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(global.fetch).toHaveBeenCalledTimes(5);
+      expect(results[0].url).toBe('https://x/char.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries through more than one consecutive 5xx on the same tier — live testing found failure streaks longer than the original single-retry budget could survive', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) })
+        .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) })
+        .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Charizard', set: { name: 'Base Set' }, images: { large: 'https://x/char.jpg' } }] }));
+
+      const promise = searchPokemon('Charizard');
       await vi.runAllTimersAsync();
       const results = await promise;
 

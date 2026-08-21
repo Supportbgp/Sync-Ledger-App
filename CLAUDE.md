@@ -718,6 +718,44 @@ Everything else found:
   so the common case still fires the same number of requests as before —
   this only doubles requests for the minority of possessive names, and even
   then only until one representation succeeds.
+- **The dominant real cause of "search unreliable"/"no results" reports
+  turned out to be pokemontcg.io's public tier being far flakier than a
+  single retry could survive — not the apostrophe handling or the hint
+  logic, which were both real but secondary.** Confirmed by directly
+  querying `api.pokemontcg.io` by hand, repeatedly, for the exact queries
+  this app sends: individual queries needed anywhere from 3 to 12
+  *consecutive* 5xx responses before finally succeeding. The original
+  "retry once" fix (added earlier in this doc) assumed occasional transient
+  failures; against a streak that long, one retry gives up almost
+  immediately, `searchPokemon`'s fallback ladder marks that tier "empty",
+  and the search either lands on a broader/wrong-print tier or exhausts
+  every tier and reports "no matches" — even when the exact right query
+  would have succeeded on its 3rd or 4th try. `pokemonQueryUncached` now
+  retries up to 3 times (4 attempts total) with a short backoff (400ms/1.0s/
+  2.2s) instead of once, still only on a 5xx. This directly explains real
+  reports that looked like search-logic bugs: a manually re-triggered
+  search "just working" on a second attempt (observed for Lillie's Clefairy
+  ex once Set/Number were correctly populated) was likely the API recovering
+  between attempts, not the hints being the deciding factor.
+  - **While diagnosing this, also directly confirmed two "no price data"
+    reports are genuine, permanent data gaps on pokemontcg.io's side, not
+    bugs**: Mega Gengar ex's Ascended Heroes print (`me2pt5-269`, Mega
+    Attack Rare) has a `tcgplayer` object with only a `url`, no `prices` key
+    at all; Lillie's Clefairy ex (`me2pt5-280`) has no `tcgplayer` field
+    whatsoever. `pokemonTcgplayerPrice` already handles both correctly
+    (returns `null`) — there's no client-side fix possible when the API
+    itself never populated pricing for that exact print. A *different*,
+    unrelated print of "Mega Gengar ex" in a different set did have real
+    `market` pricing when found by a plain name-only query, confirming
+    (again) that Pokemon commonly reprints the same name with wildly
+    inconsistent price-data coverage per print — the existing "no per-
+    condition pricing" acceptance in this doc extends to "no pricing at
+    all for some individual prints," not just no per-condition granularity.
+  - Also confirmed via direct query that "Ascended Heroes" alone (name +
+    set, no number) returns 3 distinct real "Mega Gengar ex" prints
+    (#125 Double Rare, #269 Mega Attack Rare, #284 Special Illustration
+    Rare) — validating that Number remains the right disambiguator among
+    same-name-same-set reprints, exactly as this doc has assumed throughout.
 - **Scanner/EditModal: blocking modal during the post-scan image/price
   auto-fill, loading state + disabled state on every manual search button,
   and a "Search by name only" escape hatch** — three real-phone UX reports
