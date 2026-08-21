@@ -89,12 +89,29 @@ describe('searchScryfall', () => {
     expect(results[0].url).toBe('https://x/bb42.jpg');
   });
 
-  it('falls through to the broad name search if the numberHint tier finds nothing', async () => {
+  it('falls back to a loose (non-exact) name match still scoped by Number when the exact-name tier finds nothing — real report: the scan OCR\'d "Sauron, Dark Lord" for the actual "Sauron, the Dark Lord", so an exact-name requirement silently lost the Number constraint entirely and landed on the wrong (common) print', async () => {
+    // Number has no leading zero here so there's exactly one exact-match
+    // attempt (no separate padded/unpadded sub-tier) before falling to the
+    // loose tier — keeps this test isolated to the exact-vs-loose behavior
+    // it's actually checking, not the unrelated padding logic.
     global.fetch
-      .mockResolvedValueOnce(jsonResponse({ data: [] })) // number tier, empty
-      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '2', image_uris: { normal: 'https://x/bb.jpg' } }] })); // broad name tier
-    const results = await searchScryfall('Bruce Banner', '', '', '999');
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // exact name + number: no card is literally named "Sauron, Dark Lord"
+      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Sauron, the Dark Lord', set_name: 'Tales of Middle-earth', collector_number: '744', image_uris: { normal: 'https://x/sauron-alt.jpg' } }] })); // loose name + number
+    const results = await searchScryfall('Sauron, Dark Lord', '', '', '744');
     expect(global.fetch).toHaveBeenCalledTimes(2);
+    const secondQuery = decodeURIComponent(global.fetch.mock.calls[1][0]);
+    expect(secondQuery).not.toContain('!"'); // not an exact-match query this time
+    expect(secondQuery).toContain('number:744');
+    expect(results[0].url).toBe('https://x/sauron-alt.jpg');
+  });
+
+  it('only drops the Number constraint entirely (the fully unscoped broad-name tier) once BOTH the exact-name and loose-name number-scoped tiers find nothing', async () => {
+    global.fetch
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // exact name + number
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // loose name + number
+      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '2', image_uris: { normal: 'https://x/bb.jpg' } }] })); // broad, unscoped tier
+    const results = await searchScryfall('Bruce Banner', '', '', '999');
+    expect(global.fetch).toHaveBeenCalledTimes(3);
     expect(results[0].url).toBe('https://x/bb.jpg');
   });
 

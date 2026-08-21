@@ -156,12 +156,32 @@ export async function searchScryfall(name, setHint, rarityHint, numberHint) {
   // trustworthy enough to try first rather than as a last resort.
   if (collectorNumber) {
     const base = cleanName || trimmed;
+    const unpadded = collectorNumber.replace(/^0+/, '') || collectorNumber;
+    const numberVariants = unpadded !== collectorNumber ? [collectorNumber, unpadded] : [collectorNumber];
     try {
-      let results = await scryfallQuery(`!"${base}" number:${collectorNumber}`);
-      if (results.length) return preferRarity(results, rarityHint);
-      const unpadded = collectorNumber.replace(/^0+/, '') || collectorNumber;
-      if (unpadded !== collectorNumber) {
-        results = await scryfallQuery(`!"${base}" number:${unpadded}`);
+      // Exact-name match first (`!"..."` requires the name to equal `base`
+      // precisely) — fast and precise when the scan's name is dead-on.
+      for (const num of numberVariants) {
+        const results = await scryfallQuery(`!"${base}" number:${num}`);
+        if (results.length) return preferRarity(results, rarityHint);
+      }
+      // Real-world report: a scan read "Sauron, Dark Lord" for the actual
+      // "Sauron, the Dark Lord" — a small dropped word that made every
+      // exact-name+number query above return nothing, silently losing the
+      // number constraint entirely and falling through to the fully
+      // unscoped broad-name tier below, which landed on a different
+      // (wrong) print with no numeric narrowing left at all. A vision
+      // model's OCR drops small connecting words like this often enough
+      // that requiring exact name equality here is too strict — this
+      // second pass keeps the SAME number constraint but drops the exact-
+      // match requirement on the name (bare, unquoted terms — the same
+      // loose matching the broad tier below already relies on, which is
+      // exactly why that tier still found *a* "Sauron" card despite the
+      // missing "the"), so the number keeps doing its real disambiguating
+      // work instead of being abandoned at the first sign of an
+      // imperfectly-transcribed name.
+      for (const num of numberVariants) {
+        const results = await scryfallQuery(`${base} number:${num}`);
         if (results.length) return preferRarity(results, rarityHint);
       }
     } catch {
