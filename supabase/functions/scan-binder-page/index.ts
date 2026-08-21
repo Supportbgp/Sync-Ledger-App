@@ -61,11 +61,11 @@ const DETECT_CARDS_TOOL = {
             game: { type: "string", enum: CARD_GAMES },
             set: {
               type: "string",
-              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible. For One Piece specifically, an expansion NAME is rarely printed on the card itself — report the set-code prefix instead, from the same bottom-right code the number field reads (e.g. 'OP01' from 'OP01-001', or 'ST01' from a starter-deck card 'ST01-001') — this is what actually narrows a search for this game, same role a full expansion name plays for the others. For Lorcana, no expansion name is printed on the card at all — only a bare SET NUMBER (e.g. '6' for Azurite Sea), printed in the small bottom-left text next to the collector number. Report that number as the set value.",
+              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible. For One Piece specifically, an expansion NAME is rarely printed on the card itself — report the set-code prefix instead, from the same bottom-right code the number field reads (e.g. 'OP01' from 'OP01-001', or 'ST01' from a starter-deck card 'ST01-001') — this is what actually narrows a search for this game, same role a full expansion name plays for the others. For Lorcana, no expansion name is printed on the card at all — only a bare SET NUMBER (e.g. '6' for Azurite Sea), printed in the small bottom-left text next to the collector number. Report that number as the set value. For Riftbound, likewise no expansion name is printed — report the short set-letters code instead (e.g. 'OGN' for Origins), from the same bottom code the number field reads.",
             },
             number: {
               type: "string",
-              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). For One Piece, the card's full code (set letters + number, e.g. 'OP01-001' or 'ST01-001') is printed together in the BOTTOM-RIGHT corner, right next to the rarity letter code (e.g. 'OP01-121 SEC') — report just the number portion after the dash (e.g. '001', '121'), not the set-code prefix (that belongs in the set field below). For Lorcana, it's in the small bottom-left text alongside the set number and language code, in the same 'this card / total in set' format as Pokemon, e.g. '154/204' — report it exactly as shown, denominator included if present. Keep any leading zeros exactly as printed. Used only to narrow an image search, never saved as-is.",
+              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). For One Piece, the card's full code (set letters + number, e.g. 'OP01-001' or 'ST01-001') is printed together in the BOTTOM-RIGHT corner, right next to the rarity letter code (e.g. 'OP01-121 SEC') — report just the number portion after the dash (e.g. '001', '121'), not the set-code prefix (that belongs in the set field below). For Lorcana, it's in the small bottom-left text alongside the set number and language code, in the same 'this card / total in set' format as Pokemon, e.g. '154/204' — report it exactly as shown, denominator included if present. For Riftbound, it's at the bottom of the card as a set-code-plus-number combo followed by a total, e.g. 'OGN-310/298' — report just the number portion (e.g. '310'), not the set-code prefix (that belongs in the set field above) or the total. Keep any leading zeros exactly as printed. Used only to narrow an image search, never saved as-is.",
             },
             rarity: {
               type: "string",
@@ -192,10 +192,21 @@ const DETECT_CARDS_TOOL = {
                 "treatment (Hyperspace, Showcase, Prestige) does NOT change which of the four values above to " +
                 "report — those are a separate treatment layered on top of a card's own base rarity, not a " +
                 "rarity themselves. " +
+                "FOR RIFTBOUND: read BOTH the card's frame style AND the small gem-shaped symbol next to " +
+                "the collector number — report exactly one of: 'Common' (plain bronze frame, round gem), " +
+                "'Uncommon' (silver frame, triangular gem), 'Rare' (gold full-art frame with a foil sheen, " +
+                "square gem), 'Epic' (a more minimal gold frame, foil sheen, pentagonal gem), or 'Showcase' " +
+                "(no colored frame at all — a full-bleed foil card, the chase rarity above Epic). A " +
+                "Showcase card may ALSO be a special Alternate Art/Overnumbered/Signature print, but that " +
+                "doesn't change the rarity value to report — it's still 'Showcase' either way (see the " +
+                "printing/finish field elsewhere for that distinction). If the card is from an unnumbered " +
+                "promotional release rather than a normal numbered set, report 'Promo' instead regardless of " +
+                "frame style. Leave this blank rather than guess if the frame/gem isn't legible. " +
                 "FOR EVERY OTHER GAME: leave this field blank unless an exact rarity tier name is legibly " +
                 "printed on the card itself (e.g. a printed 'Rare'/'Secret Rare' marker) — visual-style-based " +
-                "guessing has only been worked out and verified for Magic, Pokemon, Yu-Gi-Oh, Lorcana, and " +
-                "SWU above (One Piece above reads an exact printed code, not a visual guess); don't extend any of those " +
+                "guessing has only been worked out and verified for Magic, Pokemon, Yu-Gi-Oh, Lorcana, SWU, " +
+                "and Riftbound above (One Piece above instead reads an exact printed code, not a visual " +
+                "guess); don't extend any of those " +
                 "games' rules to a different game's cards. " +
                 "Narrows an image/price search among same-name/same-set prints that differ by rarity, and " +
                 "becomes the item's initial saved Rarity value on this guess (staff can correct it in the " +
@@ -240,12 +251,15 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "bottom-right corner, right next to the rarity letter — report only the number portion after the " +
   "dash (e.g. '001') as the number, and the set-letters portion (e.g. 'OP01') as the set; Lorcana prints " +
   "it in the same bottom-left area in the same number/total-in-set format Pokemon uses (e.g. '154/204') — " +
-  "report it exactly as shown. For set, prefer the specific expansion name over the " +
+  "report it exactly as shown; Riftbound prints a set-code-plus-number-plus-total combo at the bottom " +
+  "(e.g. 'OGN-310/298') — report just the middle number ('310') as the number, and the set-letters " +
+  "prefix ('OGN') as the set. For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
   "be read; One Piece rarely prints an expansion name at all, so use its set-code prefix instead (see " +
   "above); Lorcana never prints an expansion name either, only a bare set number in that same bottom-left " +
-  "text — report that number as the set. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
+  "text — report that number as the set; Riftbound likewise never prints an expansion name, only the " +
+  "short set-letters code described above. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
   "(right edge, just above the rules text): black/white is 'Common' (also basic lands, which have " +
   "no symbol), silver is 'Uncommon', gold is 'Rare', red-orange is 'Mythic Rare', purple is " +
   "'Special' (Time Spiral timeshifted cards only), and a glowing/prismatic mythic symbol is 'Bonus' " +
@@ -302,10 +316,18 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "Showcase, Prestige) doesn't change this value — it's a separate layered treatment, not a rarity. " +
   "Leave it blank for a card that doesn't clearly match one of those four looks (e.g. a suspected " +
   "'Special'-rarity card) rather than guessing, since that fifth tier has no confirmed visual marker. " +
+  "For rarity on a Riftbound card, read BOTH the frame style and the small gem-shaped symbol next to " +
+  "the collector number: plain bronze frame with a round gem is 'Common'; silver frame with a " +
+  "triangular gem is 'Uncommon'; gold full-art frame with foil and a square gem is 'Rare'; a more " +
+  "minimal gold frame with foil and a pentagonal gem is 'Epic'; no colored frame at all (a full-bleed " +
+  "foil card) is 'Showcase', the chase rarity above Epic — a Showcase card that's also a special " +
+  "Alternate Art/Overnumbered/Signature print is still just 'Showcase' for this field, not a different " +
+  "value. An unnumbered promotional card is 'Promo' regardless of frame style. Leave it blank rather " +
+  "than guess if the frame/gem isn't legible. " +
   "For every " +
   "other game, leave rarity blank unless an exact tier name is legibly printed on " +
   "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, Pokemon, " +
-  "Lorcana, and SWU (One Piece instead reads an exact printed code, not a visual guess). " +
+  "Lorcana, SWU, and Riftbound (One Piece instead reads an exact printed code, not a visual guess). " +
   "If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +

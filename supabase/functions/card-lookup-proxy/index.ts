@@ -78,10 +78,11 @@ async function fetchWithRetry(url, delayMs = 500) {
 // print. If the hint doesn't match anything (typo, or genuinely no hint),
 // we fall back to the unnarrowed name matches rather than returning empty.
 //
-// numberHint (One Piece only for now — Riftbound/Gundam never pass one, so
-// this is a no-op for them) is the card's own printed collector number —
-// confirmed real card_code format is "<set code>-<number>" (e.g.
-// "OP01-001"), so it's matched against the suffix after the last dash,
+// numberHint (One Piece and Riftbound so far — Gundam's own parity sprint
+// hasn't happened yet, so it never passes one, and this is a no-op for it)
+// is the card's own printed collector number — confirmed real card_code
+// format is "<set code>-<number>" (e.g. "OP01-001", "OGN-310"), so it's
+// matched against the suffix after the last dash,
 // leading zeros ignored (same convention mergeScanDuplicates in
 // cardUtils.js already uses for the same reason: "0451" and "451" are the
 // same printed number). Tried before setHint/rarityHint, same "number is
