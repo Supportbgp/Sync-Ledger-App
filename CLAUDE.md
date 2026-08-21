@@ -1304,17 +1304,17 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
-## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana + SWU done; other games pending)
+## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana + SWU + Riftbound done; Gundam pending)
 
 A new multi-sprint initiative, one sprint per game, bringing every other
 supported game up to the same depth of feature support Pokemon already has
 (curated Rarity/Printing vocab, collector-number disambiguation, search
 reliability hardening, scanner prompt tuning) — confirmed with the user as
 **full parity**, not just "add the dropdowns." Order: Magic first, then
-Yugioh, then One Piece, then Lorcana, then SWU (all done below); the rest
-in an order not yet decided (Sports Singles is excluded — it has no card
-database to integrate against at all, a documented drawback, not an
-oversight).
+Yugioh, then One Piece, then Lorcana, then SWU, then Riftbound (all done
+below); Gundam is last, in an order not otherwise decided (Sports Singles
+is excluded — it has no card database to integrate against at all, a
+documented drawback, not an oversight).
 
 - **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
   confirmed via its type definitions/blog posts, not guessed), then wired
@@ -1730,9 +1730,75 @@ oversight).
     `searchSwu` accepted them; adding SWU's entries to `cardUtils.js` was
     enough to light up the same curated dropdowns every other
     parity-complete game already had.
-- **Remaining games, not yet started**: Riftbound, Gundam — each gets the
-  same treatment (real vocabulary research first, then wiring), one
-  sprint at a time.
+- **Riftbound (Sprint 6) — done.** Real research first (community rarity
+  guides for the frame-style/gem-shape system, since Egman's deckbuilder
+  API itself has no public docs to research against — the shape of its
+  response was already confirmed in an earlier sprint, same as One
+  Piece), then wired through the same places Pokemon/Magic/Yugioh/One
+  Piece/Lorcana/SWU already use:
+  - **Structural finding**: Riftbound's collector code is a THREE-part
+    combo printed at the bottom of the card — set-code, number, and total
+    — e.g. `OGN-310/298` (Origins, card 310, out of 298) — closer to a
+    hybrid of One Piece's set-code-plus-number format and Pokemon's
+    number-plus-total format than either alone. No expansion name is ever
+    printed, matching One Piece/Lorcana's convention, so the Set field's
+    real content is the short set-letters code (`OGN`), not a name.
+  - **A genuine rarity-model contradiction found and resolved, same
+    discipline as SWU's sprint**: some sources describe Riftbound's
+    Alternate Art/Overnumbered/Signature collector versions as their own
+    categories; research confirmed all three are actually sub-flavors
+    that still report `Showcase` as their real `rarity` value, distinguished
+    from each other only by their collector-number notation (an "a"
+    suffix, an unmarked number above the set's total, or an asterisk) —
+    not a separate rarity, and not an independent finish axis either
+    (unlike SWU/Lorcana/Magic). This puts Riftbound in the same
+    rarity-implies-treatment bucket as Yu-Gi-Oh/One Piece, just with the
+    "treatment" being which Showcase print style rather than a foil
+    detail.
+  - `RARITY_OPTIONS_BY_GAME.Riftbound` (`cardUtils.js`): six real,
+    confirmed values — the four functional/pull-structure tiers `Common`/
+    `Uncommon`/`Rare`/`Epic` (each with its own frame style AND gem
+    shape), plus `Showcase` (the chase rarity above Epic, foil-only, no
+    colored frame — full art) and `Promo`.
+  - `PRINTING_OPTIONS_BY_GAME.Riftbound`: `["Normal", "Alternate Art",
+    "Overnumbered", "Signature"]` — per the structural finding above,
+    these three real Showcase-rarity print styles are the genuinely
+    separate axis for this game (not a foil/nonfoil toggle, which rarity
+    already implies), plus the plain `Normal` default every non-Showcase
+    card gets.
+  - **`searchRiftbound` (`cardSearch.js`) gained a `numberHint` param**
+    (previously only `name, setHint, rarityHint`) — the shared `egmanQuery`/
+    `card-lookup-proxy` infrastructure already supported numberHint
+    end-to-end since the One Piece sprint (it was already a documented,
+    inert no-op for Riftbound specifically), so this sprint's wiring work
+    was just passing it through the one missing link: `searchRiftbound`
+    itself. Matches `card_code`'s suffix after the last dash, e.g. `310`
+    from `OGN-310`, same convention as One Piece.
+  - No changes needed to `card-lookup-proxy`, `egmanQuery`, or the
+    `fetchWithRetry` reliability helper — all three were already shared,
+    generic infrastructure covering Riftbound since the One Piece sprint;
+    this game's own sprint only needed the client-side wiring plus the
+    curated vocab and scan-binder-page prompt work below. A narrower scope
+    than One Piece's own sprint, same "structural differences narrow later
+    games' scope" pattern as Yu-Gi-Oh's sprint being narrower than Magic's.
+  - **`scan-binder-page`'s number/set/rarity guidance now branches for
+    Riftbound too** — reads the three-part bottom code directly (number
+    portion only, set-letters prefix separately, no expansion name to
+    fall back to), and rarity from BOTH the frame style and gem shape
+    (bronze+round=Common, silver+triangular=Uncommon, gold full-art
+    foil+square=Rare, minimal gold foil+pentagonal=Epic, no frame at
+    all/full-bleed foil=Showcase, explicitly noting a Showcase card's
+    Alternate Art/Overnumbered/Signature sub-flavor doesn't change the
+    rarity value to report). **Requires redeploying `scan-binder-page`**
+    — schema/prompt changes are server-side.
+  - `EditModal`/`ScannerPanel` needed no changes at all — both already
+    passed `number`/`rarity` generically to every game via
+    `searchCardImage`, which already forwarded `numberHint` through to
+    `searchRiftbound` once that function accepted it; adding Riftbound's
+    entries to `cardUtils.js` was enough to light up the same curated
+    dropdowns every other parity-complete game already had.
+- **Remaining game, not yet started**: Gundam — same treatment (real
+  vocabulary research first, then wiring), completing this initiative.
 
 ## Scanner: merging duplicate physical copies into a quantity
 

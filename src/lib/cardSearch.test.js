@@ -631,6 +631,12 @@ describe('proxy-backed searches (One Piece / Riftbound / Gundam / SWU)', () => {
     expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'swu', query: 'Vader', setHint: 'Spark of Rebellion', rarityHint: 'Legendary', numberHint: '' } });
   });
 
+  it('forwards a numberHint for Riftbound, same as One Piece', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchRiftbound('Sett', 'OGN', '', '310');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'riftbound', query: 'Sett', setHint: 'OGN', rarityHint: '', numberHint: '310' } });
+  });
+
   it('returns an empty array (not an error) when the proxy call fails', async () => {
     invokeMock.mockResolvedValueOnce({ data: null, error: { message: 'network' } });
     const results = await searchOnePiece('Luffy');
@@ -668,6 +674,12 @@ describe('searchCardImage dispatcher', () => {
     await searchCardImage('Lorcana', 'Lilo', '6', '', '154');
     expect(global.fetch.mock.calls[0][0]).toContain('api.lorcast.com');
     expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('Lilo s:6 cn:154');
+  });
+
+  it('dispatches Riftbound to the proxy, forwarding a numberHint', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchCardImage('Riftbound', 'Sett', 'OGN', '', '310');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'riftbound', query: 'Sett', setHint: 'OGN', rarityHint: '', numberHint: '310' } });
   });
 
   it('dispatches One Piece to the proxy with the "onepiece" provider', async () => {

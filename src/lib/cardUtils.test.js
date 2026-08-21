@@ -155,8 +155,15 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(swu.some(o => /hyperspace|showcase|prestige/i.test(o))).toBe(false);
   });
 
+  it('lists the six real Riftbound rarities including Showcase/Promo, excluding Alternate Art/Overnumbered/Signature (sub-flavors of Showcase, not their own rarity)', () => {
+    const riftbound = RARITY_OPTIONS_BY_GAME.Riftbound;
+    expect(riftbound).toEqual(['Common', 'Uncommon', 'Rare', 'Epic', 'Showcase', 'Promo']);
+    expect(new Set(riftbound).size).toBe(riftbound.length);
+    expect(riftbound.some(o => /alternate art|overnumbered|signature/i.test(o))).toBe(false);
+  });
+
   it('has no entry for a game whose rarities have not been researched yet', () => {
-    expect(RARITY_OPTIONS_BY_GAME.Riftbound).toBeUndefined();
+    expect(RARITY_OPTIONS_BY_GAME.Gundam).toBeUndefined();
   });
 });
 
@@ -273,8 +280,12 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
     expect(swu.some(o => /serial|promo|judge|convention/i.test(o))).toBe(false);
   });
 
+  it('offers Normal plus the three real Showcase-rarity print styles for Riftbound — its finish is implied by rarity, not independent', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Riftbound).toEqual(['Normal', 'Alternate Art', 'Overnumbered', 'Signature']);
+  });
+
   it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {
-    expect(PRINTING_OPTIONS_BY_GAME.Riftbound).toBeUndefined();
+    expect(PRINTING_OPTIONS_BY_GAME.Gundam).toBeUndefined();
   });
 });
 

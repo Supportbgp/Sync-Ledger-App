@@ -173,6 +173,21 @@ export const RARITY_OPTIONS_BY_GAME = {
   // genuinely independent finish/treatment axis layered on top of any base
   // rarity, not a rarity tier itself — see PRINTING_OPTIONS_BY_GAME.SWU.
   SWU: ["Common", "Uncommon", "Rare", "Legendary", "Special"],
+  // Riftbound's four functional/pull-structure rarities, each with its own
+  // frame style AND gem shape (confirmed via multiple community rarity
+  // guides): bronze frame + round gem (Common), silver frame + triangular
+  // gem (Uncommon), gold full-art frame with foil + square gem (Rare),
+  // minimalist gold frame with foil + pentagonal gem (Epic). Plus two more
+  // real, confirmed values: `Showcase` — the chase rarity above Epic,
+  // foil-only, no colored frame at all (full art) — and `Promo`. Unlike
+  // SWU/Lorcana/Magic, Riftbound's Alternate Art/Overnumbered/Signature
+  // collector versions are NOT a separate axis from rarity — research
+  // confirmed all three are sub-flavors that still report Showcase as
+  // their own `rarity` value, distinguished from each other only by their
+  // collector-number notation (an "a" suffix, an unmarked number above the
+  // set's total, or an asterisk) — so they belong in
+  // PRINTING_OPTIONS_BY_GAME.Riftbound below instead, not here.
+  Riftbound: ["Common", "Uncommon", "Rare", "Epic", "Showcase", "Promo"],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -264,6 +279,18 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // hatch" call as Pokemon's Poke Ball pattern exclusion and Yu-Gi-Oh's
   // Parallel Rare exclusion above.
   SWU: ["Normal", "Foil", "Hyperspace", "Hyperspace Foil", "Showcase", "Prestige"],
+  // Same rarity-vs-finish split as Yu-Gi-Oh/One Piece, not SWU/Lorcana/
+  // Magic: a Riftbound print's base rarity (Common/Uncommon/Rare/Epic)
+  // already implies its default foil treatment (Common/Uncommon are
+  // plain, Rare/Epic get an inherent foil pattern as part of that rarity's
+  // frame style — confirmed via research, not guessed), so there's no
+  // independent foil/nonfoil toggle to offer. The genuinely separate axis
+  // is instead WHICH of the three real Showcase-rarity print styles a
+  // Showcase card is — Alternate Art / Overnumbered / Signature (see
+  // RARITY_OPTIONS_BY_GAME.Riftbound for why these live here and not as
+  // their own rarity values) — plus a plain "Normal" default for every
+  // non-Showcase card.
+  Riftbound: ["Normal", "Alternate Art", "Overnumbered", "Signature"],
 };
 
 export function normalizeCard(c) {

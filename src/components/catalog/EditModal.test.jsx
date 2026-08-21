@@ -167,8 +167,8 @@ describe('EditModal — Rarity picker', () => {
     expect(screen.getByRole('option', { name: 'Special Illustration Rare' })).toBeInTheDocument();
   });
 
-  it('falls back to a plain free-text field for a game with no curated rarity list (e.g. Riftbound), instead of a select with nothing real to pick', () => {
-    render(<EditModal card={baseCard({ game: 'Riftbound' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+  it('falls back to a plain free-text field for a game with no curated rarity list (e.g. Gundam), instead of a select with nothing real to pick', () => {
+    render(<EditModal card={baseCard({ game: 'Gundam' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByLabelText('Rarity').tagName).toBe('INPUT');
   });
 
@@ -220,8 +220,8 @@ describe('EditModal — Printing/finish picker', () => {
     expect(screen.getByRole('option', { name: 'Reverse Holofoil' })).toBeInTheDocument();
   });
 
-  it('falls back to free text for a game with no curated printing list (e.g. Riftbound)', () => {
-    render(<EditModal card={baseCard({ game: 'Riftbound' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+  it('falls back to free text for a game with no curated printing list (e.g. Gundam)', () => {
+    render(<EditModal card={baseCard({ game: 'Gundam' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByLabelText('Printing / finish').tagName).toBe('INPUT');
   });
 
