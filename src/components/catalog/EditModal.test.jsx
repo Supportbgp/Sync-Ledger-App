@@ -136,6 +136,29 @@ describe('EditModal — image candidate selection', () => {
   });
 });
 
+describe('EditModal — Pricing section listing link', () => {
+  // Yugioh/Lorcana/SWU searches never return a listingUrl (confirmed — see
+  // CLAUDE.md) — a real report found the Pricing section going silent on a
+  // clickable link entirely once basePrice was already set, with only
+  // dead-end text ("worth checking the real listing") and nothing to
+  // actually click.
+  it('shows a direct listing link when sourceUrl is set', () => {
+    render(<EditModal card={baseCard({ basePrice: 40, sourceUrl: 'https://tcg/real-listing', condition: 'NM' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByText('Check live TCGPlayer listing ↗')).toBeInTheDocument();
+    expect(screen.queryByText('Search TCGPlayer manually ↗')).not.toBeInTheDocument();
+  });
+
+  it('falls back to a manual search link when sourceUrl is blank (e.g. Yugioh/Lorcana/SWU today) instead of leaving nothing to click', () => {
+    render(<EditModal card={baseCard({ basePrice: 40, sourceUrl: '', condition: 'NM' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const link = screen.getByText('Search TCGPlayer manually ↗');
+    expect(link.closest('a')).toHaveAttribute(
+      'href',
+      'https://www.tcgplayer.com/search/all/product?q=Charizard%20Base%20Set&view=grid',
+    );
+    expect(screen.queryByText('Check live TCGPlayer listing ↗')).not.toBeInTheDocument();
+  });
+});
+
 describe('EditModal — Rarity picker', () => {
   it('shows Rarity as a dropdown of curated options for a game that has them (Pokemon)', () => {
     render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);

@@ -1571,6 +1571,40 @@ per-line layout instead of a wrap-when-it-fits row.
   the new row grouping, spacing, and the mobile label/one-per-line
   behavior all render as intended.
 
+## Pricing section: manual listing-link fallback
+
+Real report: no clickable TCGPlayer link ever appeared for a Yugioh card
+even once a Market Value was already showing. Confirmed as a real,
+fixable gap, not (only) a data limitation — three providers currently
+never return a `listingUrl`/`sourceUrl` at all:
+
+- **Yugioh** — deliberate (see the per-game parity section above): enabling
+  YGOPRODeck's `tcgplayer_data=yes` mode would unlock a listing URL, but
+  its own docs warn that mode's Set Name/Rarity data can be inaccurate,
+  and accurate Set/Rarity backfill mattered more than the extra link.
+- **Lorcana** — Lorcast's response never includes one; not a deliberate
+  omission, just never wired up.
+- **SWU** — the real API sample confirmed `Name`/`FrontArt`/`Set`/
+  `MarketPrice`/`LowPrice`; no listing/product URL field was present to
+  wire up.
+(Magic/Pokemon/One Piece/Riftbound/Gundam all do have a real one today.)
+
+The actual bug wasn't the missing link itself (that's an accepted,
+documented gap for those three) — it's that **EditModal's and
+ScannerPanel's Pricing sections had no fallback for it**. Once
+`basePrice`/`form.basePrice` is set, the old code only ever rendered the
+"Check live TCGPlayer listing ↗" line `if (sourceUrl)` — with nothing in
+its place when there wasn't one. The $25+ high-value warning right below
+it made this worse: it told staff "worth checking the real current
+listing" but gave them no way to actually do that. Fixed by falling back
+to the same game-agnostic `tcgplayerSearchUrl` manual-search link already
+used elsewhere (image-search-failed, price-search-found-no-price) instead
+of leaving that line blank — the Pricing section's listing line now always
+renders something clickable once a Market Value exists, real link or
+manual-search fallback. The now-redundant "worth checking…" sentence in
+the high-value warning was removed since the link right above it already
+covers that.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
