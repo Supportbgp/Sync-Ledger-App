@@ -532,8 +532,14 @@ describe('proxy-backed searches (One Piece / Riftbound / Gundam / SWU)', () => {
   it('calls card-lookup-proxy with the right provider name and forwards the query/setHint', async () => {
     invokeMock.mockResolvedValueOnce({ data: { results: [{ url: 'https://x/op.jpg', label: 'Luffy' }] }, error: null });
     const results = await searchOnePiece('Luffy', 'OP01');
-    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'onepiece', query: 'Luffy', setHint: 'OP01', rarityHint: '' } });
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'onepiece', query: 'Luffy', setHint: 'OP01', rarityHint: '', numberHint: '' } });
     expect(results).toEqual([{ url: 'https://x/op.jpg', label: 'Luffy' }]);
+  });
+
+  it('forwards a numberHint for One Piece', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchOnePiece('Luffy', 'OP01', '', '001');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'onepiece', query: 'Luffy', setHint: 'OP01', rarityHint: '', numberHint: '001' } });
   });
 
   it.each([
@@ -543,7 +549,7 @@ describe('proxy-backed searches (One Piece / Riftbound / Gundam / SWU)', () => {
   ])('%s dispatches with the matching provider name', async (provider, fn) => {
     invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
     await fn('Some Card');
-    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider, query: 'Some Card', setHint: '', rarityHint: '' } });
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider, query: 'Some Card', setHint: '', rarityHint: '', numberHint: '' } });
   });
 
   it('returns an empty array (not an error) when the proxy call fails', async () => {
@@ -581,6 +587,12 @@ describe('searchCardImage dispatcher', () => {
   it('dispatches One Piece to the proxy with the "onepiece" provider', async () => {
     invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
     await searchCardImage('One Piece', 'Luffy', 'OP01');
-    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'onepiece', query: 'Luffy', setHint: 'OP01', rarityHint: '' } });
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'onepiece', query: 'Luffy', setHint: 'OP01', rarityHint: '', numberHint: '' } });
+  });
+
+  it('forwards a numberHint through to the proxy for One Piece, same as Magic/Pokemon', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchCardImage('One Piece', 'Luffy', 'OP01', '', '001');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'onepiece', query: 'Luffy', setHint: 'OP01', rarityHint: '', numberHint: '001' } });
   });
 });

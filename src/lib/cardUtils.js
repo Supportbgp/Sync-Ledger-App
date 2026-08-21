@@ -119,6 +119,28 @@ export const RARITY_OPTIONS_BY_GAME = {
     "Gold Rare", "Ghost Rare", "Platinum Secret Rare", "Prismatic Secret Rare",
     "Collector's Rare", "Starlight Rare", "Quarter Century Secret Rare",
   ],
+  // Real One Piece Card Game rarity codes, each one actually printed in the
+  // card's bottom-right corner (confirmed via Bandai's own card-list site and
+  // cross-referenced community rarity guides, not guessed): Common (C),
+  // Uncommon (UC), Rare (R), Super Rare (SR), Secret Rare (SEC), Leader (L),
+  // Special Rare (SP), Treasure Rare (TR — English/Chinese/French only,
+  // OP-06 booster sets onward; Japanese releases get a different chase
+  // incentive instead), and Manga Rare (MR — always also a Secret Rare
+  // under the hood, but carries its own distinct printed code and Oda-manga-
+  // panel artwork, same "give it its own entry" call as Pokemon's tiers that
+  // nest inside a broader concept).
+  //
+  // Deliberately excludes "Parallel"/"Alternate Art" — confirmed via research
+  // to be the SAME thing (collectors and TCGPlayer use both names
+  // interchangeably for a card marked with a small star above its rarity
+  // code), and it's an overlay on top of any of the tiers above (a Common,
+  // an SR, even a Leader can get one) rather than a rarity tier itself — see
+  // PRINTING_OPTIONS_BY_GAME["One Piece"] below, same rarity-vs-finish split
+  // as Yu-Gi-Oh's edition field.
+  "One Piece": [
+    "Common", "Uncommon", "Rare", "Super Rare", "Secret Rare",
+    "Leader", "Special Rare", "Treasure Rare", "Manga Rare",
+  ],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -176,6 +198,18 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // own price-guide edition options, not guessed. Evergreen, non-expanding
   // vocabulary — no ball-pattern-style exclusion needed here.
   Yugioh: ["1st Edition", "Unlimited Edition", "Limited Edition"],
+  // Same rarity-vs-finish split as Yu-Gi-Oh above, but the other way around:
+  // a One Piece print's base rarity code (Common/Rare/SR/etc., see
+  // RARITY_OPTIONS_BY_GAME["One Piece"]) already implies its default foil
+  // treatment (Common/Uncommon are non-foil, Rare gets an accent foil,
+  // Super Rare and above are full holo — confirmed via research, not
+  // guessed), so there's no separate foil/nonfoil toggle to offer here.
+  // The genuinely independent axis is instead the star-marked overlay
+  // treatment ("Parallel"/"Alternate Art" — the same thing, confirmed via
+  // research; picking one name to avoid offering duplicate options for one
+  // real value) that swaps in different artwork on top of any base rarity
+  // without changing the card's stats or text.
+  "One Piece": ["Normal", "Alternate Art"],
 };
 
 export function normalizeCard(c) {
