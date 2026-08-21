@@ -432,31 +432,91 @@ export async function searchPokemon(name, setHint, rarityHint, numberHint) {
   return preferRarity(results, rarityHint);
 }
 
-async function ygoQuery(param, value) {
+// Unlike Scryfall/pokemontcg.io, a Yu-Gi-Oh card is ONE database entry
+// covering every printing — reprints don't get a separate card object, they
+// just add another entry to that one card's own `card_sets` array (each
+// with its own set_name/set_code/set_rarity/set_price). So there's no
+// "wrong print returned" problem to fix the way Magic/Pokemon have (a fname
+// search essentially always finds the right card already) — the real
+// disambiguation need here is picking WHICH of that one confirmed card's
+// set_sets entries to surface the price/rarity/set from, not which card.
+// Soft best-effort match, same "never zero out a real result over a
+// mismatched hint" rule as preferRarity — numberHint (the printed set code,
+// e.g. "LOB-005", visible bottom-left on every real card) is the strongest
+// signal since it's essentially a global unique key; setHint/rarityHint are
+// still useful fallbacks when the code wasn't captured/legible.
+function pickYugiohSetEntry(cardSets, setHint, rarityHint, numberHint) {
+  if (!cardSets || !cardSets.length) return null;
+  const safeNumber = numberHint ? String(numberHint).trim().toLowerCase() : '';
+  const safeSet = setHint ? setHint.trim().toLowerCase() : '';
+  const safeRarity = rarityHint ? rarityHint.trim().toLowerCase() : '';
+  if (safeNumber) {
+    const m = cardSets.find(s => (s.set_code || '').toLowerCase().includes(safeNumber));
+    if (m) return m;
+  }
+  if (safeSet) {
+    const m = cardSets.find(s => (s.set_name || '').toLowerCase().includes(safeSet));
+    if (m) return m;
+  }
+  if (safeRarity) {
+    const m = cardSets.find(s => (s.set_rarity || '').toLowerCase().includes(safeRarity));
+    if (m) return m;
+  }
+  return cardSets[0];
+}
+
+// Deliberately stays on YGOPRODeck's own default (internal) card_sets data
+// rather than opting into its `tcgplayer_data=yes` mode — that mode
+// additionally returns set_edition/set_url (which would otherwise be handy
+// for the Printing/finish field and a listingUrl), but YGOPRODeck's own docs
+// explicitly warn TCGplayer's own Set Name/Rarity data "have occasionally
+// made up Rarity names in the past and don't always conform to correct Card
+// Set Names" under that mode. Since Set/Rarity backfill accuracy here
+// matters more than an extra listing link, this sticks with the more
+// reliable default — no listingUrl for Yugioh today (the game-agnostic
+// manual TCGPlayer search link already covers that gap, same as it does
+// for every other provider that lacks one).
+const YUGIOH_RETRY_DELAYS_MS = [500]; // same lighter 1-retry safety net as Scryfall — no confirmed flakiness report for this API either
+async function ygoQuery(param, value, setHint, rarityHint, numberHint, attempt = 0) {
   const res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?${param}=${encodeURIComponent(value)}`);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    if (res.status >= 500 && attempt < YUGIOH_RETRY_DELAYS_MS.length) {
+      await new Promise((r) => setTimeout(r, YUGIOH_RETRY_DELAYS_MS[attempt]));
+      return ygoQuery(param, value, setHint, rarityHint, numberHint, attempt + 1);
+    }
+    // Not confirmed (unlike Scryfall's documented 404, or pokemontcg.io's
+    // live-tested behavior) whether this API reliably uses a distinct
+    // status code for "no results" vs. a real error — rather than guess and
+    // risk misreporting a genuine outage as "no matches," this keeps the
+    // original behavior of treating any other non-ok status as empty.
+    return [];
+  }
   const data = await res.json();
   const cards = data.data || [];
   return cards.slice(0, 4).flatMap(c => {
-    const price = c.card_prices && c.card_prices[0] && c.card_prices[0].tcgplayer_price
-      ? Number(c.card_prices[0].tcgplayer_price) : null;
+    const setEntry = pickYugiohSetEntry(c.card_sets, setHint, rarityHint, numberHint);
+    const price = (setEntry && Number(setEntry.set_price)) ||
+      (c.card_prices && c.card_prices[0] && Number(c.card_prices[0].tcgplayer_price)) || null;
     return (c.card_images || []).slice(0, 2).map(img => ({
       url: img.image_url, label: c.name, price,
+      rarity: (setEntry && setEntry.set_rarity) || '',
+      set: (setEntry && setEntry.set_name) || '',
     }));
   });
 }
 
-export async function searchYugioh(name) {
+export async function searchYugioh(name, setHint, rarityHint, numberHint) {
   // fname is already a fuzzy/substring match server-side; the fallback here
   // is for names with an extra trailing word (misremembered subtitle, etc.)
   // that keeps the full string from matching anything.
-  let results = await ygoQuery('fname', name);
-  if (results.length) return results;
-  const words = name.split(/\s+/);
-  if (words.length > 1) {
-    results = await ygoQuery('fname', words.slice(0, -1).join(' '));
+  let results = await ygoQuery('fname', name, setHint, rarityHint, numberHint);
+  if (!results.length) {
+    const words = name.split(/\s+/);
+    if (words.length > 1) {
+      results = await ygoQuery('fname', words.slice(0, -1).join(' '), setHint, rarityHint, numberHint);
+    }
   }
-  return results;
+  return preferRarity(results, rarityHint);
 }
 
 // One Piece, Riftbound, Gundam, and SWU's card databases either block direct
@@ -544,7 +604,7 @@ export async function searchCardImage(game, name, setHint, rarityHint, numberHin
   if (!name) return [];
   if (game === "Magic") return await searchScryfall(name, setHint, rarityHint, numberHint);
   if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint, numberHint);
-  if (game === "Yugioh") return await searchYugioh(name);
+  if (game === "Yugioh") return await searchYugioh(name, setHint, rarityHint, numberHint);
   if (game === "Lorcana") return await searchLorcana(name);
   if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint);
   if (game === "Riftbound") return await searchRiftbound(name, setHint, rarityHint);

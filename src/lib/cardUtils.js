@@ -104,6 +104,21 @@ export const RARITY_OPTIONS_BY_GAME = {
   // in a real shop's binders that an exact pick beats forcing free text
   // every time one comes in.
   Magic: ["Common", "Uncommon", "Rare", "Mythic Rare", "Special", "Bonus"],
+  // Real Yu-Gi-Oh TCG rarity tiers, confirmed against YGOPRODeck's own
+  // `card_sets[].set_rarity` field (a real sample returned exactly "Secret
+  // Rare"/"Ultra Rare" as Title Case strings — matches what's listed here)
+  // plus cross-referenced community rarity guides for the tiers a single
+  // sample didn't happen to include. Ordered roughly least-to-most-rare.
+  // Deliberately excludes Parallel Rare variants (Normal/Ultra/Super
+  // Parallel Rare, Duel Terminal-exclusive) and region-specific OCG-only
+  // tiers — same "an ever-expanding, niche vocabulary belongs in the
+  // free-text escape hatch, not a hardcoded list" call as Pokemon's Poke
+  // Ball/Master Ball pattern exclusion above.
+  Yugioh: [
+    "Common", "Rare", "Super Rare", "Ultra Rare", "Ultimate Rare", "Secret Rare",
+    "Gold Rare", "Ghost Rare", "Platinum Secret Rare", "Prismatic Secret Rare",
+    "Collector's Rare", "Starlight Rare", "Quarter Century Secret Rare",
+  ],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -149,6 +164,18 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // values, so adding them would just be duplicate vocabulary for the same
   // four real options.
   Magic: ["Nonfoil", "Foil", "Etched", "Glossy"],
+  // Unlike Magic/Pokemon, a Yu-Gi-Oh print's RARITY tier already implies a
+  // specific foil/holo treatment (e.g. Ultra Rare always means holo card
+  // name + art) — there's no independent "foil vs. nonfoil" axis the way
+  // the other two games have. The genuinely separate, real printing/edition
+  // concept for Yu-Gi-Oh is instead 1st Edition vs. Unlimited Edition —
+  // Konami prints every retail product 1st Edition for an initial run, then
+  // switches to Unlimited Edition for later reprints, with a separate
+  // Limited Edition used for certain promos (Sneak Peek/Championship Series
+  // prize cards). Confirmed via Yugipedia's edition pages and TCGPlayer's
+  // own price-guide edition options, not guessed. Evergreen, non-expanding
+  // vocabulary — no ball-pattern-style exclusion needed here.
+  Yugioh: ["1st Edition", "Unlimited Edition", "Limited Edition"],
 };
 
 export function normalizeCard(c) {

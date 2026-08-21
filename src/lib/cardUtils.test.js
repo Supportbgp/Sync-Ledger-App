@@ -123,6 +123,15 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(new Set(magic).size).toBe(magic.length);
   });
 
+  it('lists real Yu-Gi-Oh rarity tiers, no duplicates, excluding niche Parallel Rare variants', () => {
+    const yugioh = RARITY_OPTIONS_BY_GAME.Yugioh;
+    expect(yugioh).toContain('Secret Rare');
+    expect(yugioh).toContain('Ultra Rare');
+    expect(yugioh).toContain('Starlight Rare');
+    expect(new Set(yugioh).size).toBe(yugioh.length);
+    expect(yugioh.some(o => /parallel/i.test(o))).toBe(false);
+  });
+
   it('has no entry for a game whose rarities have not been researched yet', () => {
     expect(RARITY_OPTIONS_BY_GAME['One Piece']).toBeUndefined();
   });
@@ -221,6 +230,10 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
   it('offers the four real Scryfall finish values for Magic, excluding frame/border treatments like Showcase/Extended Art/Borderless (a separate attribute, not a finish)', () => {
     expect(PRINTING_OPTIONS_BY_GAME.Magic).toEqual(['Nonfoil', 'Foil', 'Etched', 'Glossy']);
     expect(PRINTING_OPTIONS_BY_GAME.Magic.some(o => /showcase|extended|borderless|full art/i.test(o))).toBe(false);
+  });
+
+  it('offers the real edition options for Yu-Gi-Oh (its finish is implied by rarity, not independent, so edition is the real printing distinction)', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Yugioh).toEqual(['1st Edition', 'Unlimited Edition', 'Limited Edition']);
   });
 
   it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {

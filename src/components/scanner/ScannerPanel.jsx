@@ -555,7 +555,7 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
           <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
           <input
             type="text" placeholder="Number" className="sf" value={row.number}
-            title="Optional — the printed collector number (e.g. 150, or 280/217). The strongest signal for telling apart same-name/alt-art prints; used to narrow both the initial automatic fill and 'Find another image' below"
+            title="Optional — the printed collector number or set code (e.g. 150, 280/217, or LOB-005). The strongest signal for telling apart same-name/alt-art prints; used to narrow both the initial automatic fill and 'Find another image' below"
             onChange={(e) => onChange({ number: e.target.value })}
           />
           <div className="sf">
