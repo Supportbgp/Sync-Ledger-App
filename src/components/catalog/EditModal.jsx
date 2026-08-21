@@ -584,19 +584,29 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                     </div>
                   </div>
                 </div>
-                {form.sourceUrl && (
-                  <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
+                <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
+                  {form.sourceUrl ? (
                     <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
                       Check live TCGPlayer listing ↗
                     </span>
-                    {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
-                  </div>
-                )}
+                  ) : (
+                    // Some providers (Yugioh, Lorcana, SWU today) never return a
+                    // direct per-print listing link — a manual search still gets
+                    // staff most of the way there instead of leaving them with
+                    // nothing to click once a price is already showing.
+                    <a
+                      href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
+                      style={{ fontWeight: 600, color: 'var(--blue)' }}
+                    >
+                      Search TCGPlayer manually ↗
+                    </a>
+                  )}
+                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
+                </div>
                 {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
                   <div className="status-line err" style={{ marginTop: '8px' }}>
                     Market value above is an estimate (NM reference price × a flat condition %), not real
                     per-condition sales data — on a ${HIGH_VALUE_THRESHOLD}+ card that gap can be real money.
-                    {!form.sourceUrl && " Worth checking the real current listing before pricing it."}
                   </div>
                 )}
               </div>

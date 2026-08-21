@@ -644,10 +644,21 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
                 <button type="button" className="btn ghost small" style={{ marginLeft: '8px' }} onClick={() => onChange({ price: marketValue })}>Use this</button>
               </>
             ) : 'market value —'}
-            {row.listingUrl && (
+            {row.listingUrl ? (
               <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }} onClick={() => window.open(row.listingUrl, '_blank')}>
                 Check live TCGPlayer listing ↗
               </span>
+            ) : (
+              // Some providers (Yugioh, Lorcana, SWU today) never return a
+              // direct per-print listing link — a manual search still gets
+              // staff most of the way there instead of leaving them with
+              // nothing to click once a price is already showing.
+              <a
+                href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }}
+              >
+                Search TCGPlayer manually ↗
+              </a>
             )}
           </div>
         )}
@@ -655,7 +666,6 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
           <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--rust)' }}>
             Market value above is an estimate (NM price × a flat condition %), not real per-condition sales
             data — on a ${HIGH_VALUE_THRESHOLD}+ card that gap can be real money.
-            {!row.listingUrl && " Worth checking the real current listing before pricing it, especially in a batch."}
           </div>
         )}
         {row.showCandidates && row.imageCandidates.length > 0 && (
