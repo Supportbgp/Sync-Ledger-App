@@ -1,13 +1,10 @@
 import { useState } from 'react';
+import { CONDITION_TIERS } from '../lib/cardUtils.js';
 
 // NM is always 100% by definition, not editable — only the four non-NM
-// tiers are store-configurable.
-const FIELDS = [
-  { key: 'LP', label: 'Lightly Played' },
-  { key: 'MP', label: 'Moderately Played' },
-  { key: 'HP', label: 'Heavily Played' },
-  { key: 'DMG', label: 'Damaged' },
-];
+// tiers are store-configurable. Labels come from the same CONDITION_TIERS
+// list the Condition field's dropdown uses, so the two can't drift apart.
+const FIELDS = CONDITION_TIERS.filter(t => t.key !== 'NM').map(t => ({ key: t.key, label: t.name }));
 
 export default function SettingsModal({ multipliers, onClose, onSave }) {
   const [form, setForm] = useState(multipliers);

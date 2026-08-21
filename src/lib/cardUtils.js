@@ -194,6 +194,22 @@ export function timeAgo(ts) {
 // store_settings; this is only the fallback before that loads.
 export const DEFAULT_CONDITION_MULTIPLIERS = { NM: 100, LP: 85, MP: 65, HP: 45, DMG: 25 };
 
+// The five recognized condition tiers with their full display names, in
+// NM-first order — the Condition field's dropdown (EditModal/ScannerPanel)
+// and SettingsModal's editable multiplier rows both read from this one
+// list instead of keeping their own separate copies of the same names.
+// Each full name is already a recognized alias in CONDITION_ALIASES below
+// (e.g. "near mint" → NM), so picking one from the dropdown round-trips
+// through canonicalizeCondition with no changes needed there.
+export const CONDITION_TIERS = [
+  { key: "NM", name: "Near Mint" },
+  { key: "LP", name: "Lightly Played" },
+  { key: "MP", name: "Moderately Played" },
+  { key: "HP", name: "Heavily Played" },
+  { key: "DMG", name: "Damaged" },
+];
+export const CONDITION_OPTIONS = CONDITION_TIERS.map(t => t.name);
+
 const CONDITION_ALIASES = {
   nm: "NM", "near mint": "NM", mint: "NM", m: "NM",
   lp: "LP", "lightly played": "LP", "light play": "LP", "slightly played": "LP", sp: "LP",

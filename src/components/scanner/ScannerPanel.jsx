@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -556,7 +556,18 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
           </div>
         </div>
         <div className="scan-row-line">
-          <input type="text" placeholder="Condition" className="sf" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
+          <div className="sf">
+            <SelectWithCustom
+              options={CONDITION_OPTIONS}
+              value={row.condition}
+              onChange={(v) => onChange({ condition: v })}
+              ariaLabel="Condition"
+              selectPlaceholder="— Condition —"
+              addNewLabel="+ Enter a different condition…"
+              customPlaceholder="Condition"
+              backLabel="← Choose from the list instead"
+            />
+          </div>
           <input type="number" placeholder="Price" step="0.01" className="sf" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
           <span className={`badge confidence-${row.confidence} sf-auto`} title="How confident the scan was about this card" style={{ alignSelf: 'center' }}>
             {row.confidence}

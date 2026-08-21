@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -440,7 +440,19 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               />
             </div>
             <div className="field-row2">
-              <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
+              <div className="field-group">
+                <label>Condition</label>
+                <SelectWithCustom
+                  options={CONDITION_OPTIONS}
+                  value={form.condition}
+                  onChange={(v) => set('condition', v)}
+                  ariaLabel="Condition"
+                  selectPlaceholder="— Select a condition —"
+                  addNewLabel="+ Enter a different condition…"
+                  customPlaceholder="e.g. NM, LP"
+                  backLabel="← Choose from the list instead"
+                />
+              </div>
               <div className="field-group"><label>Printing / finish</label><input type="text" placeholder="e.g. Foil, Normal" value={form.printing} onChange={(e) => set('printing', e.target.value)} /></div>
             </div>
             <div className="field-group">

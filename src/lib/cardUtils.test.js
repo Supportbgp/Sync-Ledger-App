@@ -4,7 +4,7 @@ import {
   channelDefaultsForLocation, isTicketComplete, needsPlatformStatusReset,
   timeAgo, canonicalizeCondition, marketValueForCondition,
   resolveActiveImage, activeImageSrc, SORT_COLUMNS, DEFAULT_CONDITION_MULTIPLIERS,
-  RARITY_OPTIONS_BY_GAME,
+  RARITY_OPTIONS_BY_GAME, CONDITION_TIERS, CONDITION_OPTIONS,
 } from './cardUtils.js';
 
 describe('parseMoney', () => {
@@ -187,6 +187,18 @@ describe('timeAgo', () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     expect(timeAgo(now - 3 * 86400000)).toBe('3d ago');
+  });
+});
+
+describe('CONDITION_TIERS / CONDITION_OPTIONS', () => {
+  it('every option round-trips through canonicalizeCondition onto its own tier key — the Condition dropdown must never offer a name the app itself can\'t recognize', () => {
+    for (const { key, name } of CONDITION_TIERS) {
+      expect(canonicalizeCondition(name)).toBe(key);
+    }
+  });
+
+  it('CONDITION_OPTIONS is just the full names, NM-first', () => {
+    expect(CONDITION_OPTIONS).toEqual(['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']);
   });
 });
 
