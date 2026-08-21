@@ -1512,13 +1512,64 @@ distributions tend to vary."
   queue behavior — has nothing to do with matching a freshly scanned card
   against something already saved in the catalog (a separate feature,
   not built).
-- **`ScanRow` gained a Qty number input** (`ScannerPanel.jsx`, right before
-  Price) — the row data model already had a `qty` field (used verbatim by
-  `handleConfirm`), but there was previously no way to see or edit it in
-  the UI at all; every scanned row silently saved as qty 1 regardless.
-  Needed for the merge feature above to actually be visible/correctable,
-  and as a side effect now also lets staff manually bump qty on a row
-  added via "+ Add missed card" without a merge ever being involved.
+- **`ScanRow` gained a Qty number input** (`ScannerPanel.jsx`) — the row
+  data model already had a `qty` field (used verbatim by `handleConfirm`),
+  but there was previously no way to see or edit it in the UI at all; every
+  scanned row silently saved as qty 1 regardless. Needed for the merge
+  feature above to actually be visible/correctable, and as a side effect
+  now also lets staff manually bump qty on a row added via "+ Add missed
+  card" without a merge ever being involved. (Originally landed tucked into
+  the second field row next to Price — see the layout pass right below for
+  where it actually ended up.)
+
+## Scanner review row layout pass
+
+A follow-up UX pass on `ScanRow` (`ScannerPanel.jsx`) — regrouped the
+fields into a clearer order and gave mobile its own dedicated one-field-
+per-line layout instead of a wrap-when-it-fits row.
+
+- **Two rows, deliberately regrouped**: row 1 is now Qty/Card name/Game/
+  Set/Number (Qty moved next to the thumbnail, first in the row, instead
+  of buried in the middle of row 2 next to Price where it was easy to miss
+  after the qty-merge feature above started auto-filling it); row 2 is
+  Rarity/Printing/Condition/Price, with the confidence badge and Remove
+  button kept together at the end. Reads roughly as "what card is this"
+  (row 1) then "what specific copy/condition is this" (row 2).
+- **`.scan-field`**: each field is now a label+input pair (`.scan-field` /
+  `.scan-field-label`), mirroring EditModal's `.field-group` — but the
+  label stays hidden on desktop (`display: none`) where this queue is
+  deliberately dense and a placeholder already identifies a blank field.
+  It only renders on mobile, under the existing shared 640px breakpoint.
+  `.sf`/`.sf-wide`/`.sf-auto` (the old flex-basis classes, applied straight
+  to each input/select) are replaced by `.sf`/`.sf-wide`/`.sf-qty` applied
+  to the new `.scan-field` wrapper instead, so the label can live alongside
+  the input it describes.
+  - **`.scan-row-meta`**: the confidence badge + Remove button are grouped
+    into their own wrapper, explicitly kept OUT of the one-field-per-line
+    treatment below — they're row-level metadata/actions, not something
+    staff type into, so stacking them the same way as a text field would
+    just add scroll height for no clarity benefit.
+- **Mobile: one field per line, not wrap-when-it-fits.** The previous
+  mobile behavior (`.scan-row-line { flex-wrap: wrap }`, each field
+  `flex: 1 1 120px`) could still pack 2-3 narrow fields onto the same
+  visual line if they happened to fit — real feedback found this cramped
+  and uncomfortable to type into, especially once a field had real text in
+  it rather than empty placeholder space to judge by. `.scan-row-line`
+  becomes `flex-direction: column` on mobile instead, every `.scan-field`
+  goes full-width, and its label becomes visible (`display: block`) so a
+  long vertical stack of otherwise-identical-looking inputs stays
+  identifiable — the same reasoning EditModal's always-visible field
+  labels already rely on.
+- **Verification**: this queue only ever renders after a real scan (a live
+  Anthropic API call this sandbox has no network path to — see the
+  existing "Manual QA note"), so it was checked the same throwaway-harness
+  way documented elsewhere in this file: a temporary `devtest.html`/
+  `src/devtest.jsx` rendering `ScanRow` directly with mock row data (a
+  brief `export` added to `ScanRow` to reach it, reverted immediately
+  after) under `UIProvider`, screenshotted via Playwright at a desktop and
+  a mobile (390px) viewport, then deleted before committing — confirmed
+  the new row grouping, spacing, and the mobile label/one-per-line
+  behavior all render as intended.
 
 ## Testing
 

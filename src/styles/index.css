@@ -1331,34 +1331,60 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
 
     .scan-row-line {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
     }
 
-    .scan-row-line input,
-    .scan-row-line select {
+    /* Each field is a label+input pair (the label mirrors EditModal's
+       .field-group, but stays hidden on desktop — this queue is
+       deliberately dense, and a placeholder already identifies a blank
+       field there). Shown on mobile below, where a placeholder-only field
+       becomes indistinguishable from its neighbors the moment it's filled
+       in and the queue stacks one field per line. */
+    .scan-field {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .scan-field input,
+    .scan-field select {
       min-width: 0;
       width: 100%;
     }
 
-    /* Flex-basis classes for scan-row-line's children — kept as real
+    .scan-field-label {
+      display: none;
+    }
+
+    /* Flex-basis classes for scan-row-line's fields — kept as real
        classes (not inline styles) specifically so the mobile media query
        below can override them. An inline style="" attribute would win
        over any external stylesheet rule, breakpoint or not. */
-    .scan-row-line .sf-wide {
-      flex: 2;
+    .scan-row-line .scan-field.sf-wide {
+      flex: 2.5;
     }
 
-    .scan-row-line .sf {
+    .scan-row-line .scan-field.sf {
       flex: 1;
     }
 
-    .scan-row-line .sf-auto {
+    .scan-row-line .scan-field.sf-qty {
+      flex: 0 0 60px;
+    }
+
+    /* Confidence badge + remove button — row-level metadata/actions, not a
+       field to fill in, so this stays a plain side-by-side pair rather than
+       following the one-field-per-line treatment above (mobile included). */
+    .scan-row-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       flex: 0 0 auto;
     }
 
@@ -1562,14 +1588,35 @@
         align-self: flex-start;
       }
 
+      /* One field per line on mobile, matching EditModal's stacked
+         .field-group layout — real-phone feedback found the previous
+         wrap-when-it-fits behavior (multiple narrow fields still sharing a
+         visual line) cramped and uncomfortable to type into. .scan-row-meta
+         (confidence badge + remove button) is a plain sibling here, not a
+         .scan-field, so it stretches full-width too but keeps its own
+         side-by-side pair instead of also splitting across two lines. */
       .scan-row-line {
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: stretch;
       }
 
-      .scan-row-line .sf-wide,
-      .scan-row-line .sf {
-        flex: 1 1 120px;
-        width: auto;
+      .scan-row-line .scan-field {
+        flex: none;
+        width: 100%;
+      }
+
+      .scan-field-label {
+        display: block;
+        font-size: 10.5px;
+        font-family: 'IBM Plex Mono', monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--ink-soft);
+        margin-bottom: 3px;
+      }
+
+      .scan-row-meta {
+        justify-content: space-between;
       }
 
       /* Real-phone testing found every button on mobile reading as too small
