@@ -4,6 +4,7 @@ import {
   channelDefaultsForLocation, isTicketComplete, needsPlatformStatusReset,
   timeAgo, canonicalizeCondition, marketValueForCondition,
   resolveActiveImage, activeImageSrc, SORT_COLUMNS, DEFAULT_CONDITION_MULTIPLIERS,
+  RARITY_OPTIONS_BY_GAME,
 } from './cardUtils.js';
 
 describe('parseMoney', () => {
@@ -103,6 +104,20 @@ describe('GAME_TAG_CLASS', () => {
   it('gives every game its own distinct tag class — no two games share a color', () => {
     const values = Object.values(GAME_TAG_CLASS);
     expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe('RARITY_OPTIONS_BY_GAME', () => {
+  it('lists real Pokemon rarity strings for both the modern and older eras, no duplicates', () => {
+    const pokemon = RARITY_OPTIONS_BY_GAME.Pokemon;
+    expect(pokemon).toContain('Illustration Rare');
+    expect(pokemon).toContain('Special Illustration Rare');
+    expect(pokemon).toContain('Rare Secret');
+    expect(new Set(pokemon).size).toBe(pokemon.length);
+  });
+
+  it('has no entry for a game whose rarities have not been researched yet', () => {
+    expect(RARITY_OPTIONS_BY_GAME.Magic).toBeUndefined();
   });
 });
 

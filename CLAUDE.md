@@ -418,6 +418,405 @@ Everything else found:
     just switched to, even though the small preview itself updated
     correctly on the next render. Both toggle buttons now call
     `e.stopPropagation()`.
+- **Pokemon set/rarity recognition was poor for alt-art/high-rarity cards**
+  (e.g. a Special Illustration Rare getting "Scarlet & Violet" as its set —
+  too vague to be useful — and "Pokemon EX" reported as a *rarity*, which
+  isn't a real one). Root-caused to two schema/prompt gaps, not a vision
+  capability limit: (1) the `rarity` field's description never distinguished
+  a print's actual rarity tier from a Pokemon card's *subtype* printed in
+  its name area (ex/GX/V/VMAX/VSTAR) — the model was doing exactly what an
+  ambiguous instruction invited, reporting the subtype it could clearly see
+  as if it were the rarity; (2) `set` had no guidance to prefer the specific
+  expansion name over the general era/block, so it defaulted to the vaguer,
+  easier-to-infer-from-styling answer. Fixed by rewriting both field
+  descriptions with explicit anti-examples and real rarity-ladder terms
+  (Double Rare/Illustration Rare/Special Illustration Rare/Hyper Rare,
+  alongside older Rare Holo/Rare Secret), reinforced in `PROMPT_TEXT` too.
+  Also added a new `number` field (the printed collector number, e.g.
+  "280/217") — previously never captured at all, despite being the
+  strongest disambiguator a print has among many same-name/alt-art
+  versions. `searchPokemon` (`cardSearch.js`) now tries `name+set+number`,
+  then `name+number` *before* falling back to `name+set` — number is
+  deliberately given priority over set in the fallback ladder because set
+  is the less reliable of the two signals per the above, so a set guess
+  that's still just the vague era name shouldn't block a number-based
+  match. **Requires redeploying `scan-binder-page`** (schema/prompt
+  changes are server-side); `number` is threaded through `ScannerPanel` the
+  same transient, never-saved way `rarity` already was — a plain editable
+  field next to Rarity in the review row, used only to narrow the search.
+  Scoped to Pokemon only for now, per an explicit decision to prove the
+  approach on the game with the worst symptoms before generalizing the
+  same rarity/set-description discipline to the other games.
+- **Rarity detection (tier 2) now leans on visual border/frame treatment,
+  not fine-print reading** — real testing of the tier-1 fix above (schema/
+  prompt wording only) still found the model regularly failing to fill in
+  Rarity at all, and separately misreading the specific Set on some cards
+  (e.g. an XY-era Zapdos ex reported as "XY Evolutions" instead of the
+  correct "XY — Phantom Forces"). Root cause: tier 1 only fixes the
+  model's *instructions* for what counts as a rarity vs. a subtype — it
+  doesn't help the model actually *see* a rarity symbol or set icon that's
+  printed too small/blurry to read in an ordinary binder-page photo,
+  which is a real, separate limitation. Rather than a second zoom/crop
+  pass on that same tiny text (still fragile against any photo that isn't
+  perfectly sharp), the `rarity` field's description was rewritten to
+  judge PRIMARILY from the card's overall visual layout — a much bigger,
+  more robust signal than reading small print, and a case where Claude's
+  vision is far more reliable at holistic style recognition than
+  fine-grained OCR under imperfect photo conditions. Researched (not
+  guessed) via `pokemon-tcg-data` on GitHub — the actual open-source
+  dataset pokemontcg.io serves, fetched directly (`curl` on
+  `raw.githubusercontent.com`, not blocked here unlike most other TCG
+  sites) and inspected for real rarity values across a modern set
+  (`sv1.json`, Scarlet & Violet base) and an older one (`xy4.json`,
+  Phantom Forces — the same set as the real Zapdos ex report). This
+  caught and corrected a wrong first guess (this doc originally said
+  Illustration Rare keeps "a colored info box" unlike Special Illustration
+  Rare — false; both are fully borderless, the real difference is an
+  added glitter-foil layer on SIR) before it shipped. Confirmed real
+  values, by era — the field now asks for one of these exact strings
+  (matching what `preferRarity`'s substring search actually matches
+  against), not a free-text description:
+  **Modern (2023+, lowercase "ex")**: `Double Rare` = normal small-boxed
+  frame, all-over foil, for an ex Pokemon. `Illustration Rare` = full-bleed
+  edge-to-edge art, holo border line, no ex suffix. `Ultra Rare` = same
+  full-bleed treatment, ex suffix. `Special Illustration Rare` = same
+  full-bleed art plus an extra glitter-foil layer. `Hyper Rare` = entire
+  border/background gold-toned.
+  **Older (2012-2022, uppercase "-EX"/"-GX"/"V")**: `Rare Holo` = normal
+  frame, foil over the art only, no suffix. `Rare Holo EX`/`Rare Holo GX`/
+  `Rare Holo V` = normal frame but the art breaks past its border, for an
+  EX/GX/V Pokemon. `Rare Ultra` = full art, a colored text bar remains.
+  `Rare Secret` = same full art plus a gold border, and/or a collector
+  number past the set's listed total.
+  Only the plain `Common`/`Uncommon`/`Rare` tiers still require reading an
+  actual tiny rarity symbol, and the field stays blank rather than
+  guessing if that's not legible — same never-guess discipline as before,
+  just with a much higher chance of correctly identifying the higher (and
+  more valuable, more disambiguation-critical) tiers. No schema change —
+  same `rarity` field, so no client-side code changes needed, only the
+  Edge Function's field description/`PROMPT_TEXT`. Doesn't address wrong
+  Set guesses directly (border style doesn't tell you *which* expansion a
+  card is from) — that failure mode instead relies on the existing
+  number-before-set fallback priority in `searchPokemon` for resilience: a
+  correctly-read collector number still finds the right card even when Set
+  is guessed wrong, provided the number itself was legible.
+  **Requires redeploying `scan-binder-page`** again (prompt-only change,
+  no schema/version bump needed on the client side).
+- **Mega Evolution era rarities added** (`Mega Attack Rare`, `Mega Hyper
+  Rare`) — researched the same way as the rest of this section, against a
+  real sample (`me1.json`/Mega Evolution base set and `me2pt5.json`/
+  Ascended Heroes, both from `pokemon-tcg-data`) rather than assumed from
+  the name alone. `Mega Hyper Rare` replaces plain `Hyper Rare` as this
+  era's gold chase-card tier for a `Mega ___ ex` headliner; `Mega Attack
+  Rare` debuted specifically with Ascended Heroes and — unlike every other
+  visual-style rule above — isn't about border/art-bleed extent at all:
+  its real tell is the attack name itself being printed in Japanese
+  katakana instead of English, even on an otherwise-English card, which
+  the prompt now checks for explicitly on any `Mega ___ ex` Pokemon.
+  Also found and fixed a real data quirk while verifying: pokemontcg.io's
+  actual API value for Mega Attack Rare is `MEGA_ATTACK_RARE` (all-caps,
+  underscored) — inconsistent with every other rarity string in the same
+  set, which are normal Title Case. Rather than special-case that one
+  value, `preferRarity`'s matching (`cardSearch.js`) now normalizes
+  underscores/hyphens to spaces before comparing, so the model's Title
+  Case guess still connects to the real data regardless of this kind of
+  formatting inconsistency, for this or any future rarity.
+- **ScannerPanel's post-scan auto-fill silently failing, then working on
+  manual retry** — also surfaced by the same round of real testing above,
+  and a separate root cause from the two rarity/set issues above: an
+  unbounded parallel search burst right after a scan (see the
+  `runWithConcurrency` concurrency-cap note further down, under Market
+  Value/pokemontcg.io reliability) was the actual culprit, not a
+  search-logic bug.
+- **Rarity field gained a `<datalist>` of real suggestions for Pokemon**
+  (`RARITY_OPTIONS_BY_GAME` in `cardUtils.js`, the same researched rarity
+  strings from the tier-2 fix above) in both `EditModal.jsx` and
+  `ScannerPanel.jsx`'s `ScanRow` — still a plain text `<input>`, so staff
+  can type any value, but now with a dropdown of real options to pick
+  from instead of needing to remember/spell the exact rarity name. Games
+  with no entry in `RARITY_OPTIONS_BY_GAME` (everything except Pokemon,
+  for now) just get no suggestions, same free-text behavior as before —
+  to be filled in "when the time comes" for each other game, matching the
+  Pokemon-first staged rollout elsewhere in this doc. `ScannerPanel`'s
+  `<datalist>` id is keyed per-row (`rarity-options-${row.id}`) since a
+  single scan can review several cards — and therefore several `ScanRow`s
+  — at once; a shared static id would collide.
+  - **Found a real accessibility gap while wiring this up**: an `<input
+    list="...">` gets an implicit ARIA `combobox` role per the HTML-ARIA
+    mapping spec — same as a `<select>` — which shifted the position that
+    `EditModal.test.jsx`'s `getAllByRole('combobox')[1]` hack depended on
+    to find `LocationPicker`'s `<select>` (it had no accessible name of
+    its own; its `<label>` was a visual sibling only, never wired via
+    `htmlFor`). Fixed at the actual root cause rather than dodging the
+    datalist pattern: `LocationPicker` now takes an `ariaLabel` prop
+    (passed as each caller's own visible label text — "Binder / case /
+    collection" in `EditModal`, "...for this page" in `ScannerPanel`),
+    and the test now finds it via `getByLabelText` instead of a
+    position-dependent index that any future added form control could
+    just as easily have broken again.
+- **Scanner post-scan auto-fill hardened further against overloading
+  pokemontcg.io** (on top of the `runWithConcurrency` cap above), after
+  the same round of real-phone testing that surfaced the concurrency and
+  rarity/set issues above:
+  - **Self-imposed request pacing**: the batch auto-fill in
+    `ScannerPanel.handleScan` now staggers the first wave of requests
+    (`Math.min(i, 2) * 220ms` before each row's search starts) instead of
+    firing the initial concurrency-capped batch in the same instant — a
+    deliberately conservative pace meant to stay under whatever limit the
+    API enforces, rather than finding it the hard way via 5xx responses.
+  - **Query de-duplication cache** (`pokemonQueryCache` in `cardSearch.js`,
+    module-level, keyed on the exact query string): a binder page with
+    several copies of the same card (bulk commons especially) previously
+    fired one full search per copy — now the first search's promise is
+    cached and reused for any identical query, whether still in-flight or
+    already resolved, collapsing N duplicate requests into one for the
+    rest of the session. Cleared on failure so a transient error doesn't
+    get stuck cached; a successful result is safe to reuse indefinitely
+    since a print's data doesn't change mid-session. Test-only
+    `__resetPokemonQueryCacheForTests()` clears it between test cases so
+    two tests reusing the same query string (e.g. two 5xx-retry tests
+    both searching "Charizard") don't interfere with each other.
+  - **Progress UI to mask the added latency**: a `fillProgress` counter
+    ("Looking up images & prices — X of Y done…", reusing the existing
+    `.status-line`/`.spinner` styling) shows while the batch runs, each
+    `.scan-row` fades/slides in once on its first mount via a staggered
+    `scanRowIn` CSS animation (`prefers-reduced-motion` respected) so the
+    queue visibly populates card-by-card, and once every row settles the
+    view scrolls smoothly back to the top of the review queue — covers
+    the pacing/dedup changes with something that reads as intentional
+    rather than makes scanning feel slower.
+  - **Post-batch "needs review" nudge**: once the auto-fill batch settles,
+    a toast reports how many rows ended up with no image found (tallied in
+    a plain closure variable inside the `runWithConcurrency` callback, not
+    read back off `rows` state — the `.then()` fires the instant every
+    worker resolves, which can outrace React actually applying the last
+    `setRows` calls). A blank thumbnail is easy to miss in a long list, and
+    jumping straight into mass-retrying "Find another image" clicks would
+    recreate the exact request burst the pacing above exists to avoid — one
+    nudge is more useful than staff discovering blanks by scrolling.
+- **Real-phone scan accuracy findings, round 2** — a 9-card real binder page
+  test surfaced three more distinct issues beyond the rarity/set/number work
+  above, each with a different fix:
+  - **"Rare Ultra" (older era) and "Ultra Rare" (modern era) were getting
+    swapped** — same two words, opposite order, for the visually-identical
+    full-art "ex"/EX/GX/V treatment in different eras; an easy thing for the
+    model to transpose. Both the `rarity` field's schema description and
+    `PROMPT_TEXT` now call this out explicitly with a CAUTION note at the
+    exact point each term is defined, telling the model to re-check word
+    order before answering either one.
+  - **Detection was noticeably non-deterministic** — the same 9-card photo
+    scanned anywhere from 3 to 7 detected cards across reruns. Tried pinning
+    `temperature: 0` on the Anthropic call to cut down that variance (this
+    is forced tool-use structured extraction, not creative writing), but a
+    real scan attempt came back with `"temperature" is deprecated for this
+    model` — this model rejects the parameter outright rather than
+    ignoring/clamping it, so it can't be set at all here. Reverted; this
+    specific variance is unaddressed for now.
+  - **"Find market price"/"Find another image" failed on every input
+    combination for "Lillie's Clefairy ex"** specifically — first suspected
+    to be the apostrophe in the name (fixed via `sanitizeForPokemonQuery`
+    stripping it, same as its other special characters), but real-world
+    retesting after that fix showed the client correctly sending the
+    sanitized query and *still* hitting a 500. The apostrophe fix was
+    real but not the actual cause here — see the fallback-ladder bug
+    below, which is.
+  **Requires redeploying `scan-binder-page`** (schema description + prompt
+  + temperature are all server-side).
+- **`searchPokemon`'s fallback ladder had no per-tier failure isolation** —
+  a real regression from the retry-then-throw change above. Before that
+  change, a failing tier silently returned "zero results" and the ladder
+  moved on to the next, broader tier; after it, a *persistent* 5xx on the
+  first tier tried (most often `name+set+number`, since Set is frequently
+  wrong per the findings above) now threw straight out of `searchPokemon`
+  entirely, aborting the whole search before ever reaching the plain-name
+  tier that would likely have succeeded. This is almost certainly why
+  "search by name only" empirically outperformed hint-narrowed search in
+  real testing, and directly explains the Lillie's Clefairy 500 above (not
+  the apostrophe). Fixed by restructuring the ladder into a list of tiers
+  tried in a loop, wrapped so a thrown error is treated the same as an
+  empty result and falls through to the next tier — except the *last*
+  tier, whose failure still propagates, so a genuinely unreachable API
+  still reports as an error rather than a misleading "no matches."
+- **"Find another image"/"Find stock image"/"Find market price" briefly
+  went name-only, then reverted** — the theory (a wrong hint narrows OUT
+  the correct print) was real, but real-world retesting found it was a net
+  regression: names with multiple genuine variants sharing a first word
+  ("Eevee" vs "Eevee ex") lost their disambiguation entirely, and
+  possessive names ("Lillie's", "Cynthia's") fell through to the broad
+  first-word-prefix tier and matched unrelated cards (e.g. "Cynthia's
+  Gabite" instead of "Cynthia's Garchomp ex") once hints weren't there to
+  short-circuit before reaching it — the same prefix-tier fallback
+  mechanism, just triggered by a missing hint instead of a wrong one.
+  Reverted to using every hint again everywhere (both these manual actions
+  and the initial auto-fill), trusting the fallback-ladder isolation fix
+  above to degrade gracefully on a bad hint instead of removing hints
+  altogether. EditModal's search calls now also pass `number` (via its new
+  scratch field, added for Sprint 1 below) to match ScannerPanel's full
+  hint set.
+- **Possessive names ("Lillie's Clefairy ex", "Cynthia's Garchomp ex") were
+  still broken after the fallback-ladder fix above — real-world retest found
+  the *hint-restored* search now returning the right card mixed in with
+  unrelated Trainer/Supporter cards literally named "Lillie"/"Cynthia".**
+  Root cause was the original apostrophe fix itself: `sanitizeForPokemonQuery`
+  replaced the apostrophe with a space, turning "Lillie's" into two tokens,
+  `"Lillie"` + `"s"`. But Elasticsearch/Lucene's English analyzer (which
+  pokemontcg.io's search is built on) applies a possessive filter that
+  strips a trailing `'s` from a token *during indexing* — the real card is
+  indexed as `["lillie","clefairy","ex"]`, never `["lillie","s","clefairy",
+  "ex"]`. That spurious `"s"` token broke the exact-phrase tier's adjacency
+  match, so every possessive-name search fell through past it to the broad
+  first-word-prefix tier (`name:Lillie*`), which has no way to distinguish
+  the searched-for Pokemon from an unrelated card that merely starts with
+  the same word. Fixed by stripping a trailing `'s`/`’s` outright (no
+  replacement character) instead of space-replacing it, mirroring the
+  indexer's own possessive filter rather than fighting it — confirmed via
+  the Elasticsearch/TCGPlayer pricing docs research below, not guessed.
+  Non-possessive apostrophes still fall through to the general
+  space-replacement rule.
+- **No image candidate was ever showing a Market Value price, even for a
+  card with real, live TCGPlayer listings (reported for Mega Gengar ex)** —
+  traced to `pokemonTcgplayerPrice` only accepting a price variant when
+  `market` or `mid` was populated. Per TCGPlayer's own pricing model
+  (confirmed via their public pricing-settings docs), `market` is an
+  aggregate of *sold* listings over the previous week and `mid` is the
+  median of that same sold set — both come back null whenever a card
+  simply hasn't sold that week, which is common for an expensive,
+  low-volume chase card even while it has real active *listings* (which is
+  what `low`/`high` reflect instead, since those are listing-based, not
+  sale-based). `pokemonTcgplayerPrice` now falls back further, in the same
+  most-reliable-first order (`market` → `mid` → average of `low`+`high` →
+  whichever of `low`/`high` alone is present), so a real listing-based
+  estimate surfaces instead of "no price data" whenever a card just hasn't
+  had a sale recently. Scoped to Pokemon only, matching every other
+  provider-specific fix in this doc — Scryfall/YGOPRODeck/Lorcast/the
+  Egman-backed games each report a single flat price field with no
+  equivalent sold-vs-listed split to fall back through.
+  **Real-world retest after this fix still found Mega Gengar ex with no
+  price** — the low/high fallback is a real, defensible improvement per
+  TCGPlayer's own documented pricing model, but it can only surface a price
+  that exists somewhere in the four sub-fields; it can't be confirmed to be
+  the actual cause of this specific card's gap without inspecting a live
+  response (`c.tcgplayer`), which this sandbox has no network path to (see
+  the Manual QA note above — the same constraint that blocks Supabase also
+  blocks pokemontcg.io directly). Left open pending either a pasted real
+  API response for this print or confirmation of which message/candidate
+  actually shows for it.
+- **Possessive-name search ("Lillie's Clefairy ex", "Cynthia's Garchomp
+  ex") hedges both apostrophe representations instead of committing to one
+  theory** — the earlier fix (stripping a trailing `'s` outright, on the
+  theory pokemontcg.io's index applies an English possessive filter) was
+  real-world retested and still found unreliable. Without a way to inspect
+  the live index from this sandbox, there's no way to confirm that theory
+  over the alternative (the apostrophe needs to stay in the query
+  literally). `searchPokemon` now tries both representations —
+  `sanitizeStrippingPossessive` and the new `sanitizeKeepingApostrophe` —
+  at every precision tier (set+number, number, set, exact phrase, unquoted)
+  before ever falling through to the next, broader tier, so whichever one
+  the index actually needs is found at the highest precision available
+  instead of only being tried once everything else has failed. For a name
+  with no apostrophe at all the two functions produce an identical string,
+  so the common case still fires the same number of requests as before —
+  this only doubles requests for the minority of possessive names, and even
+  then only until one representation succeeds.
+- **The dominant real cause of "search unreliable"/"no results" reports
+  turned out to be pokemontcg.io's public tier being far flakier than a
+  single retry could survive — not the apostrophe handling or the hint
+  logic, which were both real but secondary.** Confirmed by directly
+  querying `api.pokemontcg.io` by hand, repeatedly, for the exact queries
+  this app sends: individual queries needed anywhere from 3 to 12
+  *consecutive* 5xx responses before finally succeeding. The original
+  "retry once" fix (added earlier in this doc) assumed occasional transient
+  failures; against a streak that long, one retry gives up almost
+  immediately, `searchPokemon`'s fallback ladder marks that tier "empty",
+  and the search either lands on a broader/wrong-print tier or exhausts
+  every tier and reports "no matches" — even when the exact right query
+  would have succeeded on its 3rd or 4th try. `pokemonQueryUncached` now
+  retries up to 3 times (4 attempts total) with a short backoff (400ms/1.0s/
+  2.2s) instead of once, still only on a 5xx. This directly explains real
+  reports that looked like search-logic bugs: a manually re-triggered
+  search "just working" on a second attempt (observed for Lillie's Clefairy
+  ex once Set/Number were correctly populated) was likely the API recovering
+  between attempts, not the hints being the deciding factor.
+  - **While diagnosing this, also directly confirmed two "no price data"
+    reports are genuine, permanent data gaps on pokemontcg.io's side, not
+    bugs**: Mega Gengar ex's Ascended Heroes print (`me2pt5-269`, Mega
+    Attack Rare) has a `tcgplayer` object with only a `url`, no `prices` key
+    at all; Lillie's Clefairy ex (`me2pt5-280`) has no `tcgplayer` field
+    whatsoever. `pokemonTcgplayerPrice` already handles both correctly
+    (returns `null`) — there's no client-side fix possible when the API
+    itself never populated pricing for that exact print. A *different*,
+    unrelated print of "Mega Gengar ex" in a different set did have real
+    `market` pricing when found by a plain name-only query, confirming
+    (again) that Pokemon commonly reprints the same name with wildly
+    inconsistent price-data coverage per print — the existing "no per-
+    condition pricing" acceptance in this doc extends to "no pricing at
+    all for some individual prints," not just no per-condition granularity.
+  - Also confirmed via direct query that "Ascended Heroes" alone (name +
+    set, no number) returns 3 distinct real "Mega Gengar ex" prints
+    (#125 Double Rare, #269 Mega Attack Rare, #284 Special Illustration
+    Rare) — validating that Number remains the right disambiguator among
+    same-name-same-set reprints, exactly as this doc has assumed throughout.
+- **Manual TCGPlayer search link as a fallback for the two failure modes
+  above** (search exhausts every retry and finds nothing, or finds a real
+  card with no price data) — `tcgplayerSearchUrl(name, set)` in
+  `cardSearch.js` builds a link straight to TCGPlayer's own search with the
+  name/set already filled in, so staff aren't left with a dead end when the
+  automated lookup can't help. Deliberately game-agnostic: it uses
+  TCGPlayer's general `/search/all/product?q=...` results page (verified
+  live, 2026-08-21 — a real, working URL) rather than a per-game category
+  path like `/search/pokemon/product` — confirming the exact category slug
+  for all 8 games this app supports without a real sample for each risks
+  shipping a wrong one, and "all" is already confirmed correct for every
+  game. Shown in `EditModal` right under the status line whenever
+  `imageStatus.kind === 'err'` (covers both "no matches" and "found it, no
+  price data" — both set that same `kind`), and in `ScannerPanel`'s
+  `ScanRow` next to "Find another image" when `row.imageStatus === 'none'`
+  and next to "Find market price" when no price is available
+  (`row.pendingPrice == null`).
+- **Scanner/EditModal: blocking modal during the post-scan image/price
+  auto-fill, loading state + disabled state on every manual search button,
+  and a "Search by name only" escape hatch** — three real-phone UX reports
+  bundled into one pass since they share the same buttons/state:
+  - The post-scan "Looking up images & prices" fill used to run with the
+    review queue already fully visible and editable underneath it — staff
+    could (and did) start correcting a row's name/set or toggling its
+    image while the batch fill was still writing into that same row,
+    racing it. Replaced the inline status line with a real, non-dismissible
+    modal (`ScannerPanel`, same `.overlay`/`.modal` system as every other
+    modal — z-index 1000 categorically covers and blocks clicks to
+    everything below it) that shows only progress ("X of Y done") until the
+    batch settles, then disappears on its own — no Cancel/backdrop-close,
+    matching this app's explicit-button-only modal convention elsewhere,
+    since there's nothing sensible to do mid-fill besides wait.
+  - "Find stock image"/"Find market price" (`EditModal`) and "Find another
+    image" (`ScannerPanel`'s `ScanRow`) already disabled themselves (or, for
+    ScanRow, now newly disable themselves) while their own search is in
+    flight, but gave no visible feedback beyond that — real testing reported
+    this as "taking too long" with no way to tell if a click had registered.
+    Each button's own label now switches to a spinner + "Searching…" while
+    its specific search runs (`EditModal`'s `activeSearch` state, `ScanRow`'s
+    existing `row.imageStatus === 'searching'`), and every *other* search
+    button for that same item/row is disabled meanwhile too — a double-tap
+    or a click on a sibling button can't fire a second overlapping search.
+  - **"Search by name only", added then removed**: staff reported that a
+    wrong Set/Rarity/Number hint can steer the search onto the wrong print,
+    and once picked, that wrong print's own data backfills those same
+    fields (Sprint 1's behavior), compounding the mistake on any retry
+    using the same hints. Added as an explicit, opt-in per-click escape
+    hatch — a second button next to each "Find stock image"/"Find market
+    price"/"Find another image" that searched by name only for that one
+    attempt, without touching the Set/Rarity/Number field values
+    themselves — deliberately distinct from the earlier blanket
+    name-only-search regression (which removed hints for *every* search
+    and lost real disambiguation entirely). After real use with the
+    retry-budget fix and the manual TCGPlayer link both in place (both
+    below), staff found the extra button redundant and potentially
+    confusing: clearing the Set field yourself and re-clicking the regular
+    search button does the same thing, more transparently (you can see and
+    control exactly what's being ignored, rather than a second button whose
+    behavior has to be remembered). Removed — `runFindImage`/
+    `runFindMarketPrice` (`EditModal`) and `findAnotherImageForRow`
+    (`ScannerPanel`) no longer take a `clean` parameter.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in
@@ -475,6 +874,18 @@ Everything else found:
   on a second try). Doesn't touch Scryfall/Yugioh/Lorcana/the proxy-backed
   games — scoped to the one provider a real report came in for, same
   discipline as the Pokemon-only scan-accuracy work above.
+- **ScannerPanel's post-scan image auto-fill is concurrency-capped, not
+  unbounded** (`runWithConcurrency`, cap 3 — same helper CSV import already
+  used for the same reason) — found via a real-phone test scan where a
+  card's automatic image/price fill silently came up empty, but manually
+  retrying that one row via "Find another image" immediately succeeded.
+  Root cause: `handleScan` used to fire one search per detected card on the
+  page all at once with no cap — a full 9-card page can mean 30+
+  simultaneous requests against pokemontcg.io's key-less tier (each card's
+  search can itself fire up to 4 fallback queries), which is exactly the
+  kind of burst that tier's rate limiting/5xx-proneness (see above) hits
+  hardest. A manual single-row retry doesn't compete with that burst, which
+  is why it worked when the automatic pass didn't.
 - **The condition-multiplier estimate can be materially wrong for
   high-value cards** — a flat percentage is a population average, not any
   specific card's real going rate, and a real example (M Rayquaza EX,
@@ -681,16 +1092,6 @@ Another round of live phone-testing feedback on top of round 2 above.
   this project's never-guess discipline — revisit with either a real device
   repro or the actual file involved.
 
-## Next sprints
-
-- **TCG Player draft-catalog export**: TCG Player's draft catalog accepts a
-  bulk .xlsx/.csv upload for *new* products, not just updates to existing
-  listings — confirmed by hands-on investigation (see Known constraints
-  above), correcting the earlier "manual-entry-aid only" assumption Export
-  was built around. This sprint builds an actual upload-ready export format
-  for TCG Player specifically. Get the real required column layout/format
-  before building — same "never guess an external platform's file format"
-  discipline that's applied everywhere else in this project.
 ## Staff documentation
 
 A standalone, no-login reference page — not an in-app help tab — so staff
@@ -754,6 +1155,48 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   discipline that's applied everywhere else in this project. Once built,
   add a paragraph to `ImportExportSection.jsx` in the staff docs above —
   that's the only doc change it needs.
+- **Scan review UX, staged plan** (agreed after the real-phone round-2
+  findings above) — Sprint 0 (rarity word-order/temperature/apostrophe
+  fixes) and Sprint 1 (backfill from a confirmed candidate) are done;
+  these are next, in order, each independently shippable. Every one
+  applies equally to EditModal and ScannerPanel — this app has no separate
+  "scanner-only" vs. "catalog-only" field behavior, and these shouldn't be
+  the first exception:
+  - ~~1. Backfill Number/Set/Rarity from a confirmed stock-image pick~~ —
+    done. `pokemonQuery`'s candidates now carry structured `set`/`number`
+    (previously only baked into the display label); picking a candidate in
+    either EditModal's `selectCandidate` or ScannerPanel's per-row grid now
+    overwrites the item's Set/Number/Rarity with that print's own values
+    whenever the candidate actually carries them (a no-op for every
+    non-Pokemon game today, which don't populate those fields). EditModal
+    gained a Number scratch field to match ScannerPanel's, which already
+    had one. Stays valuable independent of the name-only-search experiment
+    above (tried and reverted) — confirming a candidate visually and
+    trusting *that print's* real Set/Number/Rarity is a good source of
+    truth for those fields regardless of how the search itself is hinted.
+  2. **Rarity as a real `<select>`, not a `<datalist>`** — the datalist's
+     browser-native filtering hides suggestions once the field already has
+     a non-matching value typed, which isn't the "always show me every
+     option" behavior wanted here. Reuse `LocationPicker`'s existing
+     select-plus-"add new" escape-hatch pattern so an unresearched rarity
+     stays enterable.
+  3. **Condition dropdown**, same pattern, sourced from the tiers already
+     in `DEFAULT_CONDITION_MULTIPLIERS`/Pricing Settings (NM/LP/MP/HP/DMG).
+  4. **Printing/finish ("foil") dropdown** — UI only, no scan-side
+     recognition; explicitly decided not to have the model guess foil type,
+     since it's not reliable enough to be worth it. Manual/optional field,
+     same select-plus-escape-hatch pattern, sourced from a real per-game
+     vocabulary (Pokemon already has one sitting in `cardSearch.js`:
+     `POKEMON_PRICE_VARIANTS` — Normal/Holofoil/Reverse Holofoil/1st
+     Edition Normal/1st Edition Holofoil).
+  **Future enhancements (parked, not scheduled)**: Set-symbol accuracy
+  (near-always blank in real testing — tiny icons buried in busy full-art
+  illustrations; fixing this for real would mean deterministic icon
+  matching against a reference library, a much bigger investment for a
+  field that's already low-yield) and Japanese-print price coverage
+  (pokemontcg.io is English-print-focused; a name search on a Japanese
+  card can surface the English equivalent's image with no matching price
+  data — no verified alternative data source yet, don't guess one).
 
 ## Testing
 
@@ -836,3 +1279,9 @@ without a physical phone every time.
 - Never guess an external platform's exact file format/API capability when
   wrong-ness risk is high — get a real sample or do the research first
   (this burned us once on TCG Player/Collectr bulk-upload assumptions).
+- **Verification cadence while iterating on an open PR**: run `npm test`
+  (unit) and `npm run build` on every push — they're fast. Only run the
+  full `npm run test:e2e` suite (~3 min) right before actually merging, not
+  on every intermediate push — run just the specific `e2e/*.spec.js` file(s)
+  that cover the area touched, if one exists, otherwise skip e2e for that
+  push. Do the full e2e run as the last step before merge regardless.

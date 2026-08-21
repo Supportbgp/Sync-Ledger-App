@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
-import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
+import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
@@ -51,10 +51,16 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const { showConfirm, openLightbox } = useUI();
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
-  // Best-guess only, same as ScannerPanel's row.rarity — never saved to the
-  // catalog, purely used to narrow the image/price search below (see
-  // preferRarity in cardSearch.js: a soft re-sort, never a hard filter).
+  // Best-guess/scratch fields only, same as ScannerPanel's row.rarity/
+  // row.number — never saved to the catalog directly. Narrow Find stock
+  // image/Find market price below, and selectCandidate fills these back in
+  // from a confirmed pick's own real data. If one of these is actively
+  // steering the search wrong, clearing it and re-clicking the search
+  // button does the same thing a separate "search by name only" button
+  // used to (removed — redundant once the retry budget and the manual
+  // TCGPlayer link covered what it was for).
   const [rarity, setRarity] = useState("");
+  const [number, setNumber] = useState("");
 
   // For a brand-new item, follow whatever channels the same binder/case
   // already uses as the staff types the location in — until they manually
@@ -79,7 +85,12 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   // persisting; it's a one-time explainer, not a setting.
   const [imageHelpDismissed, setImageHelpDismissed] = useState(false);
   const [manualUrl, setManualUrl] = useState("");
-  const [searching, setSearching] = useState(false);
+  // Which search action is currently in flight, or null when idle — drives
+  // both the shared disabled-while-searching guard (so a double-click can't
+  // fire two overlapping searches) and which specific button shows a
+  // spinner/"Searching…" label.
+  const [activeSearch, setActiveSearch] = useState(null); // 'image' | 'price' | null
+  const searching = activeSearch !== null;
   const [saving, setSaving] = useState(false);
   // Which action populated `candidates` — determines what clicking one does.
   // "image": sets the stock image (and price, as a bonus, same as before).
@@ -108,15 +119,28 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   // resolveActiveImage in cardUtils.js, just pending-state aware here.
   const src = form.activeImage === 'stock' ? (stockSrc || photoSrc) : (photoSrc || stockSrc);
 
-  async function handleFindImage() {
+  // Uses every hint available — a brief attempt at name-only search turned
+  // out to be a net regression in real testing: names with multiple real
+  // variants sharing a first word (e.g. "Eevee" vs "Eevee ex") lost their
+  // disambiguation, and possessive names fell through to an overly broad
+  // fallback tier and matched unrelated cards once hints weren't there to
+  // short-circuit first. Trusting the fallback-ladder isolation fix (a bad
+  // hint now degrades gracefully instead of aborting) gets the benefit of a
+  // correct hint without that cost. Matches ScannerPanel's "Find another
+  // image", which is the same action. A separate opt-in "search by name
+  // only" escape hatch was tried on top of this and then removed — once the
+  // retry budget and the manual TCGPlayer link (below) covered the cases it
+  // was for, it was redundant, and clearing the Set field yourself before
+  // re-clicking this button does the same thing more transparently.
+  async function runFindImage() {
     const name = form.name.trim();
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
     setImageStatus({ text: "Searching…", kind: "" });
     setCandidates([]);
     setCandidateMode("image");
-    setSearching(true);
+    setActiveSearch("image");
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
       if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
       } else if (!results.length) {
@@ -128,22 +152,23 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     } catch (e) {
       setImageStatus({ text: "Couldn't reach the card image database — it may be down, rate-limited, or blocked by CORS. Try again in a moment, or upload a photo / paste a URL instead.", kind: "err" });
     }
-    setSearching(false);
+    setActiveSearch(null);
   }
 
   // For old cards that already have a correct image (basePrice didn't exist
-  // as a field when they were added) — same search as "Find image", but
-  // picking a candidate below only backfills Market Value, leaving the
-  // existing image and everything else untouched.
-  async function handleFindMarketPrice() {
+  // as a field when they were added) — same search as "Find image" (every
+  // hint available, same reasoning as above), but picking a candidate below
+  // only backfills Market Value, leaving the existing image and everything
+  // else untouched.
+  async function runFindMarketPrice() {
     const name = form.name.trim();
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
     setImageStatus({ text: "Searching…", kind: "" });
     setCandidates([]);
     setCandidateMode("price");
-    setSearching(true);
+    setActiveSearch("price");
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim());
+      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
       if (results === null) {
         setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
       } else if (!results.length) {
@@ -158,10 +183,21 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     } catch (e) {
       setImageStatus({ text: "Couldn't reach the card price database — it may be down or rate-limited. Try again in a moment.", kind: "err" });
     }
-    setSearching(false);
+    setActiveSearch(null);
   }
 
-  function selectCandidate(url, price, listingUrl) {
+  function selectCandidate({ url, price, listingUrl, set: candidateSet, number: candidateNumber, rarity: candidateRarity }) {
+    // Once staff visually confirm a candidate, that print's own Set/Number/
+    // Rarity from pokemontcg.io is more trustworthy than the scan's guess —
+    // back-fill whichever of these the candidate actually carries (only
+    // Pokemon populates them today; every other game's candidates simply
+    // don't have these fields, so this is a no-op there). Applies in both
+    // modes — a price-search pick still means staff have identified the
+    // exact print, same as an image-search pick.
+    if (candidateSet) set('set', candidateSet);
+    if (candidateNumber) setNumber(candidateNumber);
+    if (candidateRarity) setRarity(candidateRarity);
+
     if (candidateMode === "price") {
       // Deliberately leaves both images alone — this path exists specifically
       // so backfilling Market Value on an old card doesn't disturb an
@@ -312,7 +348,9 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 </div>
               )}
               <div className="img-actions">
-                <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
+                <button className="btn secondary small" disabled={searching} onClick={runFindImage}>
+                  {activeSearch === 'image' ? (<><span className="spinner" /> Searching…</>) : 'Find stock image'}
+                </button>
                 <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
                 <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
                 <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
@@ -324,6 +362,13 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
           </div>
           {candidateMode === 'image' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {candidateMode === 'image' && imageStatus.kind === 'err' && (
+            <div style={{ fontSize: '12px', marginTop: '2px' }}>
+              <a href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+                Try searching TCGPlayer manually ↗
+              </a>
+            </div>
+          )}
           {!imageHelpDismissed && (
             <div className="info-banner">
               <span>
@@ -339,7 +384,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
           {candidateMode === 'image' && candidates.length > 0 && (
             <div className="img-candidates">
               {candidates.map((r, i) => (
-                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
+                <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r)} />
               ))}
             </div>
           )}
@@ -371,13 +416,24 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             <div className="field-row2">
               <div className="field-group"><label>Set</label><input type="text" value={form.set} onChange={(e) => set('set', e.target.value)} /></div>
               <div className="field-group">
-                <label>Rarity</label>
+                <label>Number</label>
                 <input
-                  type="text" placeholder="Optional — narrows image/price search" value={rarity}
-                  title="Not saved — same as Set, just narrows the search below for cards that reprint the same name/set at different rarities"
-                  onChange={(e) => setRarity(e.target.value)}
+                  type="text" placeholder="Optional — e.g. 280/217" value={number}
+                  title="Not saved to the catalog — a scratch field. Narrows Find stock image/Find market price below, same as Set/Rarity; picking a confirmed candidate there fills this back in from that print's real data."
+                  onChange={(e) => setNumber(e.target.value)}
                 />
               </div>
+            </div>
+            <div className="field-group">
+              <label>Rarity</label>
+              <input
+                type="text" list="rarity-options" placeholder="Optional — narrows image/price search" value={rarity}
+                title="Not saved to the catalog — a scratch field. Narrows Find stock image/Find market price below for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
+                onChange={(e) => setRarity(e.target.value)}
+              />
+              <datalist id="rarity-options">
+                {(RARITY_OPTIONS_BY_GAME[form.game] || []).map(r => <option key={r} value={r} />)}
+              </datalist>
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Condition</label><input type="text" placeholder="e.g. NM, LP" value={form.condition} onChange={(e) => set('condition', e.target.value)} /></div>
@@ -389,7 +445,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
             <div className="field-group">
               <label>Binder / case / collection</label>
-              <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} />
+              <LocationPicker locations={locations} value={form.location} onChange={(v) => set('location', v)} ariaLabel="Binder / case / collection" />
             </div>
 
             <div className="checkbox-row">
@@ -438,13 +494,22 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               </div>
             </div>
             <div className="field-group">
-              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
+              <button className="btn secondary small" disabled={searching} onClick={runFindMarketPrice}>
+                {activeSearch === 'price' ? (<><span className="spinner" /> Searching…</>) : 'Find market price'}
+              </button>
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
                 Looks up this card's real market price from the name/game/set/rarity above — independent of
                 whichever image is showing, and never changes either photo.
               </div>
             </div>
             {candidateMode === 'price' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+            {candidateMode === 'price' && imageStatus.kind === 'err' && (
+              <div style={{ fontSize: '12px', marginTop: '2px' }}>
+                <a href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+                  Try searching TCGPlayer manually ↗
+                </a>
+              </div>
+            )}
             {candidateMode === 'price' && candidates.length > 0 && (
               <div className="status-line ok" style={{ fontWeight: 500 }}>
                 These are possible prints matching this card's name/set — click the one that matches your physical
@@ -455,7 +520,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             {candidateMode === 'price' && candidates.length > 0 && (
               <div className="img-candidates">
                 {candidates.map((r, i) => (
-                  <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r.url, r.price, r.listingUrl)} />
+                  <img key={i} src={r.url} title={r.label} onClick={() => selectCandidate(r)} />
                 ))}
               </div>
             )}

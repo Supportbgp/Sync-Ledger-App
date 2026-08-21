@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchCardImage } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition } from '../../lib/cardUtils.js';
+import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
+import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
 
 const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
@@ -25,8 +26,12 @@ function detectedToRow(card) {
     // Best-guess only — the vision model isn't always right about it, same
     // as name/game/set, which is why it's a plain editable field here too.
     // Used purely to narrow the image search (see findImageCandidates);
-    // never saved to the catalog.
+    // never saved to the catalog. number is the strongest of the two
+    // signals (a printed collector number narrows a same-name/alt-art card
+    // to essentially one exact print), currently only acted on for Pokemon
+    // — see searchPokemon in cardSearch.js.
     rarity: card.rarity || '',
+    number: card.number || '',
     printing: card.foil ? 'Foil' : '',
     confidence: card.confidence || 'medium',
     qty: 1,
@@ -66,10 +71,10 @@ function detectedToRow(card) {
 // (see searchCardImage) — it re-sorts matches that report their own rarity,
 // it never excludes anything, so a wrong/unrecognized guess can't zero out
 // the results.
-async function findImageCandidates(name, game, set, rarityHint) {
+async function findImageCandidates(name, game, set, rarityHint, numberHint) {
   if (!name) return [];
   try {
-    return (await searchCardImage(game, name, set, rarityHint)) || [];
+    return (await searchCardImage(game, name, set, rarityHint, numberHint)) || [];
   } catch {
     return [];
   }
@@ -86,6 +91,11 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   const [saving, setSaving] = useState(false);
   const [channels, setChannels] = useState({ posChannel: true, tcgplayerChannel: true, collectrChannel: true });
   const [channelsTouched, setChannelsTouched] = useState(false);
+  // Tracks the post-scan image/price auto-fill batch — null once it's done
+  // (or hasn't started). Drives the "Looking up images & prices" progress
+  // line and the scroll-to-top once every row has settled.
+  const [fillProgress, setFillProgress] = useState(null);
+  const reviewRef = useRef(null);
 
   // One scan is one binder page, i.e. one location for the whole batch — so
   // just like the Edit modal, follow whatever channels that binder/case
@@ -146,14 +156,47 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
       // as "pending" — Market Value stays hidden until "Find market price"
       // explicitly reveals it, since that's money-relevant and shouldn't
       // come from an unconfirmed top search result.
-      newRows.forEach(async (row) => {
-        const results = await findImageCandidates(row.name, row.game, row.set, row.rarity);
+      // Capped concurrency, not one request burst per card — a full 9-card
+      // page firing unbounded parallel searches (each up to 4 fallback
+      // queries for Pokemon) can hit 30+ simultaneous requests against
+      // pokemontcg.io's key-less tier, which is prone to rate-limiting/5xx
+      // under exactly that kind of burst (same reasoning as CSV import's
+      // runWithConcurrency cap, reused here). A small staggered start on top
+      // of that cap spreads the very first wave out further still, rather
+      // than firing several requests in the same instant — a self-imposed
+      // pace meant to stay well under whatever limit the API enforces,
+      // instead of finding it the hard way.
+      setFillProgress({ done: 0, total: newRows.length });
+      // Tallied locally, not read back off `rows` state — the .then() below
+      // fires the instant every worker's promise resolves, which can beat
+      // React actually applying the last batch of setRows updates. A plain
+      // closure variable has no such race.
+      let noImageCount = 0;
+      runWithConcurrency(newRows, 3, async (row, i) => {
+        await new Promise((r) => setTimeout(r, Math.min(i, 2) * 220));
+        const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
+        if (!results.length) noImageCount++;
         setRows(prev => prev && prev.map(r => r.id === row.id
           ? {
             ...r, imageUrl: results[0]?.url || '', imageStatus: results.length ? 'found' : 'none', imageCandidates: results,
             pendingPrice: results[0]?.price ?? null, pendingListingUrl: results[0]?.listingUrl || '',
           }
           : r));
+        setFillProgress(p => p && { ...p, done: p.done + 1 });
+      }).then(() => {
+        setFillProgress(null);
+        // Staff may have scrolled to watch a specific row fill in — snap
+        // back to the top of the review queue now that every row has
+        // settled, so they start reviewing from card #1.
+        reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // A blank thumbnail is easy to miss in a long list, and jumping
+        // straight into "Find another image" clicks recreates the exact
+        // burst the pacing above is trying to avoid — a single nudge here
+        // is more useful than staff mass-retrying rows the moment the queue
+        // settles.
+        if (noImageCount > 0) {
+          toast(`${noImageCount} card${noImageCount === 1 ? '' : 's'} need${noImageCount === 1 ? 's' : ''} a manual image search — see the row(s) below with no thumbnail.`, true);
+        }
       });
     } catch (err) {
       toast("Scan failed: " + err.message, true);
@@ -170,11 +213,26 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   // different one — image only. Picking a candidate updates the pending
   // price/listing behind the scenes (see the click handler in ScanRow) but
   // doesn't reveal it; that's "Find market price" below.
+  // Uses every hint available again — a brief attempt at name-only search
+  // (reasoning: a wrong hint can narrow OUT the correct print) turned out to
+  // be a net regression in real testing: names with multiple real variants
+  // sharing a first word (e.g. "Eevee" vs "Eevee ex") lost their
+  // disambiguation entirely, and possessive names ("Lillie's", "Cynthia's")
+  // fell through to the broad first-word-prefix tier and matched unrelated
+  // cards once hints weren't there to short-circuit before reaching it.
+  // Trusting the fallback-ladder isolation fix (a bad hint now degrades
+  // gracefully instead of aborting the search) instead of removing hints
+  // altogether gets the benefit of a correct hint without that cost. A
+  // separate opt-in "search by name only" button was tried on top of this
+  // and then removed — once the retry budget and the manual TCGPlayer link
+  // covered the cases it was for, it was redundant, and clearing the row's
+  // own Set/Rarity/Number fields before re-clicking this button does the
+  // same thing more transparently.
   async function findAnotherImageForRow(id) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity);
+    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
@@ -304,12 +362,35 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         )}
       </div>
 
+      {/* Blocking, non-dismissible — real-phone feedback found staff editing
+          rows (name/set fields, image toggles) while this batch fill was
+          still writing into them, which raced. Sitting in the same
+          .overlay/.modal system as every other modal (z-index 1000)
+          categorically covers the review queue below and swallows clicks
+          to it, so there's nothing to edit until the batch actually settles. */}
+      {fillProgress && (
+        <div className="overlay show">
+          <div className="modal">
+            <div className="modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
+              <span className="spinner" style={{ width: '26px', height: '26px', borderWidth: '3px' }} />
+              <div style={{ fontWeight: 600, marginTop: '14px', fontFamily: "'Space Grotesk', sans-serif" }}>
+                Looking up images &amp; prices…
+              </div>
+              <div style={{ color: 'var(--ink-soft)', fontSize: '13px', marginTop: '6px' }}>
+                {fillProgress.done} of {fillProgress.total} card{fillProgress.total === 1 ? '' : 's'} done.
+                This only runs once per scan — the review queue unlocks as soon as it's finished.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rows && rows.length > 0 && (
-        <div className="card card-pad">
+        <div className="card card-pad" ref={reviewRef}>
           <div className="section-label">Review before adding ({rows.length})</div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Binder / case / collection for this page</label>
-            <LocationPicker locations={locations} value={location} onChange={setLocation} />
+            <LocationPicker locations={locations} value={location} onChange={setLocation} ariaLabel="Binder / case / collection for this page" />
           </div>
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Where do these live?</label>
@@ -332,10 +413,11 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {rows.map(row => (
+            {rows.map((row, i) => (
               <ScanRow
                 key={row.id}
                 row={row}
+                entranceDelay={i}
                 multipliers={multipliers}
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
@@ -360,7 +442,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   );
 }
 
-function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
+function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
   const { openLightbox } = useUI();
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
@@ -372,7 +454,10 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
   const displaySrc = row.activeImage === 'stock' ? (stockSrc || photoSrc) : (photoSrc || stockSrc);
   const canZoom = !!displaySrc;
   return (
-    <div className="scan-row">
+    // Capped so a big page's later rows don't queue behind a silly-long
+    // delay — the fade-in itself is what reads as "one by one," not how
+    // long the last one waits.
+    <div className="scan-row" style={{ animationDelay: `${Math.min(entranceDelay, 10) * 60}ms` }}>
       <div className="scan-row-thumb-col">
         <div
           className="scan-row-thumb"
@@ -404,9 +489,42 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
         ) : photoSrc ? (
           <div style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>real photo</div>
         ) : null}
-        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindAnotherImage}>Find another image</button>
+        {/* Disabled while this row's own search is in flight — guards
+            against a double-tap firing two overlapping searches for the
+            same row, same reasoning as EditModal's shared `searching` gate. */}
+        <button
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+          disabled={row.imageStatus === 'searching'}
+          onClick={onFindAnotherImage}
+        >
+          {row.imageStatus === 'searching' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find another image'}
+        </button>
+        {/* pokemontcg.io/the other providers sometimes genuinely have no
+            match or no price for a given print (see CLAUDE.md) — a direct
+            link to TCGPlayer's own search, pre-filled, gets staff most of
+            the way to the real listing themselves instead of a dead end. */}
+        {row.imageStatus === 'none' && (
+          <a
+            href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
+          >
+            Search TCGPlayer manually ↗
+          </a>
+        )}
         {row.basePrice == null && (
-          <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }} onClick={onFindMarketPrice}>Find market price</button>
+          <button
+            className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
+            disabled={row.imageStatus === 'searching'}
+            onClick={onFindMarketPrice}
+          >Find market price</button>
+        )}
+        {row.basePrice == null && row.pendingPrice == null && (
+          <a
+            href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
+          >
+            Search TCGPlayer manually ↗
+          </a>
         )}
       </div>
 
@@ -418,10 +536,20 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
           </select>
           <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
           <input
-            type="text" placeholder="Rarity" className="sf" value={row.rarity}
-            title="Optional — narrows the image search, same as Set, for cards that reprint the same name/set at different rarities"
+            type="text" placeholder="Number" className="sf" value={row.number}
+            title="Optional — the printed collector number (e.g. 280/217). The strongest signal for telling apart same-name/alt-art prints; used to narrow both the initial automatic fill and 'Find another image' below"
+            onChange={(e) => onChange({ number: e.target.value })}
+          />
+          <input
+            type="text" list={`rarity-options-${row.id}`} placeholder="Rarity" className="sf" value={row.rarity}
+            title="Optional — narrows both the initial automatic fill and 'Find another image' below, same as Set/Number, for cards that reprint the same name/set at different rarities. Pick a suggestion or type your own."
             onChange={(e) => onChange({ rarity: e.target.value })}
           />
+          {/* Per-row id — a page scans several cards at once, so a shared
+              static datalist id would collide across rows. */}
+          <datalist id={`rarity-options-${row.id}`}>
+            {(RARITY_OPTIONS_BY_GAME[row.game] || []).map(r => <option key={r} value={r} />)}
+          </datalist>
         </div>
         <div className="scan-row-line">
           <input type="text" placeholder="Condition" className="sf" value={row.condition} onChange={(e) => onChange({ condition: e.target.value })} />
@@ -472,6 +600,16 @@ function ScanRow({ row, multipliers, onChange, onRemove, onFindAnotherImage, onF
                   // See findAnotherImageForRow — otherwise this pick could
                   // silently stay invisible behind an existing photo crop.
                   activeImage: 'stock',
+                  // Once staff visually confirm a candidate, that print's own
+                  // Set/Number/Rarity from pokemontcg.io is more trustworthy
+                  // than the scan's guess — back-fill whichever of these the
+                  // candidate actually carries (falls back to the scan's own
+                  // value when a candidate doesn't have one, e.g. every
+                  // non-Pokemon game today). Same reasoning as EditModal's
+                  // selectCandidate.
+                  set: c.set || row.set,
+                  number: c.number || row.number,
+                  rarity: c.rarity || row.rarity,
                 })}
               />
             ))}
