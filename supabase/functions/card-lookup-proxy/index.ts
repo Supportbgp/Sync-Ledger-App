@@ -168,23 +168,49 @@ const PROVIDERS = {
   gundam: (query, setHint, rarityHint, numberHint) => egmanQuery('gundam', query, setHint, rarityHint, numberHint),
 
   // api.swu-db.com (not www. — that host 404s, the docs page and the API
-  // itself live on different subdomains). Confirmed CORS-blocked and now
-  // confirmed by a real response sample: array at data.data, fields
-  // Name/FrontArt/Set/MarketPrice/LowPrice (LowPrice unused for now) — no
-  // confirmed rarity field, so rarityHint is deliberately not wired in here,
-  // same discipline as setHint below: no confirmed field/syntax, no guess.
-  // setHint isn't wired in yet — the docs only showed structured `q=`
-  // examples like `set:sor`/`c=3`, not a documented way to combine a name
-  // filter with a set filter, and guessing at that syntax risks breaking
-  // the name search that already works.
-  swu: async (query, _setHint, _rarityHint, _numberHint) => {
-    const res = await fetch(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
+  // itself live on different subdomains). Confirmed CORS-blocked, and the
+  // response shape is confirmed by a real sample: array at data.data,
+  // fields Name/FrontArt/Set/MarketPrice/LowPrice (LowPrice unused for
+  // now). A later research pass confirmed the API's query syntax DOES
+  // support `set:`/`rarity:` (or `s:`/`r:`) filter keywords server-side —
+  // but not whether they can safely combine with a plain fuzzy-text name
+  // search in the same query, and this app's Set field for SWU holds
+  // whatever free text staff typed/the scanner read (almost always a full
+  // expansion name, not the short code — e.g. "sor" — those operators
+  // expect), same mismatch risk as Magic's setHint. Rather than guess at
+  // that combination, setHint/rarityHint are applied here as a soft,
+  // narrow-if-it-helps filter against the ALREADY-fetched name-matched
+  // results' own Set/Rarity fields instead — same egmanQuery-style
+  // narrowing used for the three games above, just without a server-side
+  // query-string filter. `Rarity` (also confirmed real via research, a
+  // separate later finding from the original response sample) is read
+  // defensively as either casing in case the true field name differs
+  // from this app's other confirmed PascalCase fields. numberHint is
+  // accepted for a consistent dispatch shape but deliberately unused — no
+  // confirmed collector-number field name to narrow by.
+  swu: async (query, setHint, rarityHint, _numberHint) => {
+    const res = await fetchWithRetry(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(query)}&pretty=true`);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.data || []).slice(0, 20).map((c) => ({
+    let matches = Array.isArray(data.data) ? data.data : [];
+
+    if (setHint) {
+      const needle = setHint.toLowerCase();
+      const narrowed = matches.filter((c) => (c.Set || "").toLowerCase().includes(needle));
+      if (narrowed.length) matches = narrowed;
+    }
+    if (rarityHint) {
+      const needle = rarityHint.toLowerCase();
+      const narrowed = matches.filter((c) => ((c.Rarity || c.rarity || "")).toLowerCase().includes(needle));
+      if (narrowed.length) matches = narrowed;
+    }
+
+    return matches.slice(0, 20).map((c) => ({
       url: c.FrontArt,
-      label: `${c.Name} (${c.Set || ""})`,
+      label: `${c.Name} (${c.Set || ""}${c.Rarity || c.rarity ? ' · ' + (c.Rarity || c.rarity) : ''})`,
       price: c.MarketPrice ? Number(c.MarketPrice) : null,
+      rarity: c.Rarity || c.rarity || '',
+      set: c.Set || '',
     })).filter((r) => r.url);
   },
 };

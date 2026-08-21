@@ -1304,16 +1304,17 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
-## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana done; other games pending)
+## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana + SWU done; other games pending)
 
 A new multi-sprint initiative, one sprint per game, bringing every other
 supported game up to the same depth of feature support Pokemon already has
 (curated Rarity/Printing vocab, collector-number disambiguation, search
 reliability hardening, scanner prompt tuning) — confirmed with the user as
 **full parity**, not just "add the dropdowns." Order: Magic first, then
-Yugioh, then One Piece, then Lorcana (all done below); the rest in an order
-not yet decided (Sports Singles is excluded — it has no card database to
-integrate against at all, a documented drawback, not an oversight).
+Yugioh, then One Piece, then Lorcana, then SWU (all done below); the rest
+in an order not yet decided (Sports Singles is excluded — it has no card
+database to integrate against at all, a documented drawback, not an
+oversight).
 
 - **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
   confirmed via its type definitions/blog posts, not guessed), then wired
@@ -1650,8 +1651,87 @@ integrate against at all, a documented drawback, not an oversight).
     `searchLorcana` accepted them; adding Lorcana's entries to
     `cardUtils.js` was enough to light up the same curated dropdowns every
     other parity-complete game already had.
-- **Remaining games, not yet started**: SWU, Riftbound, Gundam — each gets
-  the same treatment (real vocabulary research first, then wiring), one
+- **SWU (Sprint 5) — done.** Real research first (community rarity/variant
+  guides, plus a concrete real card listing on swu-db.com showing a Rare
+  card's own Rarity vs. Variants fields — since api.swu-db.com itself is
+  unreachable from this sandbox for a direct sample, same as Lorcast, so
+  this was triangulated across several independent sources rather than
+  taken from any single one), then wired through the same places
+  Pokemon/Magic/Yugioh/One Piece/Lorcana already use:
+  - **Structural finding, and a real contradiction resolved**: some
+    community sources describe SWU's premium foil/art treatments
+    (Hyperspace, Showcase, Prestige) as "separate rarities alongside the
+    standard pull structure," while others describe them as a layer on
+    top of a base rarity. A concrete, specific real example (swu-db.com's
+    own "Hyperspace Disaster" card page: `Rarity: Rare`, with separate
+    `variants` Original/Hyperspace/Foil/Hyperspace Foil) settled it in
+    favor of the independent-axis model — the same rarity-vs-finish split
+    Lorcana/Magic/Pokemon already use, not Yu-Gi-Oh/One Piece's model.
+    Trusted the concrete real-card example over the vaguer blog claim it
+    contradicted, per this doc's "get a real sample" discipline.
+  - `RARITY_OPTIONS_BY_GAME.SWU` (`cardUtils.js`): the four real
+    pull-structure tiers, each with its own gemstone symbol/color at the
+    bottom of the card (grey/clear=Common, green=Uncommon, blue=Rare) —
+    except Legendary, whose symbol is a gold/yellow STAR rather than a
+    gemstone, the one shape break in that pattern. Plus a real fifth
+    value, `Special` — confirmed via a direct quote of the swuapi.com
+    docs describing the actual API's own `rarity` field as accepting it,
+    independently corroborated by community sources describing a
+    distinct Special rarity slot (including on some Leader cards).
+    `Special` deliberately gets NO scan-detection visual guidance below —
+    no confirmed distinguishing symbol/color was found for it the way the
+    other four have one, so guessing at a visual tell would be worse than
+    leaving it for staff to set by hand.
+  - `PRINTING_OPTIONS_BY_GAME.SWU`: the six real, evergreen treatment
+    names — `Normal`/`Foil`/`Hyperspace`/`Hyperspace Foil`/`Showcase`/
+    `Prestige`. Deliberately excludes the promo/distribution-specific
+    variant names also found in research (Serialized, Weekly Play Promo/
+    Foil, Prerelease Promo, Convention Exclusive, Judge Promo) — same
+    "ever-expanding, event-tied vocabulary belongs in the free-text
+    escape hatch" call as Pokemon's Poke Ball pattern and Yu-Gi-Oh's
+    Parallel Rare exclusion.
+  - **`searchSwu`/the `swu` provider in `card-lookup-proxy` gained
+    `rarityHint`/`numberHint`** (previously only `name, setHint`, and
+    setHint itself was never actually used). Research confirmed the
+    API's own query syntax DOES support `set:`/`rarity:` filter keywords
+    server-side — but not whether they can safely combine with a plain
+    fuzzy-text name search in the same query string, and this app's Set
+    field for SWU holds whatever free text staff typed/the scanner read
+    (almost always a full expansion name, not the short code those
+    operators expect) — same mismatch risk that already keeps Magic's
+    setHint unused. Rather than guess at that combination, setHint/
+    rarityHint are instead applied as a soft, narrow-if-it-helps filter
+    against the ALREADY-fetched name-matched results' own `Set`/`Rarity`
+    fields — the same `egmanQuery`-style narrowing the three Egman-backed
+    games use, just without a server-side query-string filter.
+    `numberHint` is accepted for a consistent dispatch shape but stays a
+    deliberate no-op — no confirmed collector-number field name to narrow
+    by, and this app has never guessed a field name outright anywhere
+    else in this file either.
+  - **Reliability**: the `swu` provider's fetch now goes through the same
+    shared `fetchWithRetry` helper added for One Piece/Riftbound/Gundam —
+    a genuine, safe reliability improvement since it only changes
+    behavior on an actual 5xx.
+  - Candidates now carry structured `set`/`rarity` fields (previously
+    only baked into the label) for the same backfill-on-pick every other
+    parity-complete game already has. No `listingUrl` — still no
+    confirmed purchase/listing URL field for this provider (unchanged
+    from the original Sprint 4-era finding); the game-agnostic manual
+    TCGPlayer search link continues to cover this gap, same as Yugioh.
+  - **`scan-binder-page`'s rarity guidance now branches for SWU too** —
+    reads the gemstone/star symbol's color/shape near the collector
+    number, mapping to the four confirmed tiers, explicitly leaving
+    `Special` and any premium-treatment card's underlying rarity
+    unaffected by the treatment itself. **Requires redeploying
+    `scan-binder-page`** — schema/prompt changes are server-side.
+  - `EditModal`/`ScannerPanel` needed no changes at all — both already
+    passed `rarity`/`number` generically to every game via
+    `searchCardImage`, which already forwarded both through once
+    `searchSwu` accepted them; adding SWU's entries to `cardUtils.js` was
+    enough to light up the same curated dropdowns every other
+    parity-complete game already had.
+- **Remaining games, not yet started**: Riftbound, Gundam — each gets the
+  same treatment (real vocabulary research first, then wiring), one
   sprint at a time.
 
 ## Scanner: merging duplicate physical copies into a quantity
