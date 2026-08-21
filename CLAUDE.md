@@ -1212,13 +1212,39 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
      that's already a custom/legacy one — notably including plain "NM"-
      style short codes on existing items, since the dropdown's options are
      the full names, not the codes.
-  4. **Printing/finish ("foil") dropdown** — UI only, no scan-side
-     recognition; explicitly decided not to have the model guess foil type,
-     since it's not reliable enough to be worth it. Manual/optional field,
-     same select-plus-escape-hatch pattern, sourced from a real per-game
-     vocabulary (Pokemon already has one sitting in `cardSearch.js`:
-     `POKEMON_PRICE_VARIANTS` — Normal/Holofoil/Reverse Holofoil/1st
-     Edition Normal/1st Edition Holofoil).
+  ~~4. Printing/finish ("foil") dropdown~~ — done, UI only, no new
+     scan-side recognition. Same `SelectWithCustom` pattern again; new
+     `PRINTING_OPTIONS_BY_GAME` in `cardUtils.js` (Pokemon only, matching
+     `POKEMON_PRICE_VARIANTS`' Normal/Holofoil/Reverse Holofoil/1st Edition
+     Normal/1st Edition Holofoil — confirmed real via live API responses
+     seen this session, not guessed) is the curated list. Two things
+     researched and deliberately left out, to avoid two different kinds of
+     mistake:
+     - **Poke Ball/Master Ball/Love Ball/Friend Ball/Quick Ball/Dusk
+       Ball-style reverse holo patterns** — real, and a genuine printing/
+       finish distinction (same collector number as the plain card, just a
+       different foil treatment): Prismatic Evolutions (Jan 2025)
+       introduced Poke Ball + Master Ball; Ascended Heroes (Jan 2026 — the
+       exact set Mega Gengar ex/Lillie's Clefairy ex are from, above)
+       expanded this to five ball types. Not added as dropdown options
+       because the vocabulary keeps growing with every new set and would
+       need permanent upkeep — staff enter these through the free-text
+       escape hatch instead. Confirmed with the user before implementing,
+       given it's a real trade-off (dropdown completeness vs. maintenance).
+     - **"Shadowless"** — looks like a finish variant but isn't modeled as
+       one on TCGPlayer: it's a separate Set category ("Base Set
+       (Shadowless)"), distinct from "Base Set" itself, not a
+       printing/finish flag on the same card. Belongs in the Set field
+       (already free text) — including it here would have been a real
+       modeling mistake, not just an omission.
+     - Also fixed a related inconsistency found while implementing this:
+       `ScannerPanel`'s `detectedToRow` was still pre-filling `printing`
+       from the scan's own `foil` boolean guess (`card.foil ? 'Foil' :
+       ''`) — a leftover from before this "don't have the model guess
+       foil type" decision was made, and one `ScanRow` had no UI to
+       correct anyway (Printing/finish wasn't shown there at all before
+       this sprint). Now starts blank, client-side only — no Edge Function
+       change, no redeploy needed.
   **Future enhancements (parked, not scheduled)**: Set-symbol accuracy
   (near-always blank in real testing — tiny icons buried in busy full-art
   illustrations; fixing this for real would mean deterministic icon

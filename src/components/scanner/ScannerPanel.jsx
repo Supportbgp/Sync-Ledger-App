@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -33,7 +33,13 @@ function detectedToRow(card) {
     // — see searchPokemon in cardSearch.js.
     rarity: card.rarity || '',
     number: card.number || '',
-    printing: card.foil ? 'Foil' : '',
+    // Deliberately ignores the model's own `foil` guess (still present in
+    // scan-binder-page's detection schema) rather than pre-filling this from
+    // it — Sprint 4 explicitly decided the model's foil guess isn't reliable
+    // enough to build on, and a blank field defaulting into the new
+    // Printing/finish dropdown below reads as "please tell us," while a
+    // pre-filled guess would misleadingly read as already known.
+    printing: '',
     confidence: card.confidence || 'medium',
     qty: 1,
     price: '',
@@ -309,8 +315,8 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         <div className="section-label">Scan a binder page</div>
         <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)', marginBottom: '12px' }}>
           Take or upload a photo of one full binder page. Every card gets identified automatically —
-          review and correct the results below before anything is added to the catalog. Condition and
-          price aren't guessed; fill those in yourself once you have the cards in hand.
+          review and correct the results below before anything is added to the catalog. Condition,
+          printing/finish, and price aren't guessed; fill those in yourself once you have the cards in hand.
         </div>
         <div
           className="drop"
@@ -565,6 +571,19 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
               selectPlaceholder="— Condition —"
               addNewLabel="+ Enter a different condition…"
               customPlaceholder="Condition"
+              backLabel="← Choose from the list instead"
+            />
+          </div>
+          <div className="sf">
+            <SelectWithCustom
+              options={PRINTING_OPTIONS_BY_GAME[row.game] || []}
+              value={row.printing}
+              onChange={(v) => onChange({ printing: v })}
+              ariaLabel="Printing / finish"
+              title="Optional. Special reverse-holo patterns (Poke Ball, Master Ball, etc.) aren't in the list since new ones ship almost every set — use 'Enter a different printing' for those."
+              selectPlaceholder="— Printing —"
+              addNewLabel="+ Enter a different printing…"
+              customPlaceholder="Printing"
               backLabel="← Choose from the list instead"
             />
           </div>

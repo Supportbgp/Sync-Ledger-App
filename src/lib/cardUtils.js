@@ -94,6 +94,31 @@ export const RARITY_OPTIONS_BY_GAME = {
   ],
 };
 
+// Printing/finish field's curated options (EditModal/ScannerPanel) — same
+// select-plus-escape-hatch pattern as Rarity/Condition. These five are real,
+// current TCGPlayer/pokemontcg.io price-variant categories (the same ones
+// POKEMON_PRICE_VARIANTS in cardSearch.js reads price data by — confirmed
+// directly against live API responses this session, not guessed).
+//
+// Deliberately excludes two things found during research specifically to
+// avoid getting this wrong:
+// - Poke Ball/Master Ball/Love Ball/Friend Ball/Quick Ball/Dusk Ball-style
+//   reverse holo patterns. These are real (Prismatic Evolutions introduced
+//   Poke Ball + Master Ball in Jan 2025; Ascended Heroes expanded to five
+//   ball types in Jan 2026) and share the same collector number as the
+//   plain card — a genuine printing/finish distinction, not a different
+//   print. But the vocabulary keeps growing with each new set, so hardcoding
+//   today's list would need manual upkeep forever and go stale the moment
+//   a new set ships. Staff enter these through the free-text escape hatch
+//   instead (explicit call — see CLAUDE.md).
+// - "Shadowless". Looks like a finish variant but isn't one: TCGPlayer
+//   models it as its own separate Set ("Base Set (Shadowless)"), distinct
+//   from "Base Set" — a Set-field distinction, not a Printing/finish one.
+//   Including it here would have been a real modeling mistake.
+export const PRINTING_OPTIONS_BY_GAME = {
+  Pokemon: ["Normal", "Holofoil", "Reverse Holofoil", "1st Edition Normal", "1st Edition Holofoil"],
+};
+
 export function normalizeCard(c) {
   return {
     sku: c.sku || "",

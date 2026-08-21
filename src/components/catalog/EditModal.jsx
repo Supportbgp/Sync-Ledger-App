@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -453,7 +453,20 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                   backLabel="← Choose from the list instead"
                 />
               </div>
-              <div className="field-group"><label>Printing / finish</label><input type="text" placeholder="e.g. Foil, Normal" value={form.printing} onChange={(e) => set('printing', e.target.value)} /></div>
+              <div className="field-group">
+                <label>Printing / finish</label>
+                <SelectWithCustom
+                  options={PRINTING_OPTIONS_BY_GAME[form.game] || []}
+                  value={form.printing}
+                  onChange={(v) => set('printing', v)}
+                  ariaLabel="Printing / finish"
+                  title="Optional. Special reverse-holo patterns (Poke Ball, Master Ball, etc.) aren't in the list since new ones ship almost every set — use 'Enter a different printing' for those."
+                  selectPlaceholder="— Select a printing —"
+                  addNewLabel="+ Enter a different printing…"
+                  customPlaceholder="e.g. Poke Ball Pattern Reverse Holo"
+                  backLabel="← Choose from the list instead"
+                />
+              </div>
             </div>
             <div className="field-group">
               <label>SKU / barcode</label>

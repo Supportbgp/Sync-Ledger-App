@@ -189,6 +189,27 @@ describe('EditModal — Condition picker', () => {
   });
 });
 
+describe('EditModal — Printing/finish picker', () => {
+  it('shows Printing/finish as a dropdown of curated options for a game that has them (Pokemon)', () => {
+    render(<EditModal card={baseCard({ printing: '' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const printing = screen.getByLabelText('Printing / finish');
+    expect(printing.tagName).toBe('SELECT');
+    expect(screen.getByRole('option', { name: 'Reverse Holofoil' })).toBeInTheDocument();
+  });
+
+  it('falls back to free text for a game with no curated printing list (e.g. One Piece)', () => {
+    render(<EditModal card={baseCard({ game: 'One Piece' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByLabelText('Printing / finish').tagName).toBe('INPUT');
+  });
+
+  it('starts in free-text mode for an existing item whose printing isn\'t one of the curated options (e.g. a legacy "Holo" value, or a Poke Ball/Master Ball pattern)', () => {
+    render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const printing = screen.getByLabelText('Printing / finish');
+    expect(printing.tagName).toBe('INPUT');
+    expect(printing.value).toBe('Holo');
+  });
+});
+
 describe('EditModal — per-location channel defaults', () => {
   const catalog = [
     { location: 'Binder A', posChannel: true, tcgplayerChannel: false, collectrChannel: true },

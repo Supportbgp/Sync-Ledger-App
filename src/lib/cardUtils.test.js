@@ -4,7 +4,7 @@ import {
   channelDefaultsForLocation, isTicketComplete, needsPlatformStatusReset,
   timeAgo, canonicalizeCondition, marketValueForCondition,
   resolveActiveImage, activeImageSrc, SORT_COLUMNS, DEFAULT_CONDITION_MULTIPLIERS,
-  RARITY_OPTIONS_BY_GAME, CONDITION_TIERS, CONDITION_OPTIONS,
+  RARITY_OPTIONS_BY_GAME, CONDITION_TIERS, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME,
 } from './cardUtils.js';
 
 describe('parseMoney', () => {
@@ -199,6 +199,21 @@ describe('CONDITION_TIERS / CONDITION_OPTIONS', () => {
 
   it('CONDITION_OPTIONS is just the full names, NM-first', () => {
     expect(CONDITION_OPTIONS).toEqual(['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']);
+  });
+});
+
+describe('PRINTING_OPTIONS_BY_GAME', () => {
+  it('offers the five real, evergreen printing/finish categories for Pokemon, excluding set-specific reverse-holo patterns and Shadowless (a Set distinction, not a finish one)', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Pokemon).toEqual([
+      'Normal', 'Holofoil', 'Reverse Holofoil', '1st Edition Normal', '1st Edition Holofoil',
+    ]);
+    expect(PRINTING_OPTIONS_BY_GAME.Pokemon).not.toContain('Shadowless');
+    expect(PRINTING_OPTIONS_BY_GAME.Pokemon.some(o => /poke ?ball|master ?ball/i.test(o))).toBe(false);
+  });
+
+  it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Magic).toBeUndefined();
+    expect(PRINTING_OPTIONS_BY_GAME['One Piece']).toBeUndefined();
   });
 });
 
