@@ -5,6 +5,7 @@ import {
   timeAgo, canonicalizeCondition, marketValueForCondition,
   resolveActiveImage, activeImageSrc, SORT_COLUMNS, DEFAULT_CONDITION_MULTIPLIERS,
   RARITY_OPTIONS_BY_GAME, CONDITION_TIERS, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME,
+  mergeScanDuplicates,
 } from './cardUtils.js';
 
 describe('parseMoney', () => {
@@ -301,5 +302,67 @@ describe('SORT_COLUMNS', () => {
   it('sorts a null price below every real price', () => {
     expect(SORT_COLUMNS.price({ price: null })).toBe(-Infinity);
     expect(SORT_COLUMNS.price({ price: 5 })).toBe(5);
+  });
+});
+
+describe('mergeScanDuplicates', () => {
+  function row(overrides = {}) {
+    return { id: Math.random(), name: 'The One Ring', game: 'Magic', number: '', position: '', qty: 1, confidence: 'medium', ...overrides };
+  }
+
+  it('merges rows with the same name + collector number into one qty-N row', () => {
+    const rows = [
+      row({ id: 1, number: '0451', position: 'row2-col1' }),
+      row({ id: 2, number: '0451', position: 'row2-col3' }),
+      row({ id: 3, number: '0451', position: 'row3-col1' }),
+    ];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].qty).toBe(3);
+    expect(merged[0].id).toBe(1); // keeps the first occurrence's identity/fields
+    expect(merged[0].position).toBe('row2-col1, row2-col3, row3-col1');
+  });
+
+  it('does NOT merge rows that share a name but have different collector numbers — a real photo case: three visually-identical serialized "The One Ring" cards, each a genuine one-of-one print', () => {
+    const rows = [
+      row({ id: 1, number: '0380' }),
+      row({ id: 2, number: '0246' }),
+      row({ id: 3, number: '0791' }),
+    ];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged).toHaveLength(3);
+    expect(merged.every(r => r.qty === 1)).toBe(true);
+  });
+
+  it('does not merge rows with a blank Number, even if the name matches — nothing confirms they are actually the same print', () => {
+    const rows = [row({ id: 1, number: '' }), row({ id: 2, number: '' })];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('ignores leading zeros when comparing numbers ("0451" and "451" are the same print)', () => {
+    const rows = [row({ id: 1, number: '0451' }), row({ id: 2, number: '451' })];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].qty).toBe(2);
+  });
+
+  it('does not merge across different games even if name + number coincidentally match', () => {
+    const rows = [row({ id: 1, game: 'Magic', number: '1' }), row({ id: 2, game: 'Pokemon', number: '1' })];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('name matching is case/whitespace-insensitive', () => {
+    const rows = [row({ id: 1, name: '  The One Ring  ', number: '451' }), row({ id: 2, name: 'the one ring', number: '451' })];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].qty).toBe(2);
+  });
+
+  it('surfaces the lowest confidence among the merged copies', () => {
+    const rows = [row({ id: 1, number: '451', confidence: 'high' }), row({ id: 2, number: '451', confidence: 'low' })];
+    const merged = mergeScanDuplicates(rows);
+    expect(merged[0].confidence).toBe('low');
   });
 });

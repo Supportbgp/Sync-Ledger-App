@@ -338,3 +338,61 @@ export const SORT_COLUMNS = {
   price: c => c.price === null || c.price === undefined ? -Infinity : c.price,
   updated: c => c.lastUpdated ? new Date(c.lastUpdated).getTime() : 0,
 };
+
+const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
+
+// A binder page commonly holds several physical copies of the exact same
+// print (bulk commons, promos handed out in multiples) — real-world use
+// found the scanner leaving these as N separate qty-1 review rows instead
+// of one qty-N row, which staff then had to notice and merge by hand.
+//
+// Deliberately keyed on Name + collector Number together, not Name alone —
+// confirmed with the user against a real photo of three visually-identical
+// "The One Ring" serialized cards that actually carried three DIFFERENT
+// collector numbers (each a genuine one-of-one print, not three copies of
+// anything) sitting next to three real physical copies of a promo that all
+// shared one number. Merging by name alone would have collapsed the
+// serialized ones together too, which is wrong — a different Number on an
+// otherwise-identical-looking card usually means a genuinely different
+// print, not a duplicate. A row with no Number captured at all is left
+// alone rather than merged on name alone, same "don't guess when getting
+// it wrong is worse than doing nothing" discipline as everywhere else in
+// this file — Number is frequently left blank by the scan (small, blurry
+// text), and guessing two blank-Number rows are duplicates risks silently
+// losing a real second copy of a genuinely different print.
+//
+// Only used for the scanner's own review queue, before anything is saved —
+// this has nothing to do with matching a newly scanned card against
+// something already in the catalog (a separate, unbuilt feature).
+export function mergeScanDuplicates(rows) {
+  const indexByKey = new Map();
+  const merged = [];
+  for (const row of rows) {
+    const name = (row.name || "").trim().toLowerCase();
+    // Leading zeros are an OCR/formatting detail, not a different print —
+    // "0451" and "451" should still be recognized as the same number.
+    const number = (row.number || "").trim().replace(/^0+(?=\d)/, "");
+    const key = name && number ? `${row.game}::${name}::${number}` : null;
+
+    if (key && indexByKey.has(key)) {
+      const i = indexByKey.get(key);
+      const existing = merged[i];
+      merged[i] = {
+        ...existing,
+        qty: (existing.qty || 0) + (row.qty || 1),
+        position: [existing.position, row.position].filter(Boolean).join(", "),
+        // Surfaces the least-confident detection among the merged copies
+        // rather than hiding it behind whichever copy happened to scan
+        // first — still worth a second look even if only one copy read as
+        // "low".
+        confidence: (CONFIDENCE_RANK[row.confidence] ?? 1) < (CONFIDENCE_RANK[existing.confidence] ?? 1)
+          ? row.confidence : existing.confidence,
+      };
+      continue;
+    }
+
+    merged.push(row);
+    if (key) indexByKey.set(key, merged.length - 1);
+  }
+  return merged;
+}
