@@ -222,18 +222,17 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   // cards once hints weren't there to short-circuit before reaching it.
   // Trusting the fallback-ladder isolation fix (a bad hint now degrades
   // gracefully instead of aborting the search) instead of removing hints
-  // altogether gets the benefit of a correct hint without that cost.
-  // `clean` is the explicit per-row escape hatch (matching EditModal's
-  // runFindImage) for when Set/Rarity/Number is actively wrong and steering
-  // the search away from the right print — ignores those hints for this one
-  // search without touching the row's own field values.
-  async function findAnotherImageForRow(id, clean = false) {
+  // altogether gets the benefit of a correct hint without that cost. A
+  // separate opt-in "search by name only" button was tried on top of this
+  // and then removed — once the retry budget and the manual TCGPlayer link
+  // covered the cases it was for, it was redundant, and clearing the row's
+  // own Set/Rarity/Number fields before re-clicking this button does the
+  // same thing more transparently.
+  async function findAnotherImageForRow(id) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = clean
-      ? await findImageCandidates(row.name, row.game)
-      : await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
+    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
@@ -423,7 +422,6 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
                 onFindAnotherImage={() => findAnotherImageForRow(row.id)}
-                onFindAnotherImageClean={() => findAnotherImageForRow(row.id, true)}
                 onFindMarketPrice={() => findMarketPriceForRow(row.id)}
               />
             ))}
@@ -444,7 +442,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   );
 }
 
-function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFindAnotherImage, onFindAnotherImageClean, onFindMarketPrice }) {
+function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
   const { openLightbox } = useUI();
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
@@ -500,14 +498,6 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
           onClick={onFindAnotherImage}
         >
           {row.imageStatus === 'searching' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find another image'}
-        </button>
-        <button
-          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
-          disabled={row.imageStatus === 'searching'}
-          title="Ignores Set/Rarity/Number above and searches by this card's name only — use this if the results are the wrong print or card entirely."
-          onClick={onFindAnotherImageClean}
-        >
-          Search by name only
         </button>
         {/* pokemontcg.io/the other providers sometimes genuinely have no
             match or no price for a given print (see CLAUDE.md) — a direct

@@ -798,18 +798,25 @@ Everything else found:
     existing `row.imageStatus === 'searching'`), and every *other* search
     button for that same item/row is disabled meanwhile too — a double-tap
     or a click on a sibling button can't fire a second overlapping search.
-  - **"Search by name only"**: staff reported that a wrong Set/Rarity/Number
-    hint can steer the search onto the wrong print, and once picked, that
-    wrong print's own data backfills those same fields (Sprint 1's
-    behavior), compounding the mistake on any retry using the same hints.
-    Rather than reintroduce the earlier blanket name-only-search regression
-    (which removed hints for *every* search and lost real disambiguation —
-    see above), this is an explicit, opt-in per-click escape hatch: a
-    second button next to each "Find stock image"/"Find market price"/
-    "Find another image" that searches by name only for that one attempt,
-    without touching the Set/Rarity/Number field values themselves. Named
-    for what it literally does rather than "clean search" or similar
-    jargon, per an explicit ask for plain wording.
+  - **"Search by name only", added then removed**: staff reported that a
+    wrong Set/Rarity/Number hint can steer the search onto the wrong print,
+    and once picked, that wrong print's own data backfills those same
+    fields (Sprint 1's behavior), compounding the mistake on any retry
+    using the same hints. Added as an explicit, opt-in per-click escape
+    hatch — a second button next to each "Find stock image"/"Find market
+    price"/"Find another image" that searched by name only for that one
+    attempt, without touching the Set/Rarity/Number field values
+    themselves — deliberately distinct from the earlier blanket
+    name-only-search regression (which removed hints for *every* search
+    and lost real disambiguation entirely). After real use with the
+    retry-budget fix and the manual TCGPlayer link both in place (both
+    below), staff found the extra button redundant and potentially
+    confusing: clearing the Set field yourself and re-clicking the regular
+    search button does the same thing, more transparently (you can see and
+    control exactly what's being ignored, rather than a second button whose
+    behavior has to be remembered). Removed — `runFindImage`/
+    `runFindMarketPrice` (`EditModal`) and `findAnotherImageForRow`
+    (`ScannerPanel`) no longer take a `clean` parameter.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

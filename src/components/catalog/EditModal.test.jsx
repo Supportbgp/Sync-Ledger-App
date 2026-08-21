@@ -90,19 +90,13 @@ describe('EditModal — image candidate selection', () => {
     expect(screen.getByDisplayValue('OP01')).toBeInTheDocument();
   });
 
-  it('"Search by name only" ignores Set/Number/Rarity for that one search, unlike "Find stock image"', async () => {
-    searchCardImageMock.mockResolvedValue([{ url: 'https://x/candidate.jpg', label: 'Charizard', price: 12 }]);
+  it('passes Set/Number/Rarity as hints when searching for an image', async () => {
+    searchCardImageMock.mockResolvedValueOnce([{ url: 'https://x/candidate.jpg', label: 'Charizard', price: 12 }]);
     render(<EditModal card={baseCard({ set: 'Base Set' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Find stock image'));
     await screen.findByTitle('Charizard');
     expect(searchCardImageMock).toHaveBeenLastCalledWith('Pokemon', 'Charizard', 'Base Set', '', '');
-
-    // Two "Search by name only" buttons exist (image section, price section
-    // below) — the first one in document order is the image search's.
-    fireEvent.click(screen.getAllByText('Search by name only')[0]);
-    await screen.findByTitle('Charizard');
-    expect(searchCardImageMock).toHaveBeenLastCalledWith('Pokemon', 'Charizard');
   });
 
   it('disables every search button while one search is in flight, so a double-click can\'t fire overlapping searches', async () => {
@@ -115,7 +109,6 @@ describe('EditModal — image candidate selection', () => {
 
     expect(await screen.findByRole('button', { name: /searching/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Find market price' })).toBeDisabled();
-    screen.getAllByRole('button', { name: 'Search by name only' }).forEach((btn) => expect(btn).toBeDisabled());
 
     resolveSearch([]);
     await screen.findByText('No matches found — try adjusting the name, or upload a photo.');
