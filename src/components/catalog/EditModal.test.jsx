@@ -137,7 +137,7 @@ describe('EditModal — image candidate selection', () => {
 });
 
 describe('EditModal — Pricing section listing link', () => {
-  // Yugioh/Lorcana/SWU searches never return a listingUrl (confirmed — see
+  // Yugioh/SWU searches never return a listingUrl (confirmed — see
   // CLAUDE.md) — a real report found the Pricing section going silent on a
   // clickable link entirely once basePrice was already set, with only
   // dead-end text ("worth checking the real listing") and nothing to
@@ -148,7 +148,7 @@ describe('EditModal — Pricing section listing link', () => {
     expect(screen.queryByText('Search TCGPlayer manually ↗')).not.toBeInTheDocument();
   });
 
-  it('falls back to a manual search link when sourceUrl is blank (e.g. Yugioh/Lorcana/SWU today) instead of leaving nothing to click', () => {
+  it('falls back to a manual search link when sourceUrl is blank (e.g. Yugioh/SWU today) instead of leaving nothing to click', () => {
     render(<EditModal card={baseCard({ basePrice: 40, sourceUrl: '', condition: 'NM' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
     const link = screen.getByText('Search TCGPlayer manually ↗');
     expect(link.closest('a')).toHaveAttribute(

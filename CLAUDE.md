@@ -1304,16 +1304,16 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   dropdown renderers ignore it), but it's a harmless, no-cost attempt
   where it does work.
 
-## Per-game feature parity (Magic + Yugioh + One Piece done; other games pending)
+## Per-game feature parity (Magic + Yugioh + One Piece + Lorcana done; other games pending)
 
 A new multi-sprint initiative, one sprint per game, bringing every other
 supported game up to the same depth of feature support Pokemon already has
 (curated Rarity/Printing vocab, collector-number disambiguation, search
 reliability hardening, scanner prompt tuning) — confirmed with the user as
 **full parity**, not just "add the dropdowns." Order: Magic first, then
-Yugioh, then One Piece (all done below); the rest in an order not yet
-decided (Sports Singles is excluded — it has no card database to integrate
-against at all, a documented drawback, not an oversight).
+Yugioh, then One Piece, then Lorcana (all done below); the rest in an order
+not yet decided (Sports Singles is excluded — it has no card database to
+integrate against at all, a documented drawback, not an oversight).
 
 - **Magic (Sprint 1) — done.** Real research first (Scryfall's own API,
   confirmed via its type definitions/blog posts, not guessed), then wired
@@ -1556,9 +1556,103 @@ against at all, a documented drawback, not an oversight).
     that function accepted it; adding One Piece's entries to `cardUtils.js`
     was enough to light up the same curated dropdowns Pokemon/Magic/Yugioh
     already had.
-- **Remaining games, not yet started**: Lorcana, SWU, Riftbound, Gundam —
-  each gets the same treatment (real vocabulary research first, then
-  wiring), one sprint at a time.
+- **Lorcana (Sprint 4) — done.** Real research first (community rarity
+  guides for the visual symbol system, plus a real Lorcast API card sample
+  fetched via a GitHub-hosted archive of raw API snapshots, since
+  Lorcast's own docs site is unreachable from this sandbox — same
+  "triangulate a real sample instead of guessing" discipline as everywhere
+  else in this doc), then wired through the same places Pokemon/Magic/
+  Yugioh/One Piece already use:
+  - **Structural finding**: unlike Yu-Gi-Oh/One Piece, Lorcana's rarity and
+    finish (foil/nonfoil) ARE genuinely independent axes — confirmed via
+    research that every card at Common through Legendary exists in both a
+    foil and non-foil printing (the real sample's `prices.usd` vs.
+    `prices.usd_foil` fields both existing on the same card object
+    confirms both prints exist), with Enchanted being the one rarity
+    that's foil-only. This puts Lorcana in the same rarity-vs-finish
+    bucket as Magic/Pokemon, not Yu-Gi-Oh/One Piece.
+  - `RARITY_OPTIONS_BY_GAME.Lorcana` (`cardUtils.js`): the six official
+    tiers, each with its own distinct printed symbol shape (Common = gray/
+    white circle, Uncommon = a book icon — the one exception to the
+    "more sides = rarer" pattern, Rare = triangle, Super Rare = diamond,
+    Legendary = pentagon, Enchanted = rainbow/holographic hexagon), plus a
+    seventh real value, `Promo`, confirmed via the real sample: an entire
+    promotional set's cards all reported `"rarity": "Promo"` rather than
+    one of the six numbered-set tiers.
+  - **Real data quirk found and normalized, not guessed around**: the
+    same real sample's Super Rare cards report `"rarity": "Super_rare"` —
+    an underscored, oddly-cased outlier next to every other tier's normal
+    Title Case string (`Common`/`Uncommon`/`Rare`/`Legendary`). No code
+    change was needed to handle it — `preferRarity`'s existing
+    `normalizeRarityForMatch` (added for Pokemon's own `MEGA_ATTACK_RARE`
+    quirk) already lowercases and turns underscores into spaces before
+    comparing, so it transparently absorbs this one too.
+  - `PRINTING_OPTIONS_BY_GAME.Lorcana`: `["Normal", "Foil"]` — the two
+    real, evergreen finish values (see the structural finding above).
+    Enchanted's foil-only-ness is already captured by picking "Enchanted"
+    in Rarity, so no third option is needed here.
+  - **`searchLorcana` (`cardSearch.js`) rewritten for full parity** —
+    previously took only `name`; now `(name, setHint, rarityHint,
+    numberHint)`, matching every other game's shape. Lorcast's own query
+    syntax ("heavily influenced by Scryfall," confirmed via its docs) uses
+    `s:`/`set:` for the set and `cn:`/`number:` for the collector number —
+    and unlike Magic's setHint (which Scryfall's `set:` operator can't use
+    because it wants a letter code this app doesn't store), Lorcana's is
+    genuinely safe to wire up as a real server-side filter: Lorcana sets
+    have no letter code at all, only a plain NUMBER (confirmed via
+    research — e.g. `s:6` for Azurite Sea), which is exactly what this
+    app's Set field holds for this game (see the scan-binder-page note
+    below) and exactly what the operator expects. A tiered fallback tries
+    name+set+number, then name+number, then name+set, then a broad
+    name-only search, isolating each tier the same way Pokemon/Magic do —
+    a narrower tier finding nothing falls through to a broader one rather
+    than giving up. `rarityHint` stays a soft, client-side `preferRarity`
+    reorder rather than a hard `rarity:` filter — that operator exists too,
+    but its exact multi-word tokenization (given the real `"Super_rare"`
+    formatting quirk above) isn't confirmed enough to risk as a hard
+    filter that could zero out a real match on a mismatch this app can't
+    detect.
+  - **Real `listingUrl` added** — Lorcast's card object carries a real
+    `purchase_uris.tcgplayer` field (confirmed via the same real sample),
+    now mapped through same as Scryfall's/pokemontcg.io's/Egman's. This
+    closes a gap the "Pricing section: manual listing-link fallback"
+    section above previously documented as a real, undeliberate miss for
+    this game specifically — Lorcana no longer needs that fallback in
+    practice (Yugioh/SWU still do).
+  - **Pricing**: new `lorcastPrice` falls back `usd` → `usd_foil` (the two
+    real USD fields Lorcana's data carries — no etched/glossy equivalent
+    the way Magic has), same nonfoil-first reasoning as `scryfallPrice`.
+  - **Reliability**: `lorcastQuery` now retries once on a genuine 5xx (same
+    lighter 1-retry pattern as Scryfall/Yu-Gi-Oh — no confirmed flakiness
+    report for this endpoint either) and, since Lorcast's exact "zero
+    results" status code isn't independently confirmed the way Scryfall's
+    404 is, a persistent non-5xx failure still returns `[]` instead of
+    throwing — same unconfirmed-status-code call already made for
+    Yu-Gi-Oh, so a real "no matches" doesn't get misreported as an error
+    on information this app doesn't actually have.
+  - Candidates now carry structured `set`/`number`/`rarity` fields
+    (previously only baked into the label) for the same Sprint-1-era
+    backfill-on-pick every other game already has.
+  - **`scan-binder-page`'s number/set/rarity guidance now branches for
+    Lorcana too** — the collector number prints in the same bottom-left
+    number/total-in-set format Pokemon uses (e.g. `154/204`); no expansion
+    name is ever printed, only a bare set number in that same area
+    (confirmed via research — matches exactly what Lorcast's `s:` operator
+    expects, see above); and rarity is read from the small symbol's SHAPE
+    next to the collector number (circle/book/triangle/diamond/pentagon/
+    hexagon), with an unnumbered promotional card reported as `'Promo'`
+    regardless of shape. **Requires redeploying `scan-binder-page`**
+    (`supabase functions deploy scan-binder-page`) — schema/prompt changes
+    are server-side.
+  - `EditModal`/`ScannerPanel` needed no changes at all — both already
+    passed `set`/`rarity`/`number` generically to every game via
+    `searchCardImage`, which already forwarded all three through once
+    `searchLorcana` accepted them; adding Lorcana's entries to
+    `cardUtils.js` was enough to light up the same curated dropdowns every
+    other parity-complete game already had.
+- **Remaining games, not yet started**: SWU, Riftbound, Gundam — each gets
+  the same treatment (real vocabulary research first, then wiring), one
+  sprint at a time.
 
 ## Scanner: merging duplicate physical copies into a quantity
 
@@ -1672,12 +1766,18 @@ never return a `listingUrl`/`sourceUrl` at all:
   YGOPRODeck's `tcgplayer_data=yes` mode would unlock a listing URL, but
   its own docs warn that mode's Set Name/Rarity data can be inaccurate,
   and accurate Set/Rarity backfill mattered more than the extra link.
-- **Lorcana** — Lorcast's response never includes one; not a deliberate
-  omission, just never wired up.
+- **Lorcana** — at the time this was written, Lorcast's response was never
+  read for one; not a deliberate omission, just never wired up. **Fixed in
+  the Lorcana parity sprint below** — Lorcast's card object does carry a
+  real `purchase_uris.tcgplayer` field (confirmed via a real sample), now
+  mapped to `listingUrl` in `searchLorcana`. Lorcana no longer needs this
+  fallback in practice, though the fallback itself stays in place as the
+  general safety net for any provider that doesn't have one.
 - **SWU** — the real API sample confirmed `Name`/`FrontArt`/`Set`/
   `MarketPrice`/`LowPrice`; no listing/product URL field was present to
   wire up.
-(Magic/Pokemon/One Piece/Riftbound/Gundam all do have a real one today.)
+(Magic/Pokemon/Lorcana/One Piece/Riftbound/Gundam all do have a real one
+today — only Yugioh/SWU still rely on the manual-search fallback below.)
 
 The actual bug wasn't the missing link itself (that's an accepted,
 documented gap for those three) — it's that **EditModal's and

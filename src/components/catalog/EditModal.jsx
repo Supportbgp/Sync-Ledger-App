@@ -590,7 +590,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                       Check live TCGPlayer listing ↗
                     </span>
                   ) : (
-                    // Some providers (Yugioh, Lorcana, SWU today) never return a
+                    // Some providers (Yugioh, SWU today) never return a
                     // direct per-print listing link — a manual search still gets
                     // staff most of the way there instead of leaving them with
                     // nothing to click once a price is already showing.

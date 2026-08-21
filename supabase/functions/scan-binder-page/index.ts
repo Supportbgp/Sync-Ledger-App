@@ -61,11 +61,11 @@ const DETECT_CARDS_TOOL = {
             game: { type: "string", enum: CARD_GAMES },
             set: {
               type: "string",
-              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible. For One Piece specifically, an expansion NAME is rarely printed on the card itself — report the set-code prefix instead, from the same bottom-right code the number field reads (e.g. 'OP01' from 'OP01-001', or 'ST01' from a starter-deck card 'ST01-001') — this is what actually narrows a search for this game, same role a full expansion name plays for the others.",
+              description: "The SPECIFIC printed set/expansion name if you can identify it, else an empty string. For Pokemon especially: prefer the specific expansion (e.g. 'Paldean Fates', 'Obsidian Flames', 'Ascended Heroes') over the general era/block — 'Scarlet & Violet' alone is too vague if a more specific name is legible near the set symbol/collector number at the bottom of the card. Only fall back to the era name if the specific expansion truly isn't legible. For One Piece specifically, an expansion NAME is rarely printed on the card itself — report the set-code prefix instead, from the same bottom-right code the number field reads (e.g. 'OP01' from 'OP01-001', or 'ST01' from a starter-deck card 'ST01-001') — this is what actually narrows a search for this game, same role a full expansion name plays for the others. For Lorcana, no expansion name is printed on the card at all — only a bare SET NUMBER (e.g. '6' for Azurite Sea), printed in the small bottom-left text next to the collector number. Report that number as the set value.",
             },
             number: {
               type: "string",
-              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). For One Piece, the card's full code (set letters + number, e.g. 'OP01-001' or 'ST01-001') is printed together in the BOTTOM-RIGHT corner, right next to the rarity letter code (e.g. 'OP01-121 SEC') — report just the number portion after the dash (e.g. '001', '121'), not the set-code prefix (that belongs in the set field below). Keep any leading zeros exactly as printed. Used only to narrow an image search, never saved as-is.",
+              description: "The printed collector number for this exact print. Else an empty string if not legible. This is one of the strongest signals for telling apart same-name prints (a card can have many alternate-art/rarity versions with the same name, and — for a serialized card specifically — even physically distinct one-of-one copies), so look closely for it even if you're unsure of the set or rarity. LOCATION VARIES BY GAME: for Pokemon, it's typically near the set symbol at the bottom of the card, e.g. '280' or '280/217' if a total-count denominator is shown. For Magic, it's NOT near the set symbol (which sits on the type line instead) — it's in the small text along the bottom-left corner of the card, usually alongside a one-letter rarity code and a language code, e.g. a card printed '0744 LTR • EN' has collector number '0744' (keep any leading zeros exactly as printed). For Yu-Gi-Oh, it's the full printed set code in the bottom-left corner, e.g. 'LOB-005' or 'SDY-006' — report it exactly as printed, including the letters and hyphen (this is a global unique key across every Yu-Gi-Oh set, not just a bare number). For One Piece, the card's full code (set letters + number, e.g. 'OP01-001' or 'ST01-001') is printed together in the BOTTOM-RIGHT corner, right next to the rarity letter code (e.g. 'OP01-121 SEC') — report just the number portion after the dash (e.g. '001', '121'), not the set-code prefix (that belongs in the set field below). For Lorcana, it's in the small bottom-left text alongside the set number and language code, in the same 'this card / total in set' format as Pokemon, e.g. '154/204' — report it exactly as shown, denominator included if present. Keep any leading zeros exactly as printed. Used only to narrow an image search, never saved as-is.",
             },
             rarity: {
               type: "string",
@@ -170,10 +170,21 @@ const DETECT_CARDS_TOOL = {
                 "report; it only means this exact card is also a parallel print (there's no separate field for " +
                 "that yet, so it's fine to leave unrecorded here). Leave rarity blank if the code genuinely " +
                 "isn't legible rather than guessing from the art or how good the card looks. " +
+                "FOR LORCANA: a small shape symbol is printed at the bottom of the card, next to the " +
+                "collector number — read its SHAPE (not color first) and report exactly one of: 'Common' (a " +
+                "plain filled circle), 'Uncommon' (a book icon — the one exception to the shape-based " +
+                "size/rarity pattern below), 'Rare' (a triangle), 'Super Rare' (a diamond), 'Legendary' (a " +
+                "pentagon), or 'Enchanted' (a six-sided/hexagon shape, always with an unmistakable rainbow or " +
+                "holographic finish covering the whole card — this is the rarest tier and looks distinctly " +
+                "different from the other five, never plain foil like a Super Rare or Legendary can be). If " +
+                "the card instead comes from an unnumbered promotional card (no 's:<number>'-style set marker, " +
+                "often handed out at events or store exclusives) rather than a normal numbered set, report " +
+                "'Promo' regardless of what shape appears. Leave this blank if the symbol's shape genuinely " +
+                "isn't legible rather than guessing from the card's power level or how good it looks. " +
                 "FOR EVERY OTHER GAME: leave this field blank unless an exact rarity tier name is legibly " +
                 "printed on the card itself (e.g. a printed 'Rare'/'Secret Rare' marker) — visual-style-based " +
-                "guessing has only been worked out and verified for Magic, Pokemon, and Yu-Gi-Oh above (One " +
-                "Piece above reads an exact printed code, not a visual guess); don't extend any of those " +
+                "guessing has only been worked out and verified for Magic, Pokemon, Yu-Gi-Oh, and Lorcana above " +
+                "(One Piece above reads an exact printed code, not a visual guess); don't extend any of those " +
                 "games' rules to a different game's cards. " +
                 "Narrows an image/price search among same-name/same-set prints that differ by rarity, and " +
                 "becomes the item's initial saved Rarity value on this guess (staff can correct it in the " +
@@ -216,11 +227,14 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "instead of a bare number (e.g. 'LOB-005') — report it exactly as printed, letters and hyphen " +
   "included; One Piece prints its full code (set letters + number, e.g. 'OP01-001') together in the " +
   "bottom-right corner, right next to the rarity letter — report only the number portion after the " +
-  "dash (e.g. '001') as the number, and the set-letters portion (e.g. 'OP01') as the set. For set, prefer the specific expansion name over the " +
+  "dash (e.g. '001') as the number, and the set-letters portion (e.g. 'OP01') as the set; Lorcana prints " +
+  "it in the same bottom-left area in the same number/total-in-set format Pokemon uses (e.g. '154/204') — " +
+  "report it exactly as shown. For set, prefer the specific expansion name over the " +
   "general era/block if it's legible near the set symbol — for Pokemon cards, 'Scarlet & " +
   "Violet' alone is too vague when a more specific expansion name (e.g. 'Paldean Fates') can " +
   "be read; One Piece rarely prints an expansion name at all, so use its set-code prefix instead (see " +
-  "above). For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
+  "above); Lorcana never prints an expansion name either, only a bare set number in that same bottom-left " +
+  "text — report that number as the set. For rarity on a Magic card, read the small expansion symbol's COLOR on the type line " +
   "(right edge, just above the rules text): black/white is 'Common' (also basic lands, which have " +
   "no symbol), silver is 'Uncommon', gold is 'Rare', red-orange is 'Mythic Rare', purple is " +
   "'Special' (Time Spiral timeshifted cards only), and a glowing/prismatic mythic symbol is 'Bonus' " +
@@ -264,10 +278,17 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "Rare, TR=Treasure Rare, MR=Manga Rare (report 'Manga Rare', not plain 'Secret Rare', if the code or " +
   "an Oda-manga-panel art style tells you it's specifically that one). A small star above that code " +
   "means this print is also a parallel/alternate-art version, but doesn't change which rarity value " +
-  "to report. Leave it blank if the code isn't legible rather than guessing from the art. For every " +
+  "to report. Leave it blank if the code isn't legible rather than guessing from the art. For rarity on " +
+  "a Lorcana card, read the SHAPE of the small symbol printed next to the collector number: a plain " +
+  "filled circle is 'Common'; a book icon is 'Uncommon'; a triangle is 'Rare'; a diamond is 'Super " +
+  "Rare'; a pentagon is 'Legendary'; a six-sided/hexagon shape with an unmistakable rainbow or " +
+  "holographic finish across the whole card is 'Enchanted' (the rarest tier — looks distinctly " +
+  "different from the others, never just plain foil). If the card is from an unnumbered promotional " +
+  "release rather than a normal numbered set, report 'Promo' instead regardless of the shape shown. " +
+  "For every " +
   "other game, leave rarity blank unless an exact tier name is legibly printed on " +
-  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, and Pokemon " +
-  "(One Piece instead reads an exact printed code, not a visual guess). " +
+  "the card itself — the visual-style guessing above is only verified for Magic, Yu-Gi-Oh, Pokemon, and " +
+  "Lorcana (One Piece instead reads an exact printed code, not a visual guess). " +
   "If you can't confidently identify a specific card, " +
   "still report it with your best guess and confidence \"low\" rather than skipping it. Do " +
   "not guess condition or price — only identification. Also give " +

@@ -142,6 +142,12 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(onePiece.some(o => /parallel|alternate art/i.test(o))).toBe(false);
   });
 
+  it('lists the six official Lorcana rarity tiers plus the real "Promo" value, no duplicates', () => {
+    const lorcana = RARITY_OPTIONS_BY_GAME.Lorcana;
+    expect(lorcana).toEqual(['Common', 'Uncommon', 'Rare', 'Super Rare', 'Legendary', 'Enchanted', 'Promo']);
+    expect(new Set(lorcana).size).toBe(lorcana.length);
+  });
+
   it('has no entry for a game whose rarities have not been researched yet', () => {
     expect(RARITY_OPTIONS_BY_GAME.Riftbound).toBeUndefined();
   });
@@ -248,6 +254,10 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
 
   it('offers Normal/Alternate Art for One Piece — its rarity tier already implies foil treatment, so the real independent axis is the star-marked alt-art overlay, not a foil/nonfoil toggle', () => {
     expect(PRINTING_OPTIONS_BY_GAME['One Piece']).toEqual(['Normal', 'Alternate Art']);
+  });
+
+  it('offers Normal/Foil for Lorcana — unlike Yu-Gi-Oh/One Piece, rarity and finish are genuinely independent here (every non-Enchanted rarity has both a foil and non-foil printing)', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Lorcana).toEqual(['Normal', 'Foil']);
   });
 
   it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {

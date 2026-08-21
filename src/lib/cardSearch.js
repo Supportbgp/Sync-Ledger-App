@@ -565,19 +565,103 @@ export async function searchSwu(name, setHint) {
 // Lorcast (api.lorcast.com) — a free, no-key, Scryfall-modeled API for Disney
 // Lorcana. Confirmed CORS-safe for direct browser calls (unlike several other
 // small TCG APIs checked for this feature — see CLAUDE.md).
-async function lorcastQuery(q) {
+//
+// Real `prices.usd`/`prices.usd_foil` fields (confirmed via a real card
+// sample) — same nonfoil-first fallback reasoning as scryfallPrice, just
+// with the two fields Lorcana's data actually carries (no etched/glossy
+// equivalent here).
+function lorcastPrice(c) {
+  const p = c.prices;
+  if (!p) return null;
+  if (p.usd != null) return Number(p.usd);
+  if (p.usd_foil != null) return Number(p.usd_foil);
+  return null;
+}
+
+// A printed Lorcana collector number ("154/204", same number/total-count
+// format Pokemon uses) needs the "/<total>" part stripped before it's a
+// bare number Lorcast's cn: operator can use.
+function sanitizeLorcanaNumber(s) {
+  return String(s).split('/')[0].trim();
+}
+
+// Lighter, 1-retry safety net on a genuine 5xx, same pattern as Scryfall/
+// Yu-Gi-Oh — no confirmed flakiness report for this endpoint either. Unlike
+// Scryfall (whose 404-means-"no-results" behavior is confirmed via its own
+// docs), Lorcast's exact "zero matches" status code isn't independently
+// confirmed, so — same call as ygoQuery — a persistent non-5xx failure
+// still returns [] instead of throwing, rather than risk misreporting a
+// real "no matches" as an error on unconfirmed information.
+const LORCAST_RETRY_DELAYS_MS = [500];
+async function lorcastQuery(q, attempt = 0) {
   const res = await fetch(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(q)}`);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    if (res.status >= 500 && attempt < LORCAST_RETRY_DELAYS_MS.length) {
+      await new Promise((r) => setTimeout(r, LORCAST_RETRY_DELAYS_MS[attempt]));
+      return lorcastQuery(q, attempt + 1);
+    }
+    return [];
+  }
   const data = await res.json();
   return (data.results || []).slice(0, 6).map(c => ({
     url: c.image_uris && c.image_uris.digital && (c.image_uris.digital.normal || c.image_uris.digital.small),
-    label: `${c.name}${c.version ? ' - ' + c.version : ''} (${(c.set && c.set.name) || ''})`,
-    price: c.prices && c.prices.usd ? Number(c.prices.usd) : null,
+    label: `${c.name}${c.version ? ' - ' + c.version : ''} (${(c.set && c.set.name) || ''}${c.collector_number ? ' #' + c.collector_number : ''}${c.rarity ? ' · ' + c.rarity : ''})`,
+    price: lorcastPrice(c),
+    // A direct link to this exact print's real TCGPlayer listing — Lorcast's
+    // card object carries the same purchase_uris.tcgplayer field Scryfall's
+    // does (confirmed via a real sample), closing what was previously a
+    // documented gap: Lorcana had no listingUrl at all, so EditModal/
+    // ScannerPanel's Pricing section could only ever show the game-agnostic
+    // manual TCGPlayer search fallback for this game. Real link now, same
+    // as Magic/Pokemon/the Egman-backed games.
+    listingUrl: c.purchase_uris && c.purchase_uris.tcgplayer,
+    rarity: c.rarity || '',
+    // Structured (not just baked into the label), same as every other
+    // game's candidates — lets a confirmed pick back-fill the item's own
+    // Set/Number/Rarity fields. set.code (a bare number, e.g. "6") rather
+    // than set.name — Lorcana cards print only a set NUMBER, never an
+    // expansion name (see the scan-binder-page guidance below), so a bare
+    // number is what this app's Set field actually holds for this game,
+    // and it's also exactly what Lorcast's own s: search operator expects.
+    set: (c.set && c.set.code) || '',
+    number: c.collector_number || '',
   })).filter(r => r.url);
 }
 
-export async function searchLorcana(name) {
-  return await lorcastQuery(name.trim());
+// Lorcast's query syntax is confirmed (via its own docs, not guessed) to be
+// "heavily influenced by Scryfall": s: (or set:) searches by the set's plain
+// NUMBER — Lorcana sets have no letter code, unlike Magic, e.g. "s:6" for
+// Azurite Sea — and cn: (or number:) searches by collector number, meant to
+// be "combined with s: to find specific card editions" per Lorcast's own
+// docs. Both are safe to use as real server-side filters here (unlike
+// Magic's setHint, which Scryfall's set: operator can't use because it
+// wants a letter code this app doesn't store) since this app's Set field
+// for Lorcana holds exactly the bare set number the scanner reads off the
+// card, matching what s: expects. A `rarity:` operator also exists there,
+// but its confirmed real API value for Super Rare is the oddly-formatted
+// "Super_rare" (see RARITY_OPTIONS_BY_GAME.Lorcana) and its multi-word
+// query tokenization isn't confirmed, so — same discipline as every other
+// game — rarityHint stays a soft, client-side preferRarity reorder instead
+// of a hard server-side filter that could zero out a real match on a
+// tokenization mismatch this app has no way to detect.
+export async function searchLorcana(name, setHint, rarityHint, numberHint) {
+  const trimmed = name.trim();
+  const safeSet = setHint ? String(setHint).trim() : '';
+  const safeNumber = numberHint ? sanitizeLorcanaNumber(numberHint) : '';
+
+  if (safeSet && safeNumber) {
+    const results = await lorcastQuery(`${trimmed} s:${safeSet} cn:${safeNumber}`);
+    if (results.length) return preferRarity(results, rarityHint);
+  }
+  if (safeNumber) {
+    const results = await lorcastQuery(`${trimmed} cn:${safeNumber}`);
+    if (results.length) return preferRarity(results, rarityHint);
+  }
+  if (safeSet) {
+    const results = await lorcastQuery(`${trimmed} s:${safeSet}`);
+    if (results.length) return preferRarity(results, rarityHint);
+  }
+  return preferRarity(await lorcastQuery(trimmed), rarityHint);
 }
 
 // A manual fallback for when the automated search above fails outright
@@ -610,7 +694,7 @@ export async function searchCardImage(game, name, setHint, rarityHint, numberHin
   if (game === "Magic") return await searchScryfall(name, setHint, rarityHint, numberHint);
   if (game === "Pokemon") return await searchPokemon(name, setHint, rarityHint, numberHint);
   if (game === "Yugioh") return await searchYugioh(name, setHint, rarityHint, numberHint);
-  if (game === "Lorcana") return await searchLorcana(name);
+  if (game === "Lorcana") return await searchLorcana(name, setHint, rarityHint, numberHint);
   if (game === "One Piece") return await searchOnePiece(name, setHint, rarityHint, numberHint);
   if (game === "Riftbound") return await searchRiftbound(name, setHint, rarityHint);
   if (game === "Gundam") return await searchGundam(name, setHint, rarityHint);
