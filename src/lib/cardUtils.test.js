@@ -116,8 +116,14 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(new Set(pokemon).size).toBe(pokemon.length);
   });
 
+  it('lists the real Scryfall rarity values for Magic, no duplicates', () => {
+    const magic = RARITY_OPTIONS_BY_GAME.Magic;
+    expect(magic).toEqual(['Common', 'Uncommon', 'Rare', 'Mythic Rare', 'Special', 'Bonus']);
+    expect(new Set(magic).size).toBe(magic.length);
+  });
+
   it('has no entry for a game whose rarities have not been researched yet', () => {
-    expect(RARITY_OPTIONS_BY_GAME.Magic).toBeUndefined();
+    expect(RARITY_OPTIONS_BY_GAME['One Piece']).toBeUndefined();
   });
 });
 
@@ -211,8 +217,12 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
     expect(PRINTING_OPTIONS_BY_GAME.Pokemon.some(o => /poke ?ball|master ?ball/i.test(o))).toBe(false);
   });
 
+  it('offers the four real Scryfall finish values for Magic, excluding frame/border treatments like Showcase/Extended Art/Borderless (a separate attribute, not a finish)', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Magic).toEqual(['Nonfoil', 'Foil', 'Etched', 'Glossy']);
+    expect(PRINTING_OPTIONS_BY_GAME.Magic.some(o => /showcase|extended|borderless|full art/i.test(o))).toBe(false);
+  });
+
   it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {
-    expect(PRINTING_OPTIONS_BY_GAME.Magic).toBeUndefined();
     expect(PRINTING_OPTIONS_BY_GAME['One Piece']).toBeUndefined();
   });
 });

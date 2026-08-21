@@ -33,27 +33,27 @@ describe('searchScryfall', () => {
     }));
     const results = await searchScryfall('Sol Ring');
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(results).toEqual([{ url: 'https://x/sol.jpg', label: 'Sol Ring (Commander) #1', price: 3, listingUrl: 'https://tcg/sol', rarity: '' }]);
+    expect(results).toEqual([{
+      url: 'https://x/sol.jpg', label: 'Sol Ring (Commander) #1', price: 3, listingUrl: 'https://tcg/sol', rarity: '',
+      set: 'Commander', number: '1',
+    }]);
   });
 
-  it('falls back to a collector-number search when a trailing "(1234)" gets no exact match', async () => {
-    global.fetch
-      .mockResolvedValueOnce(jsonResponse({ data: [] })) // exact phrase, empty
-      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '1234', image_uris: { normal: 'https://x/bb.jpg' } }] }));
+  it('finds a card via a trailing "(1234)" collector-number search, tried before the literal parenthetical text — number is the strongest disambiguator, so its tier now runs first', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '1234', image_uris: { normal: 'https://x/bb.jpg' } }] }));
     const results = await searchScryfall('Bruce Banner (1234)');
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(global.fetch.mock.calls[1][0]).toContain('number%3A1234');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls[0][0]).toContain('number%3A1234');
     expect(results[0].url).toBe('https://x/bb.jpg');
   });
 
   it('retries with the number unpadded if the padded version finds nothing', async () => {
     global.fetch
-      .mockResolvedValueOnce(jsonResponse({ data: [] }))
       .mockResolvedValueOnce(jsonResponse({ data: [] })) // padded number, empty
-      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Card', set_name: 'SET', collector_number: '7', image_uris: { normal: 'https://x/c.jpg' } }] }));
+      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Card', set_name: 'SET', collector_number: '7', image_uris: { normal: 'https://x/c.jpg' } }] })); // unpadded, matches
     const results = await searchScryfall('Card (007)');
-    expect(global.fetch).toHaveBeenCalledTimes(3);
-    expect(global.fetch.mock.calls[2][0]).toContain('number%3A7');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls[1][0]).toContain('number%3A7');
     expect(results[0].url).toBe('https://x/c.jpg');
   });
 
@@ -71,6 +71,105 @@ describe('searchScryfall', () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({ data: [] }));
     const results = await searchScryfall('Totally Made Up Card');
     expect(results).toEqual([]);
+  });
+
+  it('returns an empty array (not an error) on a plain 404 — Scryfall\'s real "zero results" response, not a failure', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ details: 'no cards found' }) });
+    const results = await searchScryfall('Totally Made Up Card');
+    expect(results).toEqual([]);
+  });
+
+  it('tries an explicit numberHint before the broad name search, same "number is the strongest disambiguator" priority as Pokemon', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{ name: 'Bruce Banner', set_name: 'Secret Lair Drop', collector_number: '42', image_uris: { normal: 'https://x/bb42.jpg' } }],
+    }));
+    const results = await searchScryfall('Bruce Banner', '', '', '42');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('number:42');
+    expect(results[0].url).toBe('https://x/bb42.jpg');
+  });
+
+  it('falls through to the broad name search if the numberHint tier finds nothing', async () => {
+    global.fetch
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // number tier, empty
+      .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '2', image_uris: { normal: 'https://x/bb.jpg' } }] })); // broad name tier
+    const results = await searchScryfall('Bruce Banner', '', '', '999');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(results[0].url).toBe('https://x/bb.jpg');
+  });
+
+  it('never turns setHint into a set: filter — Scryfall\'s set:/s:/e: operators only match a short set CODE, not the full set name this app actually stores', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Sol Ring', set_name: 'Commander', collector_number: '1', image_uris: { normal: 'https://x/sol.jpg' } }] }));
+    await searchScryfall('Sol Ring', 'Commander Legends');
+    const q = decodeURIComponent(global.fetch.mock.calls[0][0]);
+    expect(q).not.toContain('set:');
+    expect(q).not.toContain('e:');
+    expect(q).not.toContain('Commander Legends');
+  });
+
+  it('retries once on a transient 5xx, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
+        .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Sol Ring', set_name: 'Commander', collector_number: '1', image_uris: { normal: 'https://x/sol.jpg' } }] }));
+
+      const promise = searchScryfall('Sol Ring');
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(results[0].url).toBe('https://x/sol.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('throws once the retry is exhausted on the last tier, instead of reporting "no matches"', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+      const promise = searchScryfall('Totally Made Up Card');
+      const assertion = expect(promise).rejects.toThrow('502');
+      await vi.runAllTimersAsync();
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('isolates a persistent 5xx on the numberHint tier — falls through to the broad name tier instead of aborting the whole search', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) }) // number tier, 1st attempt
+        .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) }) // number tier retry — budget exhausted
+        .mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '2', image_uris: { normal: 'https://x/bb.jpg' } }] })); // broad tier succeeds
+
+      const promise = searchScryfall('Bruce Banner', '', '', '999');
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(results[0].url).toBe('https://x/bb.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('falls back through usd -> usd_foil -> usd_etched -> usd_glossy when the nonfoil price is missing', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{ name: 'Foil-Only Card', set_name: 'SLD', collector_number: '1', image_uris: { normal: 'https://x/f.jpg' }, prices: { usd: null, usd_foil: '19.99', usd_etched: null } }],
+    }));
+    const results = await searchScryfall('Foil-Only Card');
+    expect(results[0].price).toBe(19.99);
+  });
+
+  it('prefers a plain usd price over foil/etched/glossy when it is present', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      data: [{ name: 'Sol Ring', set_name: 'Commander', collector_number: '1', image_uris: { normal: 'https://x/sol.jpg' }, prices: { usd: '3.00', usd_foil: '9.00' } }],
+    }));
+    const results = await searchScryfall('Sol Ring');
+    expect(results[0].price).toBe(3);
   });
 });
 
@@ -385,6 +484,12 @@ describe('searchCardImage dispatcher', () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({ data: [] }));
     await searchCardImage('Magic', 'Sol Ring');
     expect(global.fetch.mock.calls[0][0]).toContain('api.scryfall.com');
+  });
+
+  it('forwards a numberHint through to Scryfall for Magic, same as Pokemon', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '42', image_uris: { normal: 'https://x/bb.jpg' } }] }));
+    await searchCardImage('Magic', 'Bruce Banner', '', '', '42');
+    expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('number:42');
   });
 
   it('dispatches One Piece to the proxy with the "onepiece" provider', async () => {
