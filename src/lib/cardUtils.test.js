@@ -162,8 +162,15 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(riftbound.some(o => /alternate art|overnumbered|signature/i.test(o))).toBe(false);
   });
 
-  it('has no entry for a game whose rarities have not been researched yet', () => {
-    expect(RARITY_OPTIONS_BY_GAME.Gundam).toBeUndefined();
+  it('lists the six real Gundam rarity codes (mapped to full names) including Special/Promo, excluding the "+"/"++" alt-art overlay suffixes (a separate printing axis, not a rarity)', () => {
+    const gundam = RARITY_OPTIONS_BY_GAME.Gundam;
+    expect(gundam).toEqual(['Common', 'Uncommon', 'Rare', 'Legend Rare', 'Special', 'Promo']);
+    expect(new Set(gundam).size).toBe(gundam.length);
+    expect(gundam.some(o => /\+/.test(o))).toBe(false);
+  });
+
+  it('has no entry for Sports Singles — a deliberate, permanent exclusion (no card database exists for it at all), not a "not researched yet" gap', () => {
+    expect(RARITY_OPTIONS_BY_GAME['Sports Singles']).toBeUndefined();
   });
 });
 
@@ -284,8 +291,12 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
     expect(PRINTING_OPTIONS_BY_GAME.Riftbound).toEqual(['Normal', 'Alternate Art', 'Overnumbered', 'Signature']);
   });
 
-  it('has no entry for games without a researched vocabulary yet, same as RARITY_OPTIONS_BY_GAME', () => {
-    expect(PRINTING_OPTIONS_BY_GAME.Gundam).toBeUndefined();
+  it('offers Normal plus the two real "+"/"++" alt-art overlay tiers for Gundam — its finish is implied by rarity, not independent', () => {
+    expect(PRINTING_OPTIONS_BY_GAME.Gundam).toEqual(['Normal', 'Alternate Art', 'Alternate Art (Case Hit)']);
+  });
+
+  it('has no entry for Sports Singles, same as RARITY_OPTIONS_BY_GAME', () => {
+    expect(PRINTING_OPTIONS_BY_GAME['Sports Singles']).toBeUndefined();
   });
 });
 

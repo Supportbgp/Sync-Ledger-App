@@ -637,6 +637,12 @@ describe('proxy-backed searches (One Piece / Riftbound / Gundam / SWU)', () => {
     expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'riftbound', query: 'Sett', setHint: 'OGN', rarityHint: '', numberHint: '310' } });
   });
 
+  it('forwards a numberHint for Gundam, same as One Piece/Riftbound', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchGundam('Wing Gundam', 'GD01', '', '001');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'gundam', query: 'Wing Gundam', setHint: 'GD01', rarityHint: '', numberHint: '001' } });
+  });
+
   it('returns an empty array (not an error) when the proxy call fails', async () => {
     invokeMock.mockResolvedValueOnce({ data: null, error: { message: 'network' } });
     const results = await searchOnePiece('Luffy');
@@ -680,6 +686,12 @@ describe('searchCardImage dispatcher', () => {
     invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
     await searchCardImage('Riftbound', 'Sett', 'OGN', '', '310');
     expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'riftbound', query: 'Sett', setHint: 'OGN', rarityHint: '', numberHint: '310' } });
+  });
+
+  it('dispatches Gundam to the proxy, forwarding a numberHint', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { results: [] }, error: null });
+    await searchCardImage('Gundam', 'Wing Gundam', 'GD01', '', '001');
+    expect(invokeMock).toHaveBeenCalledWith('card-lookup-proxy', { body: { provider: 'gundam', query: 'Wing Gundam', setHint: 'GD01', rarityHint: '', numberHint: '001' } });
   });
 
   it('dispatches One Piece to the proxy with the "onepiece" provider', async () => {

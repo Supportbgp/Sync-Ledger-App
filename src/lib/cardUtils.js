@@ -188,6 +188,22 @@ export const RARITY_OPTIONS_BY_GAME = {
   // set's total, or an asterisk) — so they belong in
   // PRINTING_OPTIONS_BY_GAME.Riftbound below instead, not here.
   Riftbound: ["Common", "Uncommon", "Rare", "Epic", "Showcase", "Promo"],
+  // Gundam Card Game's six official rarity abbreviations, each printed as
+  // its own letter code next to the collector number (confirmed via
+  // multiple community rarity guides, cross-referenced for consistency):
+  // Common (C), Uncommon (U), Rare (R), Legend Rare (LR — the marquee
+  // mobile suits), Special (SP — premium alt-art REPRINTS of existing
+  // cards, keeping their original card number, not a new print), and
+  // Promo (P — event/organized-play printings outside the booster
+  // ladder).
+  //
+  // Deliberately excludes the "+"/"++" alt-art suffix system (e.g. C+,
+  // LR++) — confirmed via research to be an overlay applied on TOP of any
+  // of the six rarities above (an alt-art LR+ still plays as, and shares
+  // its card number with, the base LR — only the art/foil differs), same
+  // rarity-vs-finish split as One Piece's star-marked Parallel/Alternate
+  // Art overlay. See PRINTING_OPTIONS_BY_GAME.Gundam.
+  Gundam: ["Common", "Uncommon", "Rare", "Legend Rare", "Special", "Promo"],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -291,6 +307,17 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // their own rarity values) — plus a plain "Normal" default for every
   // non-Showcase card.
   Riftbound: ["Normal", "Alternate Art", "Overnumbered", "Signature"],
+  // Same rarity-vs-finish split as One Piece/Yu-Gi-Oh/Riftbound above: a
+  // Gundam print's base rarity letter (C/U/R/LR/SP/P) already implies its
+  // default treatment, so the real separate axis is the "+"/"++" alt-art
+  // overlay confirmed via research — "+" is a standard alt-art foil
+  // (extended/borderless art, brighter foil), "++" is the scarcest
+  // "case hit" pull, confirmed to use a visually distinct GOLD foil
+  // treatment rather than just being a rarer copy of the same "+" look.
+  // Both exist on every set (an evergreen, non-expanding pair of concepts,
+  // unlike Pokemon's per-set Poke Ball patterns), so both get their own
+  // entry here rather than being collapsed into one or excluded.
+  Gundam: ["Normal", "Alternate Art", "Alternate Art (Case Hit)"],
 };
 
 export function normalizeCard(c) {
