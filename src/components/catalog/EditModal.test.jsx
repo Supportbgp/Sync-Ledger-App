@@ -3,7 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import EditModal from './EditModal.jsx';
 
 const { searchCardImageMock } = vi.hoisted(() => ({ searchCardImageMock: vi.fn() }));
-vi.mock('../../lib/cardSearch.js', () => ({ searchCardImage: (...args) => searchCardImageMock(...args) }));
+vi.mock('../../lib/cardSearch.js', () => ({
+  searchCardImage: (...args) => searchCardImageMock(...args),
+  tcgplayerSearchUrl: (name, set) => `https://www.tcgplayer.com/search/all/product?q=${encodeURIComponent([name, set].filter(Boolean).join(' '))}&view=grid`,
+}));
 
 vi.mock('../../context/UIContext.jsx', () => ({
   useUI: () => ({ showConfirm: vi.fn(async () => true), openLightbox: vi.fn() }),
@@ -116,6 +119,27 @@ describe('EditModal — image candidate selection', () => {
 
     resolveSearch([]);
     await screen.findByText('No matches found — try adjusting the name, or upload a photo.');
+  });
+
+  it('offers a manual TCGPlayer search link when the image search finds nothing', async () => {
+    searchCardImageMock.mockResolvedValueOnce([]);
+    render(<EditModal card={baseCard({ set: 'Base Set' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Find stock image'));
+    const link = await screen.findByText('Try searching TCGPlayer manually ↗');
+    expect(link.closest('a')).toHaveAttribute(
+      'href',
+      'https://www.tcgplayer.com/search/all/product?q=Charizard%20Base%20Set&view=grid',
+    );
+  });
+
+  it('offers the same manual link when a price search finds a match with no price data', async () => {
+    searchCardImageMock.mockResolvedValueOnce([{ url: 'https://x/candidate.jpg', label: 'Charizard', price: null }]);
+    render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Find market price'));
+    await screen.findByText('Matches found, but none carry price data yet for this game.');
+    expect(screen.getByText('Try searching TCGPlayer manually ↗')).toBeInTheDocument();
   });
 });
 

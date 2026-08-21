@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchCardImage } from '../../lib/cardSearch.js';
+import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
@@ -509,12 +509,32 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
         >
           Search by name only
         </button>
+        {/* pokemontcg.io/the other providers sometimes genuinely have no
+            match or no price for a given print (see CLAUDE.md) — a direct
+            link to TCGPlayer's own search, pre-filled, gets staff most of
+            the way to the real listing themselves instead of a dead end. */}
+        {row.imageStatus === 'none' && (
+          <a
+            href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
+          >
+            Search TCGPlayer manually ↗
+          </a>
+        )}
         {row.basePrice == null && (
           <button
             className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
             disabled={row.imageStatus === 'searching'}
             onClick={onFindMarketPrice}
           >Find market price</button>
+        )}
+        {row.basePrice == null && row.pendingPrice == null && (
+          <a
+            href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
+          >
+            Search TCGPlayer manually ↗
+          </a>
         )}
       </div>
 

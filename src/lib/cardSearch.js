@@ -406,6 +406,24 @@ export async function searchLorcana(name) {
   return await lorcastQuery(name.trim());
 }
 
+// A manual fallback for when the automated search above fails outright
+// (exhausted every retry) or found a card but no price data for it — rather
+// than leave staff stuck with nothing, a link straight to TCGPlayer's own
+// search with the name/set already typed in gets them most of the way to
+// finding the real listing themselves. Verified live (2026-08-21) rather
+// than guessed: `https://www.tcgplayer.com/search/all/product?q=<query>`
+// is TCGPlayer's real, working general search results URL. Deliberately
+// uses the game-agnostic "all" category rather than a per-game category
+// path (e.g. `/search/pokemon/product`) — this app supports 8 different
+// games, and confirming each one's exact category slug without a real
+// sample for every single one risks shipping a wrong/broken slug for at
+// least one of them, whereas "all" is already confirmed to work correctly
+// for any game.
+export function tcgplayerSearchUrl(name, set) {
+  const q = [name, set].filter(Boolean).join(' ').trim();
+  return `https://www.tcgplayer.com/search/all/product?q=${encodeURIComponent(q)}&view=grid`;
+}
+
 // Single dispatch table for "search a card image by game" — shared by every
 // entry point that needs it (EditModal's Find image/Find market price,
 // ScannerPanel's auto-fill, CSV/XLSX import's auto-fill) so adding a new

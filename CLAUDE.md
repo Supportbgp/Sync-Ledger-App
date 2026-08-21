@@ -756,6 +756,23 @@ Everything else found:
     (#125 Double Rare, #269 Mega Attack Rare, #284 Special Illustration
     Rare) — validating that Number remains the right disambiguator among
     same-name-same-set reprints, exactly as this doc has assumed throughout.
+- **Manual TCGPlayer search link as a fallback for the two failure modes
+  above** (search exhausts every retry and finds nothing, or finds a real
+  card with no price data) — `tcgplayerSearchUrl(name, set)` in
+  `cardSearch.js` builds a link straight to TCGPlayer's own search with the
+  name/set already filled in, so staff aren't left with a dead end when the
+  automated lookup can't help. Deliberately game-agnostic: it uses
+  TCGPlayer's general `/search/all/product?q=...` results page (verified
+  live, 2026-08-21 — a real, working URL) rather than a per-game category
+  path like `/search/pokemon/product` — confirming the exact category slug
+  for all 8 games this app supports without a real sample for each risks
+  shipping a wrong one, and "all" is already confirmed correct for every
+  game. Shown in `EditModal` right under the status line whenever
+  `imageStatus.kind === 'err'` (covers both "no matches" and "found it, no
+  price data" — both set that same `kind`), and in `ScannerPanel`'s
+  `ScanRow` next to "Find another image" when `row.imageStatus === 'none'`
+  and next to "Find market price" when no price is available
+  (`row.pendingPrice == null`).
 - **Scanner/EditModal: blocking modal during the post-scan image/price
   auto-fill, loading state + disabled state on every manual search button,
   and a "Search by name only" escape hatch** — three real-phone UX reports

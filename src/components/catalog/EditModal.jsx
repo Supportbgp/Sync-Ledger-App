@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
-import { searchCardImage as searchByGame } from '../../lib/cardSearch.js';
+import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 
@@ -373,6 +373,13 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
             </div>
           </div>
           {candidateMode === 'image' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+          {candidateMode === 'image' && imageStatus.kind === 'err' && (
+            <div style={{ fontSize: '12px', marginTop: '2px' }}>
+              <a href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+                Try searching TCGPlayer manually ↗
+              </a>
+            </div>
+          )}
           {!imageHelpDismissed && (
             <div className="info-banner">
               <span>
@@ -514,6 +521,13 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               </div>
             </div>
             {candidateMode === 'price' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
+            {candidateMode === 'price' && imageStatus.kind === 'err' && (
+              <div style={{ fontSize: '12px', marginTop: '2px' }}>
+                <a href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+                  Try searching TCGPlayer manually ↗
+                </a>
+              </div>
+            )}
             {candidateMode === 'price' && candidates.length > 0 && (
               <div className="status-line ok" style={{ fontWeight: 500 }}>
                 These are possible prints matching this card's name/set — click the one that matches your physical

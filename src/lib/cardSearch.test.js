@@ -8,6 +8,7 @@ vi.mock('./supabase.js', () => ({
 const {
   searchScryfall, searchPokemon, searchYugioh, searchLorcana,
   searchOnePiece, searchRiftbound, searchGundam, searchSwu, searchCardImage,
+  tcgplayerSearchUrl,
   __resetPokemonQueryCacheForTests,
 } = await import('./cardSearch.js');
 
@@ -297,6 +298,17 @@ describe('searchPokemon', () => {
     }));
     const results = await searchPokemon('Mega Gengar ex');
     expect(results[0].price).toBe(95);
+  });
+});
+
+describe('tcgplayerSearchUrl', () => {
+  it('builds a real, game-agnostic TCGPlayer search URL from name + set', () => {
+    expect(tcgplayerSearchUrl('Mega Gengar ex', 'Ascended Heroes'))
+      .toBe('https://www.tcgplayer.com/search/all/product?q=Mega%20Gengar%20ex%20Ascended%20Heroes&view=grid');
+  });
+
+  it('omits the set when blank rather than leaving a trailing space in the query', () => {
+    expect(tcgplayerSearchUrl('Charizard', '')).toBe('https://www.tcgplayer.com/search/all/product?q=Charizard&view=grid');
   });
 });
 
