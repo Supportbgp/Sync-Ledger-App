@@ -691,6 +691,70 @@ Everything else found:
   provider-specific fix in this doc — Scryfall/YGOPRODeck/Lorcast/the
   Egman-backed games each report a single flat price field with no
   equivalent sold-vs-listed split to fall back through.
+  **Real-world retest after this fix still found Mega Gengar ex with no
+  price** — the low/high fallback is a real, defensible improvement per
+  TCGPlayer's own documented pricing model, but it can only surface a price
+  that exists somewhere in the four sub-fields; it can't be confirmed to be
+  the actual cause of this specific card's gap without inspecting a live
+  response (`c.tcgplayer`), which this sandbox has no network path to (see
+  the Manual QA note above — the same constraint that blocks Supabase also
+  blocks pokemontcg.io directly). Left open pending either a pasted real
+  API response for this print or confirmation of which message/candidate
+  actually shows for it.
+- **Possessive-name search ("Lillie's Clefairy ex", "Cynthia's Garchomp
+  ex") hedges both apostrophe representations instead of committing to one
+  theory** — the earlier fix (stripping a trailing `'s` outright, on the
+  theory pokemontcg.io's index applies an English possessive filter) was
+  real-world retested and still found unreliable. Without a way to inspect
+  the live index from this sandbox, there's no way to confirm that theory
+  over the alternative (the apostrophe needs to stay in the query
+  literally). `searchPokemon` now tries both representations —
+  `sanitizeStrippingPossessive` and the new `sanitizeKeepingApostrophe` —
+  at every precision tier (set+number, number, set, exact phrase, unquoted)
+  before ever falling through to the next, broader tier, so whichever one
+  the index actually needs is found at the highest precision available
+  instead of only being tried once everything else has failed. For a name
+  with no apostrophe at all the two functions produce an identical string,
+  so the common case still fires the same number of requests as before —
+  this only doubles requests for the minority of possessive names, and even
+  then only until one representation succeeds.
+- **Scanner/EditModal: blocking modal during the post-scan image/price
+  auto-fill, loading state + disabled state on every manual search button,
+  and a "Search by name only" escape hatch** — three real-phone UX reports
+  bundled into one pass since they share the same buttons/state:
+  - The post-scan "Looking up images & prices" fill used to run with the
+    review queue already fully visible and editable underneath it — staff
+    could (and did) start correcting a row's name/set or toggling its
+    image while the batch fill was still writing into that same row,
+    racing it. Replaced the inline status line with a real, non-dismissible
+    modal (`ScannerPanel`, same `.overlay`/`.modal` system as every other
+    modal — z-index 1000 categorically covers and blocks clicks to
+    everything below it) that shows only progress ("X of Y done") until the
+    batch settles, then disappears on its own — no Cancel/backdrop-close,
+    matching this app's explicit-button-only modal convention elsewhere,
+    since there's nothing sensible to do mid-fill besides wait.
+  - "Find stock image"/"Find market price" (`EditModal`) and "Find another
+    image" (`ScannerPanel`'s `ScanRow`) already disabled themselves (or, for
+    ScanRow, now newly disable themselves) while their own search is in
+    flight, but gave no visible feedback beyond that — real testing reported
+    this as "taking too long" with no way to tell if a click had registered.
+    Each button's own label now switches to a spinner + "Searching…" while
+    its specific search runs (`EditModal`'s `activeSearch` state, `ScanRow`'s
+    existing `row.imageStatus === 'searching'`), and every *other* search
+    button for that same item/row is disabled meanwhile too — a double-tap
+    or a click on a sibling button can't fire a second overlapping search.
+  - **"Search by name only"**: staff reported that a wrong Set/Rarity/Number
+    hint can steer the search onto the wrong print, and once picked, that
+    wrong print's own data backfills those same fields (Sprint 1's
+    behavior), compounding the mistake on any retry using the same hints.
+    Rather than reintroduce the earlier blanket name-only-search regression
+    (which removed hints for *every* search and lost real disambiguation —
+    see above), this is an explicit, opt-in per-click escape hatch: a
+    second button next to each "Find stock image"/"Find market price"/
+    "Find another image" that searches by name only for that one attempt,
+    without touching the Set/Rarity/Number field values themselves. Named
+    for what it literally does rather than "clean search" or similar
+    jargon, per an explicit ask for plain wording.
 - **Market Value (Sprint 5)** is never stored — `catalog.base_price` (the NM
   reference price captured from whichever search candidate staff actually
   selected) is the only new column; Market Value itself is computed live in

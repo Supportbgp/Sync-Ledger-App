@@ -150,6 +150,20 @@ describe('searchPokemon', () => {
     expect(q2).not.toContain('Cynthia s');
   });
 
+  it('falls back to keeping the apostrophe literally when the possessive-stripped variant finds nothing — we can\'t inspect pokemontcg.io\'s live index to know which representation it actually indexes on, so both are tried before giving up', async () => {
+    global.fetch
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // stripped exact phrase: name:"Lillie Clefairy ex" — empty
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // stripped unquoted — empty
+      .mockResolvedValueOnce(jsonResponse({
+        data: [{ name: "Lillie's Clefairy ex", set: { name: 'Ascended Heroes' }, number: '280', images: { large: 'https://x/clefairy.jpg' } }],
+      })); // apostrophe-kept exact phrase: name:"Lillie's Clefairy ex" — matches
+    const results = await searchPokemon("Lillie's Clefairy ex");
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    const thirdQuery = decodeURIComponent(global.fetch.mock.calls[2][0]);
+    expect(thirdQuery).toContain(`name:"Lillie's Clefairy ex"`);
+    expect(results[0].url).toBe('https://x/clefairy.jpg');
+  });
+
   it('tries set+number together first when both hints are given, stripping a "/total" denominator', async () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({
       data: [{ name: "Lillie's Clefairy ex", set: { name: 'Ascended Heroes' }, number: '280', images: { large: 'https://x/clefairy.jpg' } }],

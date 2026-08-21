@@ -52,10 +52,11 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   const [form, setForm] = useState(() => initForm(card));
   const [channelsTouched, setChannelsTouched] = useState(false);
   // Best-guess/scratch fields only, same as ScannerPanel's row.rarity/
-  // row.number — never saved to the catalog directly. No longer used to
-  // narrow Find stock image/Find market price (name-only search performed
-  // better in real-world testing), but selectCandidate below fills these
-  // back in from a confirmed pick's own real data.
+  // row.number — never saved to the catalog directly. Narrow Find stock
+  // image/Find market price below (see runFindImage/runFindMarketPrice's
+  // `clean` param for the escape hatch when one of these is actively wrong),
+  // and selectCandidate fills these back in from a confirmed pick's own
+  // real data.
   const [rarity, setRarity] = useState("");
   const [number, setNumber] = useState("");
 
@@ -82,7 +83,14 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   // persisting; it's a one-time explainer, not a setting.
   const [imageHelpDismissed, setImageHelpDismissed] = useState(false);
   const [manualUrl, setManualUrl] = useState("");
-  const [searching, setSearching] = useState(false);
+  // Which search action is currently in flight, or null when idle — drives
+  // both the shared disabled-while-searching guard (so a double-click can't
+  // fire two overlapping searches) and which specific button shows a
+  // spinner/"Searching…" label, since "Find stock image"/"Find market
+  // price" and their "Search by name only" counterparts all share one
+  // in-flight state.
+  const [activeSearch, setActiveSearch] = useState(null); // 'image' | 'imageClean' | 'price' | 'priceClean' | null
+  const searching = activeSearch !== null;
   const [saving, setSaving] = useState(false);
   // Which action populated `candidates` — determines what clicking one does.
   // "image": sets the stock image (and price, as a bonus, same as before).
@@ -119,16 +127,22 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
   // short-circuit first. Trusting the fallback-ladder isolation fix (a bad
   // hint now degrades gracefully instead of aborting) gets the benefit of a
   // correct hint without that cost. Matches ScannerPanel's "Find another
-  // image", which is the same action.
-  async function handleFindImage() {
+  // image", which is the same action. `clean` is the explicit escape hatch
+  // for when a hint (usually Set, which the scan/staff can get wrong) is
+  // actively steering the search toward the wrong print — it searches by
+  // name only, ignoring Set/Number/Rarity above for this one attempt
+  // without touching those fields' values.
+  async function runFindImage(clean) {
     const name = form.name.trim();
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
     setImageStatus({ text: "Searching…", kind: "" });
     setCandidates([]);
     setCandidateMode("image");
-    setSearching(true);
+    setActiveSearch(clean ? "imageClean" : "image");
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
+      const results = clean
+        ? await searchByGame(form.game, name)
+        : await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
       if (results === null) {
         setImageStatus({ text: "Auto image lookup isn't set up for this game yet — upload a photo or paste a URL instead.", kind: "err" });
       } else if (!results.length) {
@@ -140,23 +154,25 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     } catch (e) {
       setImageStatus({ text: "Couldn't reach the card image database — it may be down, rate-limited, or blocked by CORS. Try again in a moment, or upload a photo / paste a URL instead.", kind: "err" });
     }
-    setSearching(false);
+    setActiveSearch(null);
   }
 
   // For old cards that already have a correct image (basePrice didn't exist
   // as a field when they were added) — same search as "Find image" (every
   // hint available, same reasoning as above), but picking a candidate below
   // only backfills Market Value, leaving the existing image and everything
-  // else untouched.
-  async function handleFindMarketPrice() {
+  // else untouched. Same `clean` escape hatch as runFindImage above.
+  async function runFindMarketPrice(clean) {
     const name = form.name.trim();
     if (!name) { setImageStatus({ text: "Enter a card name first.", kind: "err" }); return; }
     setImageStatus({ text: "Searching…", kind: "" });
     setCandidates([]);
     setCandidateMode("price");
-    setSearching(true);
+    setActiveSearch(clean ? "priceClean" : "price");
     try {
-      const results = await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
+      const results = clean
+        ? await searchByGame(form.game, name)
+        : await searchByGame(form.game, name, form.set.trim(), rarity.trim(), number.trim());
       if (results === null) {
         setImageStatus({ text: "Market price lookup isn't set up for this game yet.", kind: "err" });
       } else if (!results.length) {
@@ -171,7 +187,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
     } catch (e) {
       setImageStatus({ text: "Couldn't reach the card price database — it may be down or rate-limited. Try again in a moment.", kind: "err" });
     }
-    setSearching(false);
+    setActiveSearch(null);
   }
 
   function selectCandidate({ url, price, listingUrl, set: candidateSet, number: candidateNumber, rarity: candidateRarity }) {
@@ -336,7 +352,16 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 </div>
               )}
               <div className="img-actions">
-                <button className="btn secondary small" disabled={searching} onClick={handleFindImage}>Find stock image</button>
+                <button className="btn secondary small" disabled={searching} onClick={() => runFindImage(false)}>
+                  {activeSearch === 'image' ? (<><span className="spinner" /> Searching…</>) : 'Find stock image'}
+                </button>
+                <button
+                  className="btn ghost small" disabled={searching}
+                  title="Ignores Set/Number/Rarity above and searches by this card's name only — use this if the results above are the wrong print or card entirely."
+                  onClick={() => runFindImage(true)}
+                >
+                  {activeSearch === 'imageClean' ? (<><span className="spinner" /> Searching…</>) : 'Search by name only'}
+                </button>
                 <button className="btn secondary small" onClick={() => document.getElementById('uploadImageInput').click()}>Upload real photo</button>
                 <input type="file" id="uploadImageInput" accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
                 <input type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange} />
@@ -473,7 +498,16 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               </div>
             </div>
             <div className="field-group">
-              <button className="btn secondary small" disabled={searching} onClick={handleFindMarketPrice}>Find market price</button>
+              <button className="btn secondary small" disabled={searching} onClick={() => runFindMarketPrice(false)}>
+                {activeSearch === 'price' ? (<><span className="spinner" /> Searching…</>) : 'Find market price'}
+              </button>
+              <button
+                className="btn ghost small" disabled={searching}
+                title="Ignores Set/Number/Rarity above and searches by this card's name only — use this if the results above are the wrong print or card entirely."
+                onClick={() => runFindMarketPrice(true)}
+              >
+                {activeSearch === 'priceClean' ? (<><span className="spinner" /> Searching…</>) : 'Search by name only'}
+              </button>
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
                 Looks up this card's real market price from the name/game/set/rarity above — independent of
                 whichever image is showing, and never changes either photo.

@@ -223,11 +223,17 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   // Trusting the fallback-ladder isolation fix (a bad hint now degrades
   // gracefully instead of aborting the search) instead of removing hints
   // altogether gets the benefit of a correct hint without that cost.
-  async function findAnotherImageForRow(id) {
+  // `clean` is the explicit per-row escape hatch (matching EditModal's
+  // runFindImage) for when Set/Rarity/Number is actively wrong and steering
+  // the search away from the right print — ignores those hints for this one
+  // search without touching the row's own field values.
+  async function findAnotherImageForRow(id, clean = false) {
     const row = rows.find(r => r.id === id);
     if (!row) return;
     updateRow(id, { imageStatus: 'searching', showCandidates: true });
-    const results = await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
+    const results = clean
+      ? await findImageCandidates(row.name, row.game)
+      : await findImageCandidates(row.name, row.game, row.set, row.rarity, row.number);
     updateRow(id, {
       imageCandidates: results,
       imageUrl: results[0]?.url || row.imageUrl,
@@ -357,15 +363,32 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         )}
       </div>
 
+      {/* Blocking, non-dismissible — real-phone feedback found staff editing
+          rows (name/set fields, image toggles) while this batch fill was
+          still writing into them, which raced. Sitting in the same
+          .overlay/.modal system as every other modal (z-index 1000)
+          categorically covers the review queue below and swallows clicks
+          to it, so there's nothing to edit until the batch actually settles. */}
+      {fillProgress && (
+        <div className="overlay show">
+          <div className="modal">
+            <div className="modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
+              <span className="spinner" style={{ width: '26px', height: '26px', borderWidth: '3px' }} />
+              <div style={{ fontWeight: 600, marginTop: '14px', fontFamily: "'Space Grotesk', sans-serif" }}>
+                Looking up images &amp; prices…
+              </div>
+              <div style={{ color: 'var(--ink-soft)', fontSize: '13px', marginTop: '6px' }}>
+                {fillProgress.done} of {fillProgress.total} card{fillProgress.total === 1 ? '' : 's'} done.
+                This only runs once per scan — the review queue unlocks as soon as it's finished.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rows && rows.length > 0 && (
         <div className="card card-pad" ref={reviewRef}>
           <div className="section-label">Review before adding ({rows.length})</div>
-          {fillProgress && (
-            <div className="status-line" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="spinner" />
-              Looking up images &amp; prices — {fillProgress.done} of {fillProgress.total} done…
-            </div>
-          )}
           <div className="field-group" style={{ maxWidth: '420px' }}>
             <label>Binder / case / collection for this page</label>
             <LocationPicker locations={locations} value={location} onChange={setLocation} ariaLabel="Binder / case / collection for this page" />
@@ -400,6 +423,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
                 onChange={(patch) => updateRow(row.id, patch)}
                 onRemove={() => removeRow(row.id)}
                 onFindAnotherImage={() => findAnotherImageForRow(row.id)}
+                onFindAnotherImageClean={() => findAnotherImageForRow(row.id, true)}
                 onFindMarketPrice={() => findMarketPriceForRow(row.id)}
               />
             ))}
@@ -420,7 +444,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
   );
 }
 
-function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFindAnotherImage, onFindMarketPrice }) {
+function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFindAnotherImage, onFindAnotherImageClean, onFindMarketPrice }) {
   const { openLightbox } = useUI();
   const conditionTier = canonicalizeCondition(row.condition);
   const conditionPct = conditionTier === "NM" ? 100 : (conditionTier && multipliers && multipliers[conditionTier]);
@@ -467,9 +491,30 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
         ) : photoSrc ? (
           <div style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>real photo</div>
         ) : null}
-        <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }} onClick={onFindAnotherImage}>Find another image</button>
+        {/* Disabled while this row's own search is in flight — guards
+            against a double-tap firing two overlapping searches for the
+            same row, same reasoning as EditModal's shared `searching` gate. */}
+        <button
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+          disabled={row.imageStatus === 'searching'}
+          onClick={onFindAnotherImage}
+        >
+          {row.imageStatus === 'searching' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find another image'}
+        </button>
+        <button
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
+          disabled={row.imageStatus === 'searching'}
+          title="Ignores Set/Rarity/Number above and searches by this card's name only — use this if the results are the wrong print or card entirely."
+          onClick={onFindAnotherImageClean}
+        >
+          Search by name only
+        </button>
         {row.basePrice == null && (
-          <button className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }} onClick={onFindMarketPrice}>Find market price</button>
+          <button
+            className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
+            disabled={row.imageStatus === 'searching'}
+            onClick={onFindMarketPrice}
+          >Find market price</button>
         )}
       </div>
 

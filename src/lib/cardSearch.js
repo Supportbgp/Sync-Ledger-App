@@ -111,29 +111,39 @@ export async function searchScryfall(name, rarityHint) {
 // code, e.g. "V \- SWSH204") — so instead of trusting their parser to honor
 // an escape, just replace the special character with a space. It's a fuzzy
 // image lookup, not an exact-match field, so losing the literal punctuation
-// costs nothing.
-//
-// Possessive apostrophes ("Lillie's", "Cynthia's") get their own rule, and
-// specifically NOT the space-replacement above: Elasticsearch/Lucene's
-// English analyzer applies a possessive filter that strips a trailing 's
-// from a token during indexing, so the real card is indexed as
-// ["lillie","clefairy","ex"], never ["lillie","s","clefairy","ex"].
-// Replacing the apostrophe with a space (as the very first fix here did)
-// inserts that extra "s" token, which breaks the exact-phrase tier's
-// adjacency match — confirmed by the exact failure pattern real-world
-// testing reported: possessive-name searches either found nothing, or fell
-// all the way through to the broad first-word-prefix tier and picked up
-// unrelated cards sharing just that first word (a "Lillie" Trainer/Supporter
-// card matching a "Lillie's Clefairy ex" search). Stripping "'s"/"’s"
-// outright, with no replacement character, mirrors the indexer's own
-// possessive filter instead of fighting it. Any other (non-possessive)
-// apostrophe still falls through to the general space-replacement below.
+// costs nothing. General-purpose use (e.g. sanitizing a setHint, where a
+// possessive apostrophe essentially never occurs) — see the two variants
+// below for the name field itself, where it does.
 function sanitizeForPokemonQuery(s) {
-  return s
-    .replace(/['’]s\b/gi, '')
-    .replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return s.replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Possessive apostrophes ("Lillie's", "Cynthia's") are genuinely ambiguous
+// without being able to inspect pokemontcg.io's live index (this app has no
+// network path to it from a dev sandbox): one real possibility is that their
+// search runs on an Elasticsearch/Lucene English analyzer, which applies a
+// possessive filter that strips a trailing 's from a token during indexing —
+// under that theory the real card is indexed as ["lillie","clefairy","ex"],
+// and replacing the apostrophe with a space (as an earlier fix here did)
+// inserts a spurious extra "s" token that breaks the exact-phrase tier's
+// adjacency match. That was real-world tested and found to help sometimes
+// but not reliably on its own — so instead of committing to one theory,
+// searchPokemon below tries both representations of the name at every
+// precision tier: this one (the 's stripped outright, no replacement
+// character) and sanitizeKeepingApostrophe below (the apostrophe left in
+// place, on the theory the index actually needs it). For a name with no
+// apostrophe at all, the two functions produce an identical string, so this
+// costs nothing extra in the overwhelmingly common case.
+function sanitizeStrippingPossessive(s) {
+  return s.replace(/['’]s\b/gi, '').replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// The other theory (see sanitizeStrippingPossessive above): the apostrophe
+// needs to stay in the query literally for it to match the index. A literal
+// apostrophe isn't itself a Lucene special character, so this only strips
+// every OTHER special character, same as sanitizeForPokemonQuery.
+function sanitizeKeepingApostrophe(s) {
+  return s.replace(/[+\-!(){}[\]^"~*?:\\/]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // A printed number is usually shown as "280/217" (this print's number over
@@ -249,23 +259,41 @@ export async function searchPokemon(name, setHint, rarityHint, numberHint) {
   // then just the first word — set/promo codes like "XY83" typed after the
   // name aren't part of the API's name field, so trailing words can sink an
   // otherwise-good search unless we fall back to something broader.
-  const safe = sanitizeForPokemonQuery(name);
   const safeSet = setHint ? sanitizeForPokemonQuery(setHint) : '';
   const safeNumber = numberHint ? sanitizePokemonNumber(String(numberHint)) : '';
-  const firstWord = safe.split(/\s+/)[0];
+
+  // Two representations of the name, tried at every precision tier below —
+  // see sanitizeStrippingPossessive's comment for why a possessive name is
+  // ambiguous enough to warrant hedging both ways instead of one guess.
+  // Identical strings (any name without an apostrophe — the overwhelming
+  // majority) collapse to one variant, so this doesn't add extra requests
+  // for the common case.
+  const stripped = sanitizeStrippingPossessive(name);
+  const kept = sanitizeKeepingApostrophe(name);
+  const nameVariants = stripped === kept ? [stripped] : [stripped, kept];
 
   // Narrowest first, broadest last. Set+number together is about as close
   // to a unique key as a print has (a name alone can match 8+ reprints —
   // alt arts, "ex"/"V"/"VMAX" variants, etc.) — but the scan's own set/
   // number guesses are frequently wrong in practice, so number-alone comes
-  // before set-alone (number is the more reliable of the two signals).
+  // before set-alone (number is the more reliable of the two signals). Both
+  // name variants are tried at each of these precision levels before ever
+  // falling through to the next, broader level — so whichever
+  // representation actually matches the index, it's found at the highest
+  // precision it can be, instead of only being tried once everything else
+  // has already failed.
   const tiers = [];
-  if (safeSet && safeNumber) tiers.push(`name:"${safe}" set.name:"${safeSet}" number:"${safeNumber}"`);
-  if (safeNumber) tiers.push(`name:"${safe}" number:"${safeNumber}"`);
-  if (safeSet) tiers.push(`name:"${safe}" set.name:"${safeSet}"`);
-  tiers.push(`name:"${safe}"`);
-  tiers.push('name:' + safe);
-  if (firstWord && firstWord !== safe) tiers.push('name:' + firstWord + '*');
+  for (const safe of nameVariants) {
+    if (safeSet && safeNumber) tiers.push(`name:"${safe}" set.name:"${safeSet}" number:"${safeNumber}"`);
+    if (safeNumber) tiers.push(`name:"${safe}" number:"${safeNumber}"`);
+    if (safeSet) tiers.push(`name:"${safe}" set.name:"${safeSet}"`);
+    tiers.push(`name:"${safe}"`);
+    tiers.push('name:' + safe);
+  }
+  const firstWord = stripped.split(/\s+/)[0];
+  if (firstWord && !(nameVariants.length === 1 && firstWord === nameVariants[0])) {
+    tiers.push('name:' + firstWord + '*');
+  }
 
   let results = [];
   for (let i = 0; i < tiers.length; i++) {
