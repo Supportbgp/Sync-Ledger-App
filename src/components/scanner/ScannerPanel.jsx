@@ -548,17 +548,40 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
 
       <div className="scan-row-fields">
         <div className="scan-row-line">
-          <input type="text" placeholder="Card name" className="sf-wide" value={row.name} onChange={(e) => onChange({ name: e.target.value })} />
-          <select className="sf" value={row.game} onChange={(e) => onChange({ game: e.target.value })}>
-            {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-          <input type="text" placeholder="Set" className="sf" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
-          <input
-            type="text" placeholder="Number" className="sf" value={row.number}
-            title="Optional — the printed collector number or set code (e.g. 150, 280/217, or LOB-005). The strongest signal for telling apart same-name/alt-art prints; used to narrow both the initial automatic fill and 'Find another image' below"
-            onChange={(e) => onChange({ number: e.target.value })}
-          />
-          <div className="sf">
+          <div className="scan-field sf-qty">
+            <label className="scan-field-label">Qty</label>
+            <input
+              type="number" min="1" placeholder="Qty" value={row.qty}
+              title="Defaults to 1 per detected pocket — automatically bumped when this same print (matching Name + Number) was spotted more than once on this page. Edit freely."
+              onChange={(e) => onChange({ qty: Number(e.target.value) || 1 })}
+            />
+          </div>
+          <div className="scan-field sf-wide">
+            <label className="scan-field-label">Card name</label>
+            <input type="text" placeholder="Card name" value={row.name} onChange={(e) => onChange({ name: e.target.value })} />
+          </div>
+          <div className="scan-field sf">
+            <label className="scan-field-label">Game</label>
+            <select value={row.game} onChange={(e) => onChange({ game: e.target.value })}>
+              {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          <div className="scan-field sf">
+            <label className="scan-field-label">Set</label>
+            <input type="text" placeholder="Set" value={row.set} onChange={(e) => onChange({ set: e.target.value })} />
+          </div>
+          <div className="scan-field sf">
+            <label className="scan-field-label">Number</label>
+            <input
+              type="text" placeholder="Number" value={row.number}
+              title="Optional — the printed collector number or set code (e.g. 150, 280/217, or LOB-005). The strongest signal for telling apart same-name/alt-art prints; used to narrow both the initial automatic fill and 'Find another image' below"
+              onChange={(e) => onChange({ number: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="scan-row-line">
+          <div className="scan-field sf">
+            <label className="scan-field-label">Rarity</label>
             <SelectWithCustom
               options={RARITY_OPTIONS_BY_GAME[row.game] || []}
               value={row.rarity}
@@ -571,21 +594,8 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
               backLabel="← Choose from the list instead"
             />
           </div>
-        </div>
-        <div className="scan-row-line">
-          <div className="sf">
-            <SelectWithCustom
-              options={CONDITION_OPTIONS}
-              value={row.condition}
-              onChange={(v) => onChange({ condition: v })}
-              ariaLabel="Condition"
-              selectPlaceholder="— Condition —"
-              addNewLabel="+ Enter a different condition…"
-              customPlaceholder="Condition"
-              backLabel="← Choose from the list instead"
-            />
-          </div>
-          <div className="sf">
+          <div className="scan-field sf">
+            <label className="scan-field-label">Printing / finish</label>
             <SelectWithCustom
               options={PRINTING_OPTIONS_BY_GAME[row.game] || []}
               value={row.printing}
@@ -598,16 +608,29 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
               backLabel="← Choose from the list instead"
             />
           </div>
-          <input
-            type="number" min="1" placeholder="Qty" className="sf-auto" style={{ width: '56px' }} value={row.qty}
-            title="Defaults to 1 per detected pocket — automatically bumped when this same print (matching Name + Number) was spotted more than once on this page. Edit freely."
-            onChange={(e) => onChange({ qty: Number(e.target.value) || 1 })}
-          />
-          <input type="number" placeholder="Price" step="0.01" className="sf" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
-          <span className={`badge confidence-${row.confidence} sf-auto`} title="How confident the scan was about this card" style={{ alignSelf: 'center' }}>
-            {row.confidence}
-          </span>
-          <button className="icon-btn sf-auto" title="Remove" onClick={onRemove}>✕</button>
+          <div className="scan-field sf">
+            <label className="scan-field-label">Condition</label>
+            <SelectWithCustom
+              options={CONDITION_OPTIONS}
+              value={row.condition}
+              onChange={(v) => onChange({ condition: v })}
+              ariaLabel="Condition"
+              selectPlaceholder="— Condition —"
+              addNewLabel="+ Enter a different condition…"
+              customPlaceholder="Condition"
+              backLabel="← Choose from the list instead"
+            />
+          </div>
+          <div className="scan-field sf">
+            <label className="scan-field-label">Price</label>
+            <input type="number" placeholder="Price" step="0.01" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
+          </div>
+          <div className="scan-row-meta">
+            <span className={`badge confidence-${row.confidence}`} title="How confident the scan was about this card">
+              {row.confidence}
+            </span>
+            <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
+          </div>
         </div>
         {row.basePrice != null && (
           <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>
