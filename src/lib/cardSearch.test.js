@@ -519,12 +519,85 @@ describe('searchYugioh', () => {
 });
 
 describe('searchLorcana', () => {
-  it('maps Lorcast results including the version/set label', async () => {
+  it('maps Lorcast results including the version/set/number/rarity label, structured fields, and a real listingUrl', async () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({
-      results: [{ name: 'Mickey Mouse', version: 'Brave Little Tailor', set: { name: 'The First Chapter' }, image_uris: { digital: { normal: 'https://x/mickey.jpg' } }, prices: { usd: '25.00' } }],
+      results: [{
+        name: 'Mickey Mouse', version: 'Brave Little Tailor',
+        set: { name: 'The First Chapter', code: '1' }, collector_number: '18', rarity: 'Uncommon',
+        image_uris: { digital: { normal: 'https://x/mickey.jpg' } },
+        prices: { usd: '25.00' },
+        purchase_uris: { tcgplayer: 'https://tcg/mickey' },
+      }],
     }));
     const results = await searchLorcana('Mickey Mouse');
-    expect(results).toEqual([{ url: 'https://x/mickey.jpg', label: 'Mickey Mouse - Brave Little Tailor (The First Chapter)', price: 25 }]);
+    expect(results).toEqual([{
+      url: 'https://x/mickey.jpg',
+      label: 'Mickey Mouse - Brave Little Tailor (The First Chapter #18 · Uncommon)',
+      price: 25, listingUrl: 'https://tcg/mickey', rarity: 'Uncommon', set: '1', number: '18',
+    }]);
+  });
+
+  it('falls back to usd_foil when usd is null, same nonfoil-first fallback as Scryfall', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      results: [{ name: 'Owl', image_uris: { digital: { normal: 'https://x/owl.jpg' } }, prices: { usd: null, usd_foil: '0.22' } }],
+    }));
+    const results = await searchLorcana('Owl');
+    expect(results[0].price).toBe(0.22);
+  });
+
+  it('tries name + set + collector-number together first, using the real s:/cn: query operators', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({ results: [{ name: 'Lilo', image_uris: { digital: { normal: 'https://x/lilo.jpg' } } }] }));
+    await searchLorcana('Lilo', '6', '', '154/204');
+    expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('Lilo s:6 cn:154');
+  });
+
+  it('falls through to a name-only search when the most specific tier finds nothing', async () => {
+    global.fetch
+      .mockResolvedValueOnce(jsonResponse({ results: [] })) // set+number tier
+      .mockResolvedValueOnce(jsonResponse({ results: [] })) // number-alone tier
+      .mockResolvedValueOnce(jsonResponse({ results: [] })) // set-alone tier
+      .mockResolvedValueOnce(jsonResponse({ results: [{ name: 'Lilo', image_uris: { digital: { normal: 'https://x/lilo.jpg' } } }] }));
+    const results = await searchLorcana('Lilo', '6', '', '999');
+    expect(global.fetch).toHaveBeenCalledTimes(4);
+    const lastQuery = decodeURIComponent(global.fetch.mock.calls[3][0]).split('q=')[1];
+    expect(lastQuery).toBe('Lilo');
+    expect(results[0].url).toBe('https://x/lilo.jpg');
+  });
+
+  it('reorders by rarityHint without dropping results, normalizing the real API\'s "Super_rare" formatting quirk', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({
+      results: [
+        { name: 'Elsa', rarity: 'Rare', image_uris: { digital: { normal: 'https://x/elsa-r.jpg' } } },
+        { name: 'Elsa', rarity: 'Super_rare', image_uris: { digital: { normal: 'https://x/elsa-sr.jpg' } } },
+      ],
+    }));
+    const results = await searchLorcana('Elsa', '', 'Super Rare', '');
+    expect(results[0].url).toBe('https://x/elsa-sr.jpg');
+    expect(results).toHaveLength(2);
+  });
+
+  it('retries once on a transient 5xx, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
+        .mockResolvedValueOnce(jsonResponse({ results: [{ name: 'Stitch', image_uris: { digital: { normal: 'https://x/stitch.jpg' } } }] }));
+
+      const promise = searchLorcana('Stitch');
+      await vi.runAllTimersAsync();
+      const results = await promise;
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(results[0].url).toBe('https://x/stitch.jpg');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns an empty array (not a throw) on a persistent non-5xx failure — this API\'s "no results" signal is not confirmed, so it is not treated as an error', async () => {
+    global.fetch.mockResolvedValue({ ok: false, status: 400, json: async () => ({}) });
+    const results = await searchLorcana('Nonexistentcardxyz');
+    expect(results).toEqual([]);
   });
 });
 
@@ -582,6 +655,13 @@ describe('searchCardImage dispatcher', () => {
     global.fetch.mockResolvedValueOnce(jsonResponse({ data: [{ name: 'Bruce Banner', set_name: 'SLD', collector_number: '42', image_uris: { normal: 'https://x/bb.jpg' } }] }));
     await searchCardImage('Magic', 'Bruce Banner', '', '', '42');
     expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('number:42');
+  });
+
+  it('dispatches Lorcana to Lorcast, forwarding setHint/numberHint as real s:/cn: query operators', async () => {
+    global.fetch.mockResolvedValueOnce(jsonResponse({ results: [{ name: 'Lilo', image_uris: { digital: { normal: 'https://x/lilo.jpg' } } }] }));
+    await searchCardImage('Lorcana', 'Lilo', '6', '', '154');
+    expect(global.fetch.mock.calls[0][0]).toContain('api.lorcast.com');
+    expect(decodeURIComponent(global.fetch.mock.calls[0][0])).toContain('Lilo s:6 cn:154');
   });
 
   it('dispatches One Piece to the proxy with the "onepiece" provider', async () => {

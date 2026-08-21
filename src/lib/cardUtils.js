@@ -141,6 +141,18 @@ export const RARITY_OPTIONS_BY_GAME = {
     "Common", "Uncommon", "Rare", "Super Rare", "Secret Rare",
     "Leader", "Special Rare", "Treasure Rare", "Manga Rare",
   ],
+  // The six official Disney Lorcana rarity tiers, each with its own distinct
+  // printed symbol next to the collector number (confirmed via multiple
+  // community rarity guides, not guessed): a gray/white circle (Common), a
+  // white book (Uncommon — the one exception to the "more sides = rarer"
+  // pattern), a bronze triangle (Rare), a silver diamond (Super Rare), a
+  // gold pentagon (Legendary), and a rainbow/holographic hexagon (Enchanted
+  // — foil-only, never pulled as a plain Rare/Super Rare/Legendary). Plus
+  // "Promo" — confirmed as a real, distinct value the Lorcast API's own
+  // `rarity` field assigns to cards from non-numbered promotional sets
+  // (verified against a real sample: an entire promo set's cards all
+  // reported `"rarity": "Promo"`, not one of the six tiers above).
+  Lorcana: ["Common", "Uncommon", "Rare", "Super Rare", "Legendary", "Enchanted", "Promo"],
 };
 
 // Printing/finish field's curated options (EditModal/ScannerPanel) — same
@@ -210,6 +222,16 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // real value) that swaps in different artwork on top of any base rarity
   // without changing the card's stats or text.
   "One Piece": ["Normal", "Alternate Art"],
+  // Unlike Yu-Gi-Oh/One Piece above, Lorcana's rarity and finish ARE
+  // genuinely independent axes — confirmed via research: every one of the
+  // six numbered-set cards at Common/Uncommon/Rare/Super Rare/Legendary
+  // exists in both a foil and a non-foil printing (real `prices.usd` vs.
+  // `prices.usd_foil` fields on the same Lorcast card object confirm both
+  // exist), with Enchanted being the one rarity that's foil-only. Since
+  // that foil-only-ness is already captured by picking "Enchanted" in the
+  // Rarity field, this list only needs the two real, evergreen finish
+  // values themselves.
+  Lorcana: ["Normal", "Foil"],
 };
 
 export function normalizeCard(c) {
