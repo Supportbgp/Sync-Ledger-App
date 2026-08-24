@@ -117,6 +117,10 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(new Set(pokemon).size).toBe(pokemon.length);
   });
 
+  it('includes the real "Promo" rarity for Pokemon — confirmed via pokemontcg.io\'s own /rarities endpoint and a real WOTC Black Star Promo card', () => {
+    expect(RARITY_OPTIONS_BY_GAME.Pokemon).toContain('Promo');
+  });
+
   it('lists the real Scryfall rarity values for Magic, no duplicates', () => {
     const magic = RARITY_OPTIONS_BY_GAME.Magic;
     expect(magic).toEqual(['Common', 'Uncommon', 'Rare', 'Mythic Rare', 'Special', 'Bonus']);

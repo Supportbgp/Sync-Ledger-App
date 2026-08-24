@@ -92,6 +92,12 @@ export const RARITY_OPTIONS_BY_GAME = {
     "Mega Attack Rare", "Mega Hyper Rare",
     // Older (2012-2022, uppercase "-EX"/"-GX"/"V")
     "Rare Holo EX", "Rare Holo GX", "Rare Holo V", "Rare Ultra", "Rare Secret",
+    // Confirmed real, current value — pokemontcg.io's own /rarities
+    // endpoint lists "Promo" alongside every tier above, and a real card
+    // (Mew 09/53, WOTC Black Star Promo) reports exactly this rarity. Promo
+    // cards span every era, so this sits outside the era-grouped blocks
+    // above rather than belonging to just one of them.
+    "Promo",
   ],
   // Scryfall's `rarity` field takes exactly these six values (confirmed via
   // its own API type definitions, not guessed) — "Mythic Rare" is the
