@@ -121,26 +121,27 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(RARITY_OPTIONS_BY_GAME.Pokemon).toContain('Promo');
   });
 
-  it('lists the real Scryfall rarity values for Magic, no duplicates', () => {
+  it('lists the real Scryfall rarity values for Magic plus "Promo" (added by explicit staff request despite not being a real Scryfall rarity value), no duplicates', () => {
     const magic = RARITY_OPTIONS_BY_GAME.Magic;
-    expect(magic).toEqual(['Common', 'Uncommon', 'Rare', 'Mythic Rare', 'Special', 'Bonus']);
+    expect(magic).toEqual(['Common', 'Uncommon', 'Rare', 'Mythic Rare', 'Special', 'Bonus', 'Promo']);
     expect(new Set(magic).size).toBe(magic.length);
   });
 
-  it('lists real Yu-Gi-Oh rarity tiers, no duplicates, excluding niche Parallel Rare variants', () => {
+  it('lists real Yu-Gi-Oh rarity tiers plus "Promo" (added by explicit staff request), no duplicates, excluding niche Parallel Rare variants', () => {
     const yugioh = RARITY_OPTIONS_BY_GAME.Yugioh;
     expect(yugioh).toContain('Secret Rare');
     expect(yugioh).toContain('Ultra Rare');
     expect(yugioh).toContain('Starlight Rare');
+    expect(yugioh).toContain('Promo');
     expect(new Set(yugioh).size).toBe(yugioh.length);
     expect(yugioh.some(o => /parallel/i.test(o))).toBe(false);
   });
 
-  it('lists the real One Piece rarity codes (mapped to full names), no duplicates, excluding Parallel/Alternate Art (a separate printing overlay, not a rarity tier)', () => {
+  it('lists the real One Piece rarity codes (mapped to full names) plus "Promo" (added by explicit staff request), no duplicates, excluding Parallel/Alternate Art (a separate printing overlay, not a rarity tier)', () => {
     const onePiece = RARITY_OPTIONS_BY_GAME['One Piece'];
     expect(onePiece).toEqual([
       'Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare',
-      'Leader', 'Special Rare', 'Treasure Rare', 'Manga Rare',
+      'Leader', 'Special Rare', 'Treasure Rare', 'Manga Rare', 'Promo',
     ]);
     expect(new Set(onePiece).size).toBe(onePiece.length);
     expect(onePiece.some(o => /parallel|alternate art/i.test(o))).toBe(false);
@@ -152,9 +153,9 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(new Set(lorcana).size).toBe(lorcana.length);
   });
 
-  it('lists the four SWU pull-structure rarities plus the real "Special" value, excluding Hyperspace/Showcase/Prestige (a separate finish axis)', () => {
+  it('lists the four SWU pull-structure rarities plus "Special" and "Promo" (the latter added by explicit staff request), excluding Hyperspace/Showcase/Prestige (a separate finish axis)', () => {
     const swu = RARITY_OPTIONS_BY_GAME.SWU;
-    expect(swu).toEqual(['Common', 'Uncommon', 'Rare', 'Legendary', 'Special']);
+    expect(swu).toEqual(['Common', 'Uncommon', 'Rare', 'Legendary', 'Special', 'Promo']);
     expect(new Set(swu).size).toBe(swu.length);
     expect(swu.some(o => /hyperspace|showcase|prestige/i.test(o))).toBe(false);
   });

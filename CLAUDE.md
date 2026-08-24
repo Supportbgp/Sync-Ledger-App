@@ -1864,44 +1864,52 @@ documented drawback, not an oversight).
   Gundam. Only Sports Singles remains without curated Rarity/Printing
   vocab, and that's permanent by design (no card database exists for it
   to research against), not a remaining sprint.
-- **`Promo` rarity audited across every game — added only where it's a
-  real value the game's own data actually reports.** Every one of these
-  games has promotional reprints, but that doesn't mean "Promo" is how
-  each one's real `rarity` field models it, and three of the four games
-  audited this way turned out NOT to use it as a rarity value at all:
-  - **Pokemon** — added. Confirmed via pokemontcg.io's own `/rarities`
-    endpoint (which lists `Promo` alongside every other real value) and a
-    real card (Mew 09/53, a WOTC Black Star Promo) that reports exactly
-    `"rarity": "Promo"`.
-  - **Magic** — NOT added. Scryfall's confirmed `rarity` field only ever
-    takes the six values already listed (`RARITY_OPTIONS_BY_GAME.Magic`);
-    a promo printing keeps its ORIGINAL rarity (a promo Rare stays
-    `rarity: "rare"`). Promo-ness lives in a completely separate boolean
-    (`is:promo`) and dedicated promo Sets, not the rarity field — adding
-    "Promo" here would misrepresent what Scryfall's own data says.
-  - **Yu-Gi-Oh** — NOT added, same reasoning. A print's `set_rarity` (one
-    entry per `card_sets[]`) is confirmed to always be a real functional
-    tier (`"Ultra Rare"`, `"Secret Rare"`, etc.) even for printings from a
-    promotional set — the promo-ness is which SET the printing belongs to,
-    not a distinct rarity string.
-  - **One Piece** — NOT added, already confirmed correctly excluded when
-    this game's own parity sprint ran. Research is explicit: "promos use a
-    P-### serial prefix rather than a rarity tier — a promo card still
-    carries a normal rarity underneath."
-  - **SWU** — NOT added. Only weak evidence found (a third-party
-    marketplace listing tag, not the actual API's own documented `rarity`
-    field), well short of the direct API-field confirmation every other
-    addition in this doc requires.
-  Lorcana/Riftbound/Gundam already had a confirmed real `Promo` value from
-  their own parity sprints and needed no change. For the four games where
-  it wasn't added, staff can still type "Promo" into the Rarity field by
-  hand via the existing free-text escape hatch — it just isn't offered as
-  a dropdown option, since it wouldn't reflect a real value in that game's
-  own data. `scan-binder-page`'s Pokemon rarity guidance also gained a
-  one-line fallback: a black-star-symbol or otherwise standalone
-  promotional card reports `Promo` regardless of its other visual traits.
-  **Requires redeploying `scan-binder-page`** for that prompt change to
-  take effect.
+- **`Promo` rarity — audited per game first, then added everywhere anyway
+  per an explicit staff request.** Every game has promotional reprints,
+  but that doesn't mean "Promo" is how each one's real `rarity` field
+  models it — the audit found only Pokemon (and Lorcana/Riftbound/Gundam,
+  already confirmed real in their own parity sprints) actually use it as
+  a genuine rarity value:
+  - **Pokemon** — confirmed real. pokemontcg.io's own `/rarities` endpoint
+    lists `Promo` alongside every other real value, and a real card (Mew
+    09/53, a WOTC Black Star Promo) reports exactly `"rarity": "Promo"`.
+  - **Magic** — NOT a real rarity value. Scryfall's confirmed `rarity`
+    field only ever takes the six values already listed
+    (`RARITY_OPTIONS_BY_GAME.Magic`); a promo printing keeps its ORIGINAL
+    rarity (a promo Rare stays `rarity: "rare"`). Promo-ness lives in a
+    completely separate boolean (`is:promo`) and dedicated promo Sets.
+  - **Yu-Gi-Oh** — NOT a real rarity value, same reasoning. A print's
+    `set_rarity` (one entry per `card_sets[]`) is confirmed to always be a
+    real functional tier (`"Ultra Rare"`, `"Secret Rare"`, etc.) even for
+    printings from a promotional set — the promo-ness is which SET the
+    printing belongs to, not a distinct rarity string.
+  - **One Piece** — NOT a real rarity value, already confirmed correctly
+    excluded when this game's own parity sprint ran. Research is explicit:
+    "promos use a P-### serial prefix rather than a rarity tier — a promo
+    card still carries a normal rarity underneath."
+  - **SWU** — only weak evidence found (a third-party marketplace listing
+    tag, not the actual API's own documented `rarity` field), short of the
+    direct API-field confirmation every other addition in this doc
+    otherwise requires.
+  Despite that, the user explicitly asked for `Promo` to be added to
+  Magic/Yugioh/One Piece/SWU's curated lists too, reasoning that floor
+  staff naturally describe a card as "the promo version" regardless of
+  what any API's rarity field says, and having it selectable makes that
+  kind of item easier to find later via the Catalog's Rarity filter — a
+  real, deliberate trade-off (findability over strict data-fidelity),
+  not a research gap. Each of those four entries in `cardUtils.js` carries
+  a comment explaining it's there by explicit request despite not
+  matching that game's own confirmed rarity data, so a future pass doesn't
+  mistake it for an oversight and "fix" it back out. `scan-binder-page`'s
+  Pokemon rarity guidance also gained a one-line fallback: a
+  black-star-symbol or otherwise standalone promotional card reports
+  `Promo` regardless of its other visual traits — scoped to Pokemon only,
+  since that's the one game where a promo card actually has a confirmed,
+  detectable visual tell; the other four games' new `Promo` option is
+  manual-select only, with no scanner-side auto-detection added, to avoid
+  the AI guessing a value that could feed a bogus rarityHint into search.
+  **Requires redeploying `scan-binder-page`** for the Pokemon prompt
+  change to take effect.
 
 ## Scanner: merging duplicate physical copies into a quantity
 

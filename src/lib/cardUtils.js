@@ -109,7 +109,18 @@ export const RARITY_OPTIONS_BY_GAME = {
   // Power Nine (sorts as the rarest tier, above Mythic). Both rare enough
   // in a real shop's binders that an exact pick beats forcing free text
   // every time one comes in.
-  Magic: ["Common", "Uncommon", "Rare", "Mythic Rare", "Special", "Bonus"],
+  //
+  // "Promo" is deliberately appended despite NOT being one of Scryfall's
+  // six confirmed rarity values above (a promo Magic card keeps its
+  // ORIGINAL rarity — Scryfall tracks promo-ness as a separate `is:promo`
+  // boolean/dedicated Set, never the rarity field itself — see the
+  // "Promo rarity audited across every game" note in CLAUDE.md). Kept
+  // anyway per an explicit staff request: floor staff naturally describe
+  // a card as "the promo version," so having it selectable here makes
+  // that kind of item easier to find later via the Catalog's Rarity
+  // filter, even though it doesn't correspond to a real value this
+  // game's own API would ever return.
+  Magic: ["Common", "Uncommon", "Rare", "Mythic Rare", "Special", "Bonus", "Promo"],
   // Real Yu-Gi-Oh TCG rarity tiers, confirmed against YGOPRODeck's own
   // `card_sets[].set_rarity` field (a real sample returned exactly "Secret
   // Rare"/"Ultra Rare" as Title Case strings — matches what's listed here)
@@ -120,10 +131,16 @@ export const RARITY_OPTIONS_BY_GAME = {
   // tiers — same "an ever-expanding, niche vocabulary belongs in the
   // free-text escape hatch, not a hardcoded list" call as Pokemon's Poke
   // Ball/Master Ball pattern exclusion above.
+  //
+  // "Promo" is appended despite not being a real Yu-Gi-Oh rarity value
+  // either — same reasoning and same explicit staff request as Magic's
+  // above (a promo printing's `set_rarity` is still a normal tier like
+  // "Ultra Rare," confirmed via a real card_sets sample; promo-ness is
+  // which SET a printing belongs to, not its rarity).
   Yugioh: [
     "Common", "Rare", "Super Rare", "Ultra Rare", "Ultimate Rare", "Secret Rare",
     "Gold Rare", "Ghost Rare", "Platinum Secret Rare", "Prismatic Secret Rare",
-    "Collector's Rare", "Starlight Rare", "Quarter Century Secret Rare",
+    "Collector's Rare", "Starlight Rare", "Quarter Century Secret Rare", "Promo",
   ],
   // Real One Piece Card Game rarity codes, each one actually printed in the
   // card's bottom-right corner (confirmed via Bandai's own card-list site and
@@ -143,9 +160,13 @@ export const RARITY_OPTIONS_BY_GAME = {
   // an SR, even a Leader can get one) rather than a rarity tier itself — see
   // PRINTING_OPTIONS_BY_GAME["One Piece"] below, same rarity-vs-finish split
   // as Yu-Gi-Oh's edition field.
+  //
+  // "Promo" is appended despite research confirming One Piece promos use
+  // a `P-###` number prefix instead of a distinct rarity tier — same
+  // explicit staff-convenience exception as Magic/Yugioh above.
   "One Piece": [
     "Common", "Uncommon", "Rare", "Super Rare", "Secret Rare",
-    "Leader", "Special Rare", "Treasure Rare", "Manga Rare",
+    "Leader", "Special Rare", "Treasure Rare", "Manga Rare", "Promo",
   ],
   // The six official Disney Lorcana rarity tiers, each with its own distinct
   // printed symbol next to the collector number (confirmed via multiple
@@ -178,7 +199,11 @@ export const RARITY_OPTIONS_BY_GAME = {
   // separate variants Original/Hyperspace/Foil/Hyperspace Foil) to be a
   // genuinely independent finish/treatment axis layered on top of any base
   // rarity, not a rarity tier itself — see PRINTING_OPTIONS_BY_GAME.SWU.
-  SWU: ["Common", "Uncommon", "Rare", "Legendary", "Special"],
+  //
+  // "Promo" is appended too, despite only weak (non-API) evidence it's a
+  // real rarity value for this game — same explicit staff-convenience
+  // exception as Magic/Yugioh/One Piece above.
+  SWU: ["Common", "Uncommon", "Rare", "Legendary", "Special", "Promo"],
   // Riftbound's four functional/pull-structure rarities, each with its own
   // frame style AND gem shape (confirmed via multiple community rarity
   // guides): bronze frame + round gem (Common), silver frame + triangular
