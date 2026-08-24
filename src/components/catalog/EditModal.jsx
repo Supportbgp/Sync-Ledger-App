@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
-import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage as searchByGame, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
@@ -601,7 +601,14 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                       Search TCGPlayer manually ↗
                     </a>
                   )}
-                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
+                  {' · '}
+                  <a
+                    href={ebaySoldSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
+                    style={{ fontWeight: 600, color: 'var(--blue)' }}
+                  >
+                    Check sold listings on eBay ↗
+                  </a>
+                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card. (eBay's sold-listings search requires being signed in to eBay.)
                 </div>
                 {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
                   <div className="status-line err" style={{ marginTop: '8px' }}>

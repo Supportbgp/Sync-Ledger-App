@@ -2006,6 +2006,44 @@ manual-search fallback. The now-redundant "worth checking…" sentence in
 the high-value warning was removed since the link right above it already
 covers that.
 
+## eBay as a second price reference
+
+Explicit ask: add eBay alongside TCGPlayer as a second, independent price
+check — evaluated two different versions of this before building anything,
+since they have very different feasibility:
+
+- **A real, automatically-pulled eBay price** (like `basePrice`/Market
+  Value) — evaluated and **not viable today**. eBay's old Finding API
+  (which used to support querying sold/completed prices) is deprecated;
+  the replacement, the Marketplace Insights API, is "Limited Release" —
+  gated behind a special business-level approval, not obtainable via a
+  normal free developer account, the same "no credential exists yet"
+  situation this doc already treats as parked for TCGPlayer's own frozen
+  Pricing API. eBay's freely available API (Browse/Buy) only exposes
+  ACTIVE listing prices (asking prices), not sold prices — a materially
+  weaker signal, same caveat already documented for TCGPlayer's own
+  low/high active-listing fallback. Scraping eBay's sold-listings pages
+  directly breaks its ToS, and this project already evaluated and
+  rejected exactly that once before (see "Known constraints" above).
+- **A manual "check on eBay" search link** (same pattern as the existing
+  `tcgplayerSearchUrl` fallback) — real, free, no API/approval needed.
+  Built as `ebaySoldSearchUrl` in `cardSearch.js`, using eBay's own
+  documented URL filter for sold+completed listings specifically
+  (`LH_Sold=1&LH_Complete=1`), not just any active listing — confirmed
+  live, not guessed. Rendered in both `EditModal`'s Pricing section and
+  `ScannerPanel`'s per-row pricing line, always alongside whichever
+  TCGPlayer link is showing (real listing or manual-search fallback) —
+  not conditional on TCGPlayer failing, since this is a second reference
+  source staff want available regardless.
+  - **Real caveat found while researching, not while building**: as of
+    2026-07-22, eBay put its sold/completed listings behind a login wall
+    — a signed-out browser gets redirected to `signin.ebay.com` instead of
+    seeing results. Not worked around (there's no way to from a plain
+    link) — just something to know if staff report the link "not
+    working": it still does, it just needs an eBay account signed in
+    first, unlike the TCGPlayer link, which assumes nothing about login.
+    eBay has not said whether this is permanent.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,

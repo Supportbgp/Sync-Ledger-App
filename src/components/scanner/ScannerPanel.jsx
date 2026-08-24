@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
@@ -660,6 +660,13 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
                 Search TCGPlayer manually ↗
               </a>
             )}
+            {' '}
+            <a
+              href={ebaySoldSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+              style={{ color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }}
+            >
+              Check sold listings on eBay ↗
+            </a>
           </div>
         )}
         {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (
