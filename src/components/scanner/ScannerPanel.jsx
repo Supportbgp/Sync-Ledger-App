@@ -544,6 +544,16 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
             Search TCGPlayer manually ↗
           </a>
         )}
+        {/* A standalone reference, not a fallback for "Find market price" above — eBay's real
+            sold+completed listings are a second, independent data point staff can check any
+            time, whether or not a Market Value has been found for this row yet. */}
+        <a
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
+          href={ebaySoldSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+          title="Opens eBay's real sold/completed listings for this card in a new tab. Requires being signed into eBay to see results."
+        >
+          Check eBay sold listings ↗
+        </a>
       </div>
 
       <div className="scan-row-fields">
@@ -660,13 +670,6 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
                 Search TCGPlayer manually ↗
               </a>
             )}
-            {' '}
-            <a
-              href={ebaySoldSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
-              style={{ color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }}
-            >
-              Check sold listings on eBay ↗
-            </a>
           </div>
         )}
         {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (

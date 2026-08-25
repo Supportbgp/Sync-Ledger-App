@@ -159,13 +159,19 @@ describe('EditModal — Pricing section listing link', () => {
     expect(screen.queryByText('Check live TCGPlayer listing ↗')).not.toBeInTheDocument();
   });
 
-  it('always shows an eBay sold-listings link alongside whichever TCGPlayer link is showing', () => {
-    render(<EditModal card={baseCard({ basePrice: 40, sourceUrl: 'https://tcg/real-listing', condition: 'NM' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
-    const link = screen.getByText('Check sold listings on eBay ↗');
+  it('shows a standalone eBay sold-listings button next to Find market price, independent of whether a Market Value has been found', () => {
+    render(<EditModal card={baseCard({ basePrice: null })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const link = screen.getByText('Check eBay sold listings ↗');
     expect(link.closest('a')).toHaveAttribute(
       'href',
       'https://www.ebay.com/sch/i.html?_nkw=Charizard%20Base%20Set&LH_Sold=1&LH_Complete=1',
     );
+  });
+
+  it('keeps showing the eBay button once a Market Value is found — it is not a fallback for the TCGPlayer link', () => {
+    render(<EditModal card={baseCard({ basePrice: 40, sourceUrl: 'https://tcg/real-listing', condition: 'NM' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByText('Check eBay sold listings ↗')).toBeInTheDocument();
+    expect(screen.getByText('Check live TCGPlayer listing ↗')).toBeInTheDocument();
   });
 });
 

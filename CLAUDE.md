@@ -2071,16 +2071,23 @@ since they have very different feasibility:
   low/high active-listing fallback. Scraping eBay's sold-listings pages
   directly breaks its ToS, and this project already evaluated and
   rejected exactly that once before (see "Known constraints" above).
-- **A manual "check on eBay" search link** (same pattern as the existing
-  `tcgplayerSearchUrl` fallback) — real, free, no API/approval needed.
-  Built as `ebaySoldSearchUrl` in `cardSearch.js`, using eBay's own
-  documented URL filter for sold+completed listings specifically
-  (`LH_Sold=1&LH_Complete=1`), not just any active listing — confirmed
-  live, not guessed. Rendered in both `EditModal`'s Pricing section and
-  `ScannerPanel`'s per-row pricing line, always alongside whichever
-  TCGPlayer link is showing (real listing or manual-search fallback) —
-  not conditional on TCGPlayer failing, since this is a second reference
-  source staff want available regardless.
+- **A manual "check on eBay" search link, as its own standalone button —
+  not a fallback tucked onto the TCGPlayer line.** Built as
+  `ebaySoldSearchUrl` in `cardSearch.js`, using eBay's own documented URL
+  filter for sold+completed listings specifically (`LH_Sold=1&
+  LH_Complete=1`), not just any active listing — confirmed live, not
+  guessed. First cut rendered it appended to whichever TCGPlayer link was
+  showing, gated on a Market Value already existing (`form.basePrice != null`) —
+  reworked after real feedback: eBay is a genuinely independent reference,
+  not something staff only want to see once "Find market price" has
+  already run or failed. It's now a real `<button>`-styled `<a>` ("Check
+  eBay sold listings ↗") sitting right next to "Find market price" in
+  `EditModal`'s Quantity & pricing section, and next to "Find another
+  image"/"Find market price" in `ScannerPanel`'s `ScanRow` thumbnail
+  column — both render unconditionally off the row/form's own name+set,
+  independent of `basePrice`/`pendingPrice`/search state, so staff can
+  jump straight to eBay without running (or waiting on) a market-price
+  search first.
   - **Real caveat found while researching, not while building**: as of
     2026-07-22, eBay put its sold/completed listings behind a login wall
     — a signed-out browser gets redirected to `signin.ebay.com` instead of
