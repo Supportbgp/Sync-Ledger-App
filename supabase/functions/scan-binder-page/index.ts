@@ -147,7 +147,10 @@ const DETECT_CARDS_TOOL = {
                 "ANY era, plain non-foil card with a standard small-boxed border and none of the above visual " +
                 "traits: 'Common' / 'Uncommon' / 'Rare' — these three genuinely cannot be told apart by look " +
                 "alone; only report one if a tiny rarity symbol next to the collector number is actually " +
-                "legible, otherwise leave this field blank rather than guessing. " +
+                "legible, otherwise leave this field blank rather than guessing. If the card instead carries " +
+                "a black star symbol (or otherwise reads as a promotional release, e.g. no regular numbered-" +
+                "set collector number, just a standalone promo number), report 'Promo' regardless of the " +
+                "visual traits above. " +
                 "CAUTION: 'Ultra Rare' (modern) and 'Rare Ultra' (older) describe the same visual treatment " +
                 "in two different eras and are NOT interchangeable — they are the same two words in opposite " +
                 "order, which is easy to transpose by mistake. Before answering either one, re-check which " +
@@ -306,7 +309,9 @@ const PROMPT_TEXT = "This is a photo of one page of a trading card binder — cl
   "words in opposite order for two different eras — re-check which word comes first before answering " +
   "either one. Only fall back to reading a tiny rarity symbol/text for " +
   "the plain Common/Uncommon/Rare tiers, and leave rarity blank rather than guess if that's not " +
-  "legible. The 'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
+  "legible. A card with a black star symbol or otherwise reading as a standalone promotional release " +
+  "(no regular numbered-set collector number) is 'Promo' instead, regardless of visual style. The " +
+  "'ex'/'EX'/'GX'/'V'/'VMAX'/'VSTAR' suffix itself is a card subtype, not a rarity, and " +
   "must never be reported as the rarity value — it's only a clue for picking the right rarity name " +
   "above. For rarity on a One Piece card, don't guess from visual style — read the short letter code " +
   "printed right next to the collector number in the bottom-right corner (e.g. 'OP01-121 SEC') and map " +
