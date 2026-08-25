@@ -696,6 +696,24 @@ export function tcgplayerSearchUrl(name, set) {
   return `https://www.tcgplayer.com/search/all/product?q=${encodeURIComponent(q)}&view=grid`;
 }
 
+// A second, independent price reference alongside TCGPlayer — eBay's own
+// SOLD/completed listings (not just active asking prices) are a real,
+// useful second data point for judging a card's actual going rate,
+// confirmed live rather than guessed: `_nkw=<query>` is eBay's standard
+// search-term param, and `LH_Sold=1&LH_Complete=1` is eBay's own documented
+// filter for sold+completed results specifically (not just any listing).
+// One caveat worth remembering if this ever looks "broken": as of
+// 2026-07-22 eBay put sold/completed results behind a login wall — a
+// signed-out browser gets redirected to signin.ebay.com instead of seeing
+// results directly. Not worked around here (no accepted way to do that
+// from a plain link), just something to know if staff report the link
+// "not working" — it still does, it just needs an eBay account signed in
+// first, the same way TCGPlayer's own link assumes nothing about login.
+export function ebaySoldSearchUrl(name, set) {
+  const q = [name, set].filter(Boolean).join(' ').trim();
+  return `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&LH_Sold=1&LH_Complete=1`;
+}
+
 // Single dispatch table for "search a card image by game" — shared by every
 // entry point that needs it (EditModal's Find image/Find market price,
 // ScannerPanel's auto-fill, CSV/XLSX import's auto-fill) so adding a new

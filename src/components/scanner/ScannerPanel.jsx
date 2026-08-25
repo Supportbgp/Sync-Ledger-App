@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchCardImage, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
@@ -544,6 +544,16 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
             Search TCGPlayer manually ↗
           </a>
         )}
+        {/* A standalone reference, not a fallback for "Find market price" above — eBay's real
+            sold+completed listings are a second, independent data point staff can check any
+            time, whether or not a Market Value has been found for this row yet. */}
+        <a
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
+          href={ebaySoldSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+          title="Opens eBay's real sold/completed listings for this card in a new tab. Requires being signed into eBay to see results."
+        >
+          Check eBay sold listings ↗
+        </a>
       </div>
 
       <div className="scan-row-fields">

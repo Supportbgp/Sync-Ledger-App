@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
-import { searchCardImage as searchByGame, tcgplayerSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage as searchByGame, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
@@ -526,12 +526,25 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               </div>
             </div>
             <div className="field-group">
-              <button className="btn secondary small" disabled={searching} onClick={runFindMarketPrice}>
-                {activeSearch === 'price' ? (<><span className="spinner" /> Searching…</>) : 'Find market price'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="btn secondary small" disabled={searching} onClick={runFindMarketPrice}>
+                  {activeSearch === 'price' ? (<><span className="spinner" /> Searching…</>) : 'Find market price'}
+                </button>
+                {/* A standalone reference, not a fallback for "Find market price" above — eBay's real
+                    sold+completed listings are a second, independent data point staff can check any time,
+                    whether or not a Market Value has been found yet. */}
+                <a
+                  className="btn secondary small"
+                  href={ebaySoldSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
+                >
+                  Check eBay sold listings ↗
+                </a>
+              </div>
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
-                Looks up this card's real market price from the name/game/set/rarity above — independent of
-                whichever image is showing, and never changes either photo.
+                "Find market price" looks up this card's real market price from the name/game/set/rarity above —
+                independent of whichever image is showing, and never changes either photo. "Check eBay sold
+                listings" opens eBay's own real sold/completed listings for this card in a new tab — a second,
+                independent reference, available any time. (Requires being signed into eBay to see results.)
               </div>
             </div>
             {candidateMode === 'price' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
