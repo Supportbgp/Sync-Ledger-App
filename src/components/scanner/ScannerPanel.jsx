@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates, GAMES } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
 
-const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 let nextRowId = 1;
 
 // Same reasoning as EditModal's HIGH_VALUE_THRESHOLD — a flat condition
@@ -89,7 +88,13 @@ async function findImageCandidates(name, game, set, rarityHint, numberHint) {
   }
 }
 
-export default function ScannerPanel({ catalog, locations, onImport, multipliers }) {
+// `destinationLabel` is purely cosmetic (button/description copy) — lets
+// the Quote tab embed this exact component for its "Scan" add-card method
+// without every string here still saying "catalog". Everything else about
+// the component (photo capture, detection, the review queue, onImport's
+// signature) is unchanged; the Scanner tab's own default behavior/wording
+// is untouched.
+export default function ScannerPanel({ catalog, locations, onImport, multipliers, destinationLabel = 'catalog' }) {
   const { toast } = useUI();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -326,7 +331,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
         <div className="section-label">Scan a binder page</div>
         <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)', marginBottom: '12px' }}>
           Take or upload a photo of one full binder page. Every card gets identified automatically —
-          review and correct the results below before anything is added to the catalog. Condition,
+          review and correct the results below before anything is added to the {destinationLabel}. Condition,
           printing/finish, and price aren't guessed; fill those in yourself once you have the cards in hand.
         </div>
         <div
@@ -448,7 +453,7 @@ export default function ScannerPanel({ catalog, locations, onImport, multipliers
             <button className="btn secondary small" onClick={addBlankRow}>+ Add missed card</button>
             <div style={{ flex: 1 }} />
             <button className="btn" disabled={saving} onClick={handleConfirm}>
-              {saving ? 'Adding…' : `Add ${rows.length} item(s) to catalog`}
+              {saving ? 'Adding…' : `Add ${rows.length} item(s) to ${destinationLabel}`}
             </button>
           </div>
         </div>

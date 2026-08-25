@@ -1,5 +1,6 @@
 import { supabaseClient } from './supabase.js';
 import { normalizeCard, DEFAULT_CONDITION_MULTIPLIERS } from './cardUtils.js';
+import { DEFAULT_QUOTE_TIER_PCTS } from './quoteUtils.js';
 
 export function rowToCard(r) {
   return normalizeCard({
@@ -148,6 +149,104 @@ export async function dbSaveSettings(multipliers, toast) {
     updated_at: new Date().toISOString(),
   }).eq('id', 1);
   if (error) toast('Failed to save settings: ' + error.message, true);
+}
+
+// Quote tab — one row is both a "collection" (in-progress) and, once
+// offer_status is set, the finalized transaction record. items is a jsonb
+// array, passed straight through untouched (supabase-js encodes/decodes
+// jsonb columns transparently, same as any other column).
+export function rowToQuote(r) {
+  return {
+    id: r.id,
+    quoteNumber: r.quote_number,
+    collectionName: r.collection_name,
+    customerName: r.customer_name || '',
+    customerId: r.customer_id || '',
+    phone: r.phone || '',
+    dateQuoted: r.date_quoted,
+    employee: r.employee || '',
+    timeTaken: r.time_taken || '',
+    items: Array.isArray(r.items) ? r.items : [],
+    offerStatus: r.offer_status || null,
+    payoutAmount: r.payout_amount,
+    paidOut: !!r.paid_out,
+    convertedToCatalog: !!r.converted_to_catalog,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now(),
+  };
+}
+
+function quoteToRow(q) {
+  // id/quote_number are DB-generated (gen_random_uuid()/bigserial) — only
+  // included when already assigned (an existing quote being updated), same
+  // "don't guess a server-generated value" discipline as everywhere else
+  // in this file.
+  const row = {
+    collection_name: q.collectionName,
+    customer_name: q.customerName || null,
+    customer_id: q.customerId || null,
+    phone: q.phone || null,
+    employee: q.employee || null,
+    time_taken: q.timeTaken || null,
+    items: q.items || [],
+    offer_status: q.offerStatus || null,
+    payout_amount: q.payoutAmount ?? null,
+    paid_out: !!q.paidOut,
+    converted_to_catalog: !!q.convertedToCatalog,
+    updated_at: new Date().toISOString(),
+  };
+  if (q.id) row.id = q.id;
+  if (q.dateQuoted) row.date_quoted = q.dateQuoted;
+  return row;
+}
+
+export async function dbLoadQuotes(toast) {
+  const { data, error } = await supabaseClient.from('quotes').select('*').order('created_at', { ascending: false });
+  if (error) {
+    toast('Failed to load quotes: ' + error.message, true);
+    return [];
+  }
+  return (data || []).map(rowToQuote);
+}
+
+// Returns the saved quote (via .select().single()) rather than void, since
+// a brand-new quote needs its DB-generated id/quote_number back to keep
+// working with it — every other dbUpsert* in this file writes a
+// client-assigned key, so this is the one exception to the usual shape.
+export async function dbUpsertQuote(quote, toast) {
+  const { data, error } = await supabaseClient.from('quotes').upsert(quoteToRow(quote)).select().single();
+  if (error) {
+    toast('Save failed: ' + error.message, true);
+    return null;
+  }
+  return rowToQuote(data);
+}
+
+export async function dbDeleteQuote(id, toast) {
+  const { error } = await supabaseClient.from('quotes').delete().eq('id', id);
+  if (error) toast('Delete failed: ' + error.message, true);
+}
+
+// Quote tier-percentage settings — same singleton-row pattern as
+// dbLoadSettings/dbSaveSettings above, kept in its own quote_settings row
+// rather than bolted onto store_settings (a different concern: quoting, not
+// Catalog condition pricing).
+export async function dbLoadQuoteSettings(toast) {
+  const { data, error } = await supabaseClient.from('quote_settings').select('*').eq('id', 1).maybeSingle();
+  if (error) {
+    toast('Failed to load quote settings: ' + error.message, true);
+    return { ...DEFAULT_QUOTE_TIER_PCTS };
+  }
+  if (!data) return { ...DEFAULT_QUOTE_TIER_PCTS };
+  return { tier1: data.tier1_pct, tier2: data.tier2_pct, tier3: data.tier3_pct };
+}
+
+export async function dbSaveQuoteSettings(tiers, toast) {
+  const { error } = await supabaseClient.from('quote_settings').update({
+    tier1_pct: tiers.tier1, tier2_pct: tiers.tier2, tier3_pct: tiers.tier3,
+    updated_at: new Date().toISOString(),
+  }).eq('id', 1);
+  if (error) toast('Failed to save quote settings: ' + error.message, true);
 }
 
 // Public binder lookup (QR-code page) — reads from catalog_public_view, a

@@ -279,18 +279,27 @@ Everything else found:
 
 - `src/lib/` — all non-React logic. `db.js` (Supabase reads/writes + row↔card
   mapping), `cardUtils.js` (`normalizeCard`, game-name canonicalization,
-  platform-status-reset logic), `cardSearch.js` (Scryfall/pokemontcg.io/
-  YGOPRODeck card+image lookup), `csv.js`/`importParse.js`/`exportFormats.js`
-  (import/export), `image.js` (client-side photo resize), `scanner.js`
-  (binder-scan Edge Function client), `qr.js` (QR generation), `supabase.js`
-  (client init).
+  platform-status-reset logic, the canonical `GAMES` list), `cardSearch.js`
+  (Scryfall/pokemontcg.io/YGOPRODeck card+image lookup), `csv.js`/
+  `importParse.js`/`exportFormats.js` (import/export), `quoteUtils.js`
+  (Quote tab totals/tiers/catalog-conversion logic), `image.js`
+  (client-side photo resize), `scanner.js` (binder-scan Edge Function
+  client), `qr.js` (QR generation), `supabase.js` (client init).
 - `src/components/catalog/` — main catalog table, edit/sell modals, batch
   actions.
 - `src/components/queue/` — the Sync Queue tab (POS/TCG Player/Collectr
   three-stamp tracking).
-- `src/components/importexport/` — CSV import, the consolidated Export
-  modal, and the Binder QR modal.
-- `src/components/scanner/` — the binder-page scanner review queue.
+- `src/components/importexport/` — `ImportPanel.jsx` (the CSV/XLSX import
+  flow, standalone enough to also be embedded in the Quote tab),
+  `ExportPanel.jsx` (Export/Binder-QR/Reset-all-data), and
+  `ImportExportPanel.jsx` (a thin composer of both — the real Import/Export
+  tab).
+- `src/components/scanner/` — the binder-page scanner review queue
+  (`ScannerPanel.jsx`, also embeddable in the Quote tab).
+- `src/components/quotes/` — the Quote tab: `QuotesTab.jsx` (landing list +
+  new-quote entry point), `QuoteDetail.jsx` (one quote's detail view),
+  `QuoteLineItemRow.jsx`, `CatalogItemPicker.jsx` (the local-catalog
+  typeahead).
 - `src/components/BinderView.jsx` — the public, read-only binder page (no
   `UIContext`, no auth).
 - `src/components/docs/` — the standalone staff documentation page (also no
@@ -2096,6 +2105,157 @@ since they have very different feasibility:
     working": it still does, it just needs an eBay account signed in
     first, unlike the TCGPlayer link, which assumes nothing about login.
     eBay has not said whether this is permanent.
+
+## Quote tab — trade-in/buylist quoting
+
+A new top-level tab, the reverse workflow of everything else in Ledger:
+Catalog/Scanner/Import are about the shop's own *outbound* stock; this is
+about *buying cards in* from a walk-in customer. Ported from a manual Excel
+sheet the shop was already using (reverse-engineered from a real uploaded
+copy, not guessed): a header block (customer info, date, employee, time
+taken), a line-item grid, an auto-computed total and three offer tiers
+(percentages of that total), and a final decision (Offer Status: Accepted
+Cash / Accepted Store Credit / Rejected Offer, a Payout Amount, an
+independent Paid Out checkbox).
+
+- **One `quotes` row is both a "collection" and, once decided, the
+  finalized transaction — no separate collection entity.** A "collection"
+  (e.g. "Jake binder proposal") is just a quote row before its
+  `offer_status` is set: staff can create it, add cards to it over time,
+  and come back to it. Once `offer_status` becomes one of the two Accepted
+  values or `'rejected'`, it's done — it stops showing up as a resumable
+  collection. This was an explicit design call (confirmed with the user)
+  over inventing a second table, since a quote row already models "staged,
+  then decided" with nothing else needing to reference a collection
+  independently of its eventual quote.
+- **Line items live in a single `items` jsonb array on the `quotes` row**
+  (`phase8_quotes.sql`), not a `quote_items` child table — matches this
+  app's existing preference for denormalized snapshots over relational
+  child tables (e.g. `sync_queue` tickets already snapshot fields rather
+  than joining back to `catalog`), and line items are never queried
+  independently of their parent quote. Each item: `{ id, name, game, set,
+  number, rarity, printing, condition, basePrice, price, qty, notes }`.
+  `quote_number` (a `bigserial`) is a human-friendly display id ("Quote
+  #14") — the uuid primary key isn't something staff should ever need to
+  read or type.
+- **Condition is deliberately never defaulted** — not even to Near Mint,
+  unlike every other Condition picker in the app. Staff make a real,
+  on-the-spot physical assessment of a card they're about to pay for, and a
+  silent default would stand in for that judgment call instead of forcing
+  it. The field starts on its real placeholder (`SelectWithCustom`'s
+  existing escape-hatch pattern, just with no pre-selected value) and
+  `marketValueForCondition` already returns `null` for a blank condition —
+  no code change was needed there, only in never pre-filling the value.
+- **Offer tiers are a store-configurable setting, not a hardcoded
+  constant** (unlike the source sheet, which hardcoded 50/60/70%
+  everywhere) — a new `quote_settings` singleton row
+  (`tier1_pct`/`tier2_pct`/`tier3_pct`, defaulting 50/60/70), same
+  `id=1`/`maybeSingle()`/fallback-to-defaults pattern as `store_settings`'s
+  condition multipliers (`dbLoadQuoteSettings`/`dbSaveQuoteSettings` in
+  `db.js`). Kept as its own settings row rather than added to
+  `store_settings` — condition multipliers are a Catalog pricing concern,
+  tier percentages are a quoting concern. Editable via a small dedicated
+  "Quote settings" modal in the Quote tab itself, not the existing Pricing
+  Settings modal.
+- **Two ways into a quote, then three ways to add cards to it** — an
+  explicit design decision after real back-and-forth about UX (see the
+  section below). "+ New Quote" offers **Create from collection** (resume
+  an in-progress one, `offer_status IS NULL`) or **Create from scratch**
+  (name it, create a blank quote). Inside a quote's detail view
+  (`QuoteDetail.jsx`, one scrollable page matching the source sheet's own
+  single-page feel), staff can add cards via:
+  - **Manual entry** (`QuoteLineItemRow.jsx`) — same field set as
+    `EditModal` (Game/Set/Number/Rarity/Printing/Condition) so an accepted
+    item arrives in Catalog with good data. The Name field is a new
+    **`CatalogItemPicker.jsx`** — a lightweight, client-side-only typeahead
+    over the shop's own already-loaded `catalog` array (no network call at
+    all) — picking a match backfills game/set/rarity/printing/basePrice;
+    typing a name with no match is just as valid, staff fill in the rest by
+    hand. This was an explicit, deliberate choice over reusing the live
+    external card search (Scryfall/pokemontcg.io/etc.) that Scanner/
+    EditModal use — the user's own words: "we work based on already
+    established data not a hub with a search toolset like Scan or Import."
+  - **Scan** — the existing `ScannerPanel` mounted as-is inside a modal,
+    with its `onImport` callback redirected to append to this quote's items
+    instead of writing to Catalog. `ScannerPanel` never touched `db.js`
+    directly to begin with (its confirm flow already just calls whatever
+    `onImport(cards, mode)` callback it's given — the same one `App.jsx`
+    normally wires to the catalog-writing handler), so embedding it here
+    needed no refactor — only a new, purely cosmetic `destinationLabel`
+    prop (default `'catalog'`) so its button/description text can say
+    "quote" instead when embedded, with zero change to the real Scanner
+    tab's own wording.
+  - **Import** — required one real extraction: the original
+    `ImportExportPanel.jsx` bundled the CSV/XLSX import flow together with
+    Export/Binder-QR/Reset-all-data in one file, none of which belong in a
+    Quote context. Split into `ImportPanel.jsx` (the file-drop → sheet-pick
+    → column-mapping → confirm flow, self-contained already, now takes an
+    `embedded` prop that hides the "Replace entire catalog" import-mode
+    option — destructive and catalog-only, meaningless for a quote's item
+    list) and `ExportPanel.jsx` (Export/QR/Reset). `ImportExportPanel.jsx`
+    is now a thin composer of both, so the real Import/Export tab's
+    behavior is byte-for-byte unchanged.
+  - Both Scan and Import route through a shared `quoteUtils.itemsFromCatalogRows(cards)`
+    adapter — both already produce fully-formed `normalizeCard(...)`-shaped
+    objects before calling `onImport`, so this just reshapes each one into
+    a quote item, dropping the generated `sku` (quote items don't need
+    one) and giving each a fresh client-side id. **`number` (collector
+    number) is left blank by this adapter** — it was never part of
+    `normalizeCard`'s saved shape to begin with (Scanner/Import already
+    discard it as a transient, never-saved search-only hint before calling
+    `onImport`, same as when they write straight to Catalog), so there's
+    nothing to carry over; staff can still type it in by hand.
+  - All three methods are freely mixable on the same quote — e.g. scan a
+    binder page, then manually add a couple more cards — since they all
+    just append to the same local `items` array before Save.
+- **`GAMES` finally hoisted into `cardUtils.js` as a real export** —
+  previously duplicated verbatim in `EditModal.jsx` and `ScannerPanel.jsx`
+  with no single source of truth; a third consumer needing the identical
+  list (`QuoteLineItemRow.jsx`) was the trigger to stop tripling it.
+- **Accepted quotes auto-create Catalog rows** — the moment `offer_status`
+  becomes `'accepted_cash'` or `'accepted_store_credit'` and the quote
+  isn't already `converted_to_catalog`, `App.jsx`'s `handleSaveQuote`
+  builds new catalog rows via `quoteUtils.buildCatalogItemsFromQuoteItems`
+  (the exact same `normalizeCard(...)` shape `EditModal`/`ScannerPanel`
+  already build, `basePrice` carried over so Market Value keeps working on
+  the new row) and writes them with the same `dbUpsertCards` bulk-upsert
+  ScannerPanel's own confirm flow already uses — no new catalog-write
+  primitive needed. `converted_to_catalog` (set `true` right after) guards
+  against creating duplicate Catalog rows if an already-accepted quote is
+  edited and saved again.
+- **Quote collections are never visible from Catalog** — an explicit user
+  requirement. Every quote has its own dedicated view inside the Quote tab
+  ("Quote #14 — Jake binder proposal"); Catalog only ever sees the cards
+  that come out the other end, once Accepted.
+- **No tracked "bounce"/counter-offer state** — confirmed with the user
+  that a rejected-then-re-offered negotiation happens verbally and is never
+  recorded; only the final Accepted/Rejected outcome and Payout Amount
+  matter.
+- **Realtime**: `quotes` extends the existing single `'ledger-realtime'`
+  channel in `useRealtimeSync.js` (one more `.on('postgres_changes', ...)`
+  registration, keyed by `id`) rather than a second channel — same
+  reasoning as every other table already on it. Like `catalog`/
+  `sync_queue` when they were first set up, `quotes` needs a one-time
+  manual add to Supabase's `supabase_realtime` publication (Database →
+  Replication) — not something any migration file in this repo does.
+- **The "how should staff add cards" UX question went through two rounds**,
+  worth recording since the first answer was reversed: the initial plan
+  ruled out reusing Scanner/Import entirely (to avoid Quote becoming a
+  second Scanner) in favor of manual-entry-plus-catalog-typeahead only.
+  After the user described the full intended flow — cards get staged into
+  a named collection first, then a quote is built from either an existing
+  collection or from scratch, with staff choosing however they want to
+  add cards — Scanner and Import were explicitly brought back in as two of
+  three add-card methods, confirmed feasible with no deep refactor once
+  actually checked (both already took an `onImport` callback prop rather
+  than writing to `db.js` internally). The lesson wasn't "reuse
+  everything" or "reuse nothing" — it was that the right amount of reuse
+  depends on the actual intended workflow, which only became clear once
+  the user walked through it end to end.
+
+**Requires running `phase8_quotes.sql`** in the Supabase SQL Editor before
+this code can save/read quotes (creates both `quotes` and
+`quote_settings`), plus the manual Realtime-publication step above.
 
 ## Testing
 

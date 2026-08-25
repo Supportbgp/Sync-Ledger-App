@@ -1095,6 +1095,46 @@
       border-color: var(--amber);
     }
 
+    .catalog-item-picker {
+      position: relative;
+    }
+
+    .catalog-item-picker-menu {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0;
+      right: 0;
+      z-index: 20;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .catalog-item-picker-option {
+      padding: 6px 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .catalog-item-picker-option:hover {
+      background: var(--surface-alt);
+    }
+
+    .catalog-item-picker-name {
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .catalog-item-picker-meta {
+      font-size: 11px;
+      color: var(--ink-faint);
+    }
+
     .checkbox-row {
       display: flex;
       align-items: center;

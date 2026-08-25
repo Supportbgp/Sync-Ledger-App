@@ -31,5 +31,7 @@ export function catalogSeed(rows) {
     sync_queue: [],
     store_settings: [{ id: 1, lp_pct: 85, mp_pct: 65, hp_pct: 45, dmg_pct: 25 }],
     catalog_public_view: [],
+    quotes: [],
+    quote_settings: [{ id: 1, tier1_pct: 50, tier2_pct: 60, tier3_pct: 70 }],
   };
 }

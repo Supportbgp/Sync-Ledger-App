@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, GAMES } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
-
-const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
 
 // A flat condition percentage is a population average, not this specific
 // card's real going rate — the higher the NM price, the bigger the dollar
