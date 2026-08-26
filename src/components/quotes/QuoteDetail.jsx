@@ -62,11 +62,12 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
 
   return (
     <div className="overlay show">
-      <div className="modal wide">
+      <div className="modal xwide">
         <div className="modal-head">
-          <div className="name">Quote #{quote.quoteNumber} — {draft.collectionName}</div>
+          <div className="name">{quote.id ? `Quote #${quote.quoteNumber} — ${draft.collectionName}` : `New quote — ${draft.collectionName}`}</div>
           <div className="meta">
-            {draft.offerStatus ? 'Finalized' : 'In progress — save any time, come back later'}
+            {!quote.id ? 'Not saved yet — nothing is kept until you hit Save'
+              : draft.offerStatus ? 'Finalized' : 'In progress — save any time, come back later'}
           </div>
         </div>
         <div className="modal-body">
@@ -81,7 +82,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
               <div className="field-group"><label>Date quoted</label><input type="date" value={draft.dateQuoted || ''} onChange={(e) => set('dateQuoted', e.target.value)} /></div>
             </div>
             <div className="field-row2">
-              <div className="field-group"><label>Employee</label><input type="text" placeholder="e.g. Noah, or Noah / Richard" value={draft.employee} onChange={(e) => set('employee', e.target.value)} /></div>
+              <div className="field-group"><label>Employee</label><input type="text" placeholder="e.g. John Doe" value={draft.employee} onChange={(e) => set('employee', e.target.value)} /></div>
               <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
             </div>
           </div>
@@ -159,7 +160,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           </div>
         </div>
         <div className="modal-foot">
-          <button className="btn ghost" onClick={handleDelete}>Delete</button>
+          {quote.id ? <button className="btn ghost" onClick={handleDelete}>Delete</button> : <span />}
           <div style={{ flex: 1 }} />
           <button className="btn secondary" onClick={onClose}>Cancel</button>
           <button className="btn" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save'}</button>
@@ -168,7 +169,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
 
       {addMode === 'scan' && (
         <div className="overlay show">
-          <div className="modal wide">
+          <div className="modal xwide">
             <div className="modal-head">
               <div className="name">Scan cards for this quote</div>
               <div className="meta">Detected cards are added to this quote, not the catalog</div>
@@ -191,7 +192,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
 
       {addMode === 'import' && (
         <div className="overlay show">
-          <div className="modal wide">
+          <div className="modal xwide">
             <div className="modal-head">
               <div className="name">Import cards for this quote</div>
               <div className="meta">Imported rows are added to this quote, not the catalog</div>

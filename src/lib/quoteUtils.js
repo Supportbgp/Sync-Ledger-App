@@ -26,6 +26,15 @@ export function normalizeQuoteItem(item) {
     price: parseMoney(src.price),
     qty: src.qty === '' || src.qty == null ? 1 : (Number(src.qty) || 1),
     notes: src.notes || '',
+    // Same dual-image model as a catalog row (see cardUtils.js's
+    // resolveActiveImage/activeImageSrc, reused as-is for a quote item's
+    // thumbnail) — a picked catalog reference or a scan/import carries its
+    // image straight over; a manually-typed row with no match just has none.
+    imageUrl: src.imageUrl || '',
+    imageData: src.imageData || '',
+    photoUrl: src.photoUrl || '',
+    photoData: src.photoData || '',
+    activeImage: src.activeImage === 'stock' ? 'stock' : 'photo',
   };
 }
 
@@ -86,6 +95,11 @@ export function itemsFromCatalogRows(cards) {
     price: c.price,
     qty: c.qty,
     notes: c.notes,
+    imageUrl: c.imageUrl,
+    imageData: c.imageData,
+    photoUrl: c.photoUrl,
+    photoData: c.photoData,
+    activeImage: c.activeImage,
   }));
 }
 
@@ -108,5 +122,10 @@ export function buildCatalogItemsFromQuoteItems(items) {
     price: item.price,
     basePrice: item.basePrice,
     notes: item.notes,
+    imageUrl: item.imageUrl,
+    imageData: item.imageData,
+    photoUrl: item.photoUrl,
+    photoData: item.photoData,
+    activeImage: item.activeImage,
   }));
 }

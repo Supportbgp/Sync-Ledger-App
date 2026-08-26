@@ -2257,6 +2257,85 @@ independent Paid Out checkbox).
 this code can save/read quotes (creates both `quotes` and
 `quote_settings`), plus the manual Realtime-publication step above.
 
+## Quote tab: real-usage fixes after first hands-on test
+
+A first real test pass against a live Supabase project (not just the mock
+harness) surfaced several real issues, fixed in one pass:
+
+- **A new quote is no longer persisted the instant "Create" is clicked.**
+  The original flow called `dbUpsertQuote` immediately, before the detail
+  view even opened — so clicking "+ New Quote" → "Create" → Cancel still
+  left a permanent blank row behind, and consumed a real `quote_number`
+  from the sequence for a quote that was never actually used. `QuotesTab`
+  now builds a client-only draft object (`id: null`) and only calls
+  `onSaveQuote` on the first real Save inside `QuoteDetail` — matching how
+  `EditModal` already treats a new catalog item (nothing exists until
+  Save). `QuoteDetail`'s title reads "New quote — &lt;name&gt;" before that
+  first save and "Quote #N — &lt;name&gt;" after; its Delete button only
+  renders once `quote.id` is real, since there's nothing to delete before
+  that.
+  - **This also fixes what looked like a documentation bug but wasn't**:
+    an earlier manual test checklist claimed "resuming a draft opens it
+    with everything you'd already entered intact" after Cancel — that was
+    simply wrong. Cancel has always discarded unsaved edits, matching
+    every other modal's explicit-button-only-close convention in this
+    app; the checklist description was corrected, not the behavior.
+  - **`quote_number` gaps are still normal and expected** even with this
+    fix (a genuinely abandoned mid-edit quote that reaches one real Save
+    still consumes a number) — same as invoice/ticket numbers everywhere;
+    a `bigserial` doesn't roll back on its own. Not treated as a bug.
+- **`QuoteDetail`'s modal was too narrow for its own content.** It used
+  `.modal.wide` (560px, tuned for `EditModal`'s image+form layout) for a
+  line-item grid with *more* fields per row than `EditModal` has — real
+  testing showed this as visibly cramped/truncated fields. New `.modal.xwide`
+  (1040px) is used for `QuoteDetail`'s main modal and its embedded Scan/
+  Import sub-modals instead — `.modal.wide` itself is untouched, still used
+  by `EditModal` alone.
+- **Employee field placeholder no longer shows a real staff name** — was
+  `"e.g. Noah, or Noah / Richard"` (actual example names from earlier
+  testing), now generic `"e.g. John Doe"`.
+- **Quote line items now carry an image**, same dual-image model
+  (`imageUrl`/`imageData`/`photoUrl`/`photoData`/`activeImage`) a catalog
+  row already has, rendered via the same `activeImageSrc` helper — added
+  to `normalizeQuoteItem`/`itemsFromCatalogRows`/
+  `buildCatalogItemsFromQuoteItems` in `quoteUtils.js` so a picked catalog
+  reference, a scanned crop, or a live "Find image" result all carry
+  through to the row's thumbnail and, on Accept, onto the new Catalog row.
+- **Live external card search is back on quote rows — "Find image"/
+  "Find price" buttons, reusing `searchCardImage`** (Scryfall/pokemontcg.io/
+  etc., the exact same function `EditModal`/`ScannerPanel` call) — plus the
+  manual TCGPlayer/eBay fallback links, matching `ScanRow`'s own thumb-col
+  layout. **This reverses this doc's own earlier "no live external card
+  search for Quote" decision** — the catalog-only typeahead's real
+  limitation is that a genuinely new trade-in card has no catalog history
+  to reference at all, and real use found the live search "the most
+  important time saver" once available elsewhere in the app. Search state
+  (`candidates`/`candidateMode`/`activeSearch`) is scoped locally per
+  `QuoteLineItemRow`, mirroring `EditModal`'s own local search state rather
+  than lifting it into `QuoteDetail` — each row searches independently.
+- **`QuotesTab`'s list gained status color-coding, a status filter, a
+  search box, and sortable columns** — real feedback that a growing quote
+  list needed to be scannable/filterable, not just chronological. Rows are
+  tinted by outcome using the same semantic tokens as everywhere else in
+  this app (`--amber-soft` in progress, `--green-soft` accepted,
+  `--rust-soft` rejected — applied to `td`, not `tr`, so it isn't fought by
+  the existing global `tbody tr:hover` rule). Status filter is a row of
+  quick toggle buttons (All/In progress/Accepted Cash/Accepted Store
+  Credit/Rejected), not a dropdown — matches "quick filter" as asked, not a
+  slower two-click pick. Search matches collection name + customer name.
+  Sortable column headers reuse the exact `.sortable`/click-to-toggle-
+  direction pattern `CatalogTable` already established, with a small local
+  `QUOTE_SORT_COLUMNS` key map (not exported/shared — Quote's column set is
+  different enough from Catalog's own `SORT_COLUMNS` that a shared export
+  wasn't worth it for five columns).
+- **Clarified, not changed**: what the catalog typeahead actually does when
+  picking a reference card — it only copies field *values* (game/set/
+  rarity/printing/basePrice/image) onto the new quote line item; it never
+  links to, modifies, or flags the original catalog row in any way. The
+  shop's Catalog is a read-only reference for this picker, same as a live
+  external search would be — building or editing a quote can never change
+  anything already in Catalog.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,

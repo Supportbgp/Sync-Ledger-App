@@ -421,6 +421,13 @@
       max-width: 560px;
     }
 
+    /* The Quote tab's line-item grid packs more fields per row than
+       .modal.wide has room for (5-6 dense fields plus a thumbnail),
+       which read as cramped/truncated at 560px in real testing. */
+    .modal.xwide {
+      max-width: 1040px;
+    }
+
     .modal-head {
       padding: 16px 20px;
       border-bottom: 1px solid var(--border);
@@ -1133,6 +1140,21 @@
     .catalog-item-picker-meta {
       font-size: 11px;
       color: var(--ink-faint);
+    }
+
+    /* Quote list rows tinted by outcome — same semantic colors as
+       everywhere else (amber=pending, green=success, rust=danger) so a
+       long quote list scans by color, not just by reading the Status cell. */
+    .quote-row-progress td {
+      background: var(--amber-soft);
+    }
+
+    .quote-row-accepted td {
+      background: var(--green-soft);
+    }
+
+    .quote-row-rejected td {
+      background: var(--rust-soft);
     }
 
     .checkbox-row {

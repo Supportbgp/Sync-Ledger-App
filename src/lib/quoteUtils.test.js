@@ -30,6 +30,14 @@ describe('normalizeQuoteItem', () => {
     expect(item.price).toBeNull();
     expect(item.basePrice).toBeNull();
   });
+
+  it('carries the same dual-image fields a catalog row has, defaulting activeImage to photo', () => {
+    const item = normalizeQuoteItem({ name: 'X', imageUrl: 'https://x/stock.jpg', photoData: 'data:img' });
+    expect(item.imageUrl).toBe('https://x/stock.jpg');
+    expect(item.photoData).toBe('data:img');
+    expect(item.activeImage).toBe('photo');
+    expect(normalizeQuoteItem({ name: 'Y', activeImage: 'stock' }).activeImage).toBe('stock');
+  });
 });
 
 describe('computeQuoteTotals', () => {
@@ -105,6 +113,15 @@ describe('itemsFromCatalogRows', () => {
     expect(itemsFromCatalogRows([])).toEqual([]);
     expect(itemsFromCatalogRows(undefined)).toEqual([]);
   });
+
+  it('carries image fields over from a scanned/picked card', () => {
+    const items = itemsFromCatalogRows([{
+      name: 'X', game: 'Pokemon', imageUrl: 'https://x/stock.jpg', photoData: 'data:crop', activeImage: 'stock',
+    }]);
+    expect(items[0].imageUrl).toBe('https://x/stock.jpg');
+    expect(items[0].photoData).toBe('data:crop');
+    expect(items[0].activeImage).toBe('stock');
+  });
 });
 
 describe('buildCatalogItemsFromQuoteItems', () => {
@@ -134,5 +151,12 @@ describe('buildCatalogItemsFromQuoteItems', () => {
 
   it('handles an empty item list', () => {
     expect(buildCatalogItemsFromQuoteItems([])).toEqual([]);
+  });
+
+  it('carries the quote item\'s image over onto the new catalog row', () => {
+    const items = [normalizeQuoteItem({ name: 'A', imageUrl: 'https://x/stock.jpg', activeImage: 'stock' })];
+    const cards = buildCatalogItemsFromQuoteItems(items);
+    expect(cards[0].imageUrl).toBe('https://x/stock.jpg');
+    expect(cards[0].activeImage).toBe('stock');
   });
 });
