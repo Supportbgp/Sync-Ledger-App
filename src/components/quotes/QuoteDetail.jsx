@@ -5,6 +5,7 @@ import QuoteLineItemRow from './QuoteLineItemRow.jsx';
 import ScannerPanel from '../scanner/ScannerPanel.jsx';
 import ImportPanel from '../importexport/ImportPanel.jsx';
 import { QuotePrintSheet, ReleaseFormPrintSheet } from './QuotePrintViews.jsx';
+import AcceptQuoteModal from './AcceptQuoteModal.jsx';
 
 const OFFER_STATUS_OPTIONS = [
   { value: '', label: '— Still deciding —' },
@@ -25,6 +26,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
   const [saving, setSaving] = useState(false);
   const [printMode, setPrintMode] = useState(null); // null | 'quote' | 'release'
   const [openSections, setOpenSections] = useState({ details: true, release: true, cards: true, total: true });
+  const [showAcceptModal, setShowAcceptModal] = useState(false);
 
   function toggleSection(key) {
     setOpenSections(s => ({ ...s, [key]: !s[key] }));
@@ -66,11 +68,34 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
     setAddMode(null);
   }
 
-  async function handleSave() {
+  // Real staff feedback: once a quote is Accepted, its items become
+  // Catalog rows with no way to say where they physically live or which
+  // platforms they should sync to — every accepted quote's cards landed
+  // with a blank location. Saving with a newly-Accepted status (cash or
+  // credit, doesn't matter which) now detours through AcceptQuoteModal
+  // first, once for the whole batch, instead of silently converting.
+  // Doesn't apply to re-saving an already-converted quote (nothing new to
+  // place) or an empty item list (nothing to place at all).
+  function handleSave() {
+    const willConvert = (draft.offerStatus === 'accepted_cash' || draft.offerStatus === 'accepted_store_credit')
+      && !draft.convertedToCatalog && draft.items.length > 0;
+    if (willConvert) {
+      setShowAcceptModal(true);
+      return;
+    }
+    doSave();
+  }
+
+  async function doSave(destination) {
     setSaving(true);
-    await onSave(draft);
+    await onSave(draft, destination);
     setSaving(false);
     onClose();
+  }
+
+  function handleConfirmAccept(location, channels) {
+    setShowAcceptModal(false);
+    doSave({ location, ...channels });
   }
 
   async function handleDelete() {
@@ -273,6 +298,16 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
             </div>
           </div>
         </div>
+      )}
+
+      {showAcceptModal && (
+        <AcceptQuoteModal
+          itemCount={draft.items.length}
+          catalog={catalog}
+          locations={locations}
+          onCancel={() => setShowAcceptModal(false)}
+          onConfirm={handleConfirmAccept}
+        />
       )}
     </div>
 

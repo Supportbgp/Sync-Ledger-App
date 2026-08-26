@@ -41,6 +41,28 @@ test('create from scratch, add cards via the catalog typeahead and freeform, acc
   await page.locator('.field-group', { hasText: 'Offer status' }).locator('select').selectOption('accepted_cash');
   await page.getByRole('button', { name: 'Save' }).click();
 
+  // Accepting detours through "where are these cards going?" before
+  // anything is actually persisted.
+  const acceptModal = page.locator('.modal', { hasText: 'Where are these cards going?' });
+  await expect(acceptModal).toBeVisible();
+  const acceptSave = acceptModal.getByRole('button', { name: 'Save' });
+  await expect(acceptSave).toBeDisabled();
+  // Picking a location that already has items (the seeded Charizard's
+  // "Binder A") follows that binder's own existing channel mix, same
+  // "follow the majority until touched" default EditModal already uses —
+  // that alone is enough to enable Save.
+  await page.getByLabel('Binder / case / collection').selectOption('Binder A');
+  await expect(acceptSave).toBeEnabled();
+  // Unchecking every channel disables Save again — a location with
+  // nowhere to actually list it isn't a valid destination either.
+  await page.getByLabel('In-store / POS').uncheck();
+  await page.getByLabel('TCG Player').uncheck();
+  await page.getByLabel('Collectr').uncheck();
+  await expect(acceptSave).toBeDisabled();
+  await page.getByLabel('In-store / POS').check();
+  await expect(acceptSave).toBeEnabled();
+  await acceptSave.click();
+
   await expect(page.locator('.modal-head .name')).toHaveCount(0);
 
   await page.locator('.tab', { hasText: 'Catalog' }).click();
@@ -86,6 +108,30 @@ test('quote detail sections collapse and expand independently', async ({ page })
   // Re-expanding "Quote details" brings its fields back.
   await detailsHeader.click();
   await expect(page.getByText('Customer name')).toBeVisible();
+});
+
+test('cancelling the accept-destination modal leaves the quote un-accepted and unsaved', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Cancelled accept');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  await page.getByRole('button', { name: '+ Add card manually' }).click();
+  await page.getByPlaceholder('Card name').fill('Some Card');
+  await page.locator('.scan-row').first().locator('input[placeholder="Price"]').fill('5');
+
+  await page.locator('.field-group', { hasText: 'Offer status' }).locator('select').selectOption('accepted_cash');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  const acceptModal = page.locator('.modal', { hasText: 'Where are these cards going?' });
+  await expect(acceptModal).toBeVisible();
+  await acceptModal.getByRole('button', { name: 'Cancel' }).click();
+
+  // Cancelling the destination step leaves the quote detail view open and
+  // nothing persisted — this was never a real Save.
+  await expect(acceptModal).toHaveCount(0);
+  await expect(page.locator('.modal-head .name', { hasText: 'New quote' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByText('No quotes yet')).toBeVisible();
 });
 
 test('cancelling a never-saved new quote leaves no trace — nothing to resume, no quote created', async ({ page }) => {

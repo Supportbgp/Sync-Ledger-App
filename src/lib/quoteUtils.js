@@ -109,7 +109,15 @@ export function itemsFromCatalogRows(cards) {
 // primitive needed. basePrice carries over so Market Value keeps working
 // on the new row going forward; price/condition/qty/notes carry over as
 // entered on the quote.
-export function buildCatalogItemsFromQuoteItems(items) {
+//
+// `destination` — { location, posChannel, tcgplayerChannel, collectrChannel }
+// — is staff's answer to AcceptQuoteModal ("where are these cards going?"),
+// collected once for the whole batch rather than guessed. Applied uniformly
+// to every item in this accept; there's no per-item destination on a quote.
+// Omitting it (e.g. existing callers/tests) falls back to normalizeCard's
+// own defaults — blank location, channels defaulting to "everywhere".
+export function buildCatalogItemsFromQuoteItems(items, destination) {
+  const dest = destination || {};
   return (items || []).map((item, i) => normalizeCard({
     sku: `quote-${Date.now()}-${i}`,
     name: item.name,
@@ -127,5 +135,9 @@ export function buildCatalogItemsFromQuoteItems(items) {
     photoUrl: item.photoUrl,
     photoData: item.photoData,
     activeImage: item.activeImage,
+    location: dest.location || '',
+    posChannel: dest.posChannel,
+    tcgplayerChannel: dest.tcgplayerChannel,
+    collectrChannel: dest.collectrChannel,
   }));
 }

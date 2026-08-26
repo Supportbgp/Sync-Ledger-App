@@ -2463,6 +2463,69 @@ actual printed Quote for a large card list that cut off partway through.
   alone, and the DOM-nesting fix is a straightforward, low-risk structural
   change with no new runtime logic to test.
 
+## Quote tab: accept-time destination (binder/case + platform channels)
+
+Real staff feedback after the tab shipped: "Once we accept the quote, how
+do we tell it where the items are going? aka TCGplayer, case, red binder,
+blue binder?" — a genuine gap, not a UI nit. Every accepted quote's items
+were converting into Catalog rows with a blank `location` and the
+"assumed everywhere" channel default (`posChannel`/`tcgplayerChannel`/
+`collectrChannel` all `true`, same as any other new item — see
+`normalizeCard` in `cardUtils.js`), invisible until someone went and fixed
+each new row by hand in Catalog afterward.
+
+- **`src/components/quotes/AcceptQuoteModal.jsx`** (new) — fires when
+  `QuoteDetail`'s Save is clicked while `offerStatus` is newly
+  `accepted_cash` or `accepted_store_credit` (**either one — this isn't
+  cash-only**), the quote isn't already `convertedToCatalog`, and it has
+  at least one item (nothing to place otherwise). Blocks the actual save:
+  a `LocationPicker` (the same binder/case picker `EditModal` uses, with
+  its own "+ Add new collection…" escape hatch) plus the same three
+  In-store/POS, TCG Player, Collectr channel checkboxes `EditModal` already
+  has. Save is disabled until a location is chosen **and** at least one
+  channel is checked — picking a location alone isn't enough, since a
+  destination with nowhere to actually list it isn't a real answer to
+  "where are these cards going." Same "follow the majority of this
+  location's existing items until a checkbox is manually touched" default
+  as `EditModal`'s own new-item flow (`channelDefaultsForLocation`) — for
+  an established binder this typically makes Save enabled the moment a
+  location is picked; for a genuinely new location/case it should default
+  to Catalog's existing empty-location fallback (all-channels-on) same as
+  everywhere else in this app, and the "at least one checked" gate still
+  catches anyone who deliberately unchecks every box.
+- **One destination decision applies to the whole batch**, not per line
+  item — this quote's items are all one buy transaction physically handed
+  over together; a quote never gets partial-conversion or per-item
+  locations in this app (matches the existing model where the whole quote
+  converts to Catalog atomically, guarded by `convertedToCatalog`).
+- **Cancelling the modal cancels the Save entirely** — the quote stays
+  open, un-accepted, un-persisted, same "nothing happens until you
+  actually confirm" discipline as every other modal-gated action in this
+  app. Re-clicking Save (with the offer status still Accepted) re-opens
+  the same prompt; nothing was silently remembered from the cancelled
+  attempt.
+- **Wiring**: `QuoteDetail`'s `handleSave` no longer saves directly —
+  it now checks whether this Save would trigger a first-time conversion
+  and, if so, opens `AcceptQuoteModal` instead and defers the actual save
+  (`doSave(destination)`) to the modal's confirm callback.
+  `buildCatalogItemsFromQuoteItems(items, destination)` (`quoteUtils.js`)
+  gained a second, optional `destination` argument — `{location,
+  posChannel, tcgplayerChannel, collectrChannel}` — applied uniformly to
+  every converted item via the same `normalizeCard` fields Catalog already
+  uses; omitting it (existing callers/tests) falls back to
+  `normalizeCard`'s own defaults (blank location, every channel on), so
+  nothing broke for the one non-UI test call site. `App.jsx`'s
+  `handleSaveQuote(quoteDraft, destination)` just threads the extra
+  argument through to `buildCatalogItemsFromQuoteItems`.
+- Covered by new `quoteUtils.test.js` cases (destination applied to every
+  item; falls back to normalizeCard's defaults when omitted) and new
+  `e2e/quotes.spec.js` cases: the full accept flow now picks a location
+  and a channel before Save is even clickable, plus a dedicated test that
+  Save stays disabled with no location, becomes enabled once a location
+  with existing items is picked (its majority channel default), disables
+  again if every channel is unchecked, and a separate test that
+  cancelling the modal leaves the quote open and unsaved.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,

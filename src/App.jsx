@@ -262,12 +262,14 @@ export default function App() {
   // an Accepted status (and not already converted) gets each line item
   // turned into a new Catalog row before the quote itself is saved, guarded
   // by `convertedToCatalog` so re-saving an already-accepted quote never
-  // creates duplicates.
-  async function handleSaveQuote(quoteDraft) {
+  // creates duplicates. `destination` (location + channel checkboxes) comes
+  // from QuoteDetail's AcceptQuoteModal — staff's answer to "where are
+  // these cards going?", asked once for the whole batch at accept time.
+  async function handleSaveQuote(quoteDraft, destination) {
     const toSave = { ...quoteDraft };
     const isAccepted = toSave.offerStatus === 'accepted_cash' || toSave.offerStatus === 'accepted_store_credit';
     if (isAccepted && !toSave.convertedToCatalog) {
-      const newCards = buildCatalogItemsFromQuoteItems(toSave.items);
+      const newCards = buildCatalogItemsFromQuoteItems(toSave.items, destination);
       if (newCards.length) {
         await dbUpsertCards(newCards, toast);
         setCatalog(prev => [...prev, ...newCards]);

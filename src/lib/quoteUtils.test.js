@@ -159,4 +159,26 @@ describe('buildCatalogItemsFromQuoteItems', () => {
     expect(cards[0].imageUrl).toBe('https://x/stock.jpg');
     expect(cards[0].activeImage).toBe('stock');
   });
+
+  it('applies the AcceptQuoteModal destination (location + channels) to every converted item', () => {
+    const items = [normalizeQuoteItem({ name: 'A' }), normalizeQuoteItem({ name: 'B' })];
+    const cards = buildCatalogItemsFromQuoteItems(items, {
+      location: 'Red binder', posChannel: true, tcgplayerChannel: false, collectrChannel: false,
+    });
+    for (const c of cards) {
+      expect(c.location).toBe('Red binder');
+      expect(c.posChannel).toBe(true);
+      expect(c.tcgplayerChannel).toBe(false);
+      expect(c.collectrChannel).toBe(false);
+    }
+  });
+
+  it('falls back to normalizeCard\'s own defaults (blank location, every channel on) when no destination is given', () => {
+    const items = [normalizeQuoteItem({ name: 'A' })];
+    const cards = buildCatalogItemsFromQuoteItems(items);
+    expect(cards[0].location).toBe('');
+    expect(cards[0].posChannel).toBe(true);
+    expect(cards[0].tcgplayerChannel).toBe(true);
+    expect(cards[0].collectrChannel).toBe(true);
+  });
 });
