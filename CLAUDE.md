@@ -2405,6 +2405,64 @@ process the shop was still doing by hand.
 **Requires running `phase9_quote_intake_release.sql`** in the Supabase SQL
 Editor before this code can save/read the new intake fields.
 
+## Quote tab: field layout, print pagination fix, collapsible sections
+
+A fourth round of real-usage feedback, this time from a screenshot of an
+actual printed Quote for a large card list that cut off partway through.
+
+- **Email field restyled to match Employee's** — was a bare `type="email"`
+  input with no placeholder, visually inconsistent with every other text
+  field in the section (Employee's `placeholder="e.g. John Doe"` was the
+  template every other field in this section already follows). Now
+  `type="text" placeholder="e.g. jane@email.com"` — a plain text input like
+  the rest, not relying on the browser's native email-format validation
+  UI, which this app doesn't use anywhere else either.
+- **"Quote details" fields reordered**: Date quoted moves to its own
+  full-width field-group at the end of the section (was paired with
+  Employee); Time taken to quote takes over that now-vacant slot next to
+  Employee instead. Purely a field-ordering change — no field
+  added/removed/renamed.
+- **Print Quote was silently truncating long quotes** — traced to
+  `.print-sheet` (the hidden-until-`@media print` element `QuotePrintSheet`/
+  `ReleaseFormPrintSheet` render into) being a DOM *descendant* of
+  `.overlay show`, whose CSS is `position: fixed; inset: 0; overflow-y:
+  auto` to bound the on-screen modal to the viewport. Overflow clipping on
+  a fixed-position ancestor applies to everything painted within that
+  subtree regardless of a descendant's own `position: absolute` — so a
+  print sheet taller than the overlay's own on-screen scrollable box was
+  getting cut off at print time exactly where the overlay's own bounds
+  ended, which is what a screenshot of a long quote's printed output
+  showed as "looks incomplete." Fixed by moving both print-sheet renders
+  in `QuoteDetail.jsx` to be top-level siblings of the `.overlay` div
+  (wrapping the component's whole return in a Fragment) instead of nested
+  inside it — the sheet is invisible on screen either way (only `@media
+  print` ever shows it), so this has zero visible effect outside of print,
+  and print output now paginates normally regardless of quote length.
+- **Collapsible sections**: `QuoteDetail`'s four `.form-section` blocks
+  (Quote details / Release form info / Cards / Total & offer) can now each
+  be independently collapsed via a click on their header — new local
+  `openSections` state (`{details, release, cards, total}`, all default
+  expanded so nothing changes for existing muscle memory) plus a small new
+  `SectionHeader` component (a rotating `▶` chevron + click handler,
+  replacing the previously-inert `.section-label` divider). Lets staff
+  jump straight to, say, Total & offer on a long card-heavy quote without
+  scrolling past the whole Cards list first — the actual ask, once a real
+  quote's card list got long enough that "quickly move between" sections
+  stopped being quick. No section is ever forced closed automatically
+  (e.g. based on item count) — purely a manual toggle, so a section
+  staff want open while editing (Cards, most of the time) just stays that
+  way.
+- Covered by a new e2e test (`e2e/quotes.spec.js`) asserting a section's
+  fields actually disappear/reappear on toggle and that two sections
+  collapse independently of each other. The print-pagination fix itself
+  isn't independently e2e-tested — same reasoning already established for
+  `QuotePrintViews.test.jsx`: asserting real paginated print output isn't
+  meaningfully testable in a headless browser — it was verified by tracing
+  the CSS root cause (`.overlay`'s `overflow-y: auto` clipping a nested
+  absolutely-positioned descendant) rather than by a repro screenshot
+  alone, and the DOM-nesting fix is a straightforward, low-risk structural
+  change with no new runtime logic to test.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,

@@ -62,6 +62,32 @@ test('create from scratch, add cards via the catalog typeahead and freeform, acc
   await expect(page.locator('.modal-head .name', { hasText: 'Quote #1' })).toBeVisible();
 });
 
+test('quote detail sections collapse and expand independently', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Collapsible sections test');
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.locator('.modal-head .name', { hasText: 'New quote' })).toBeVisible();
+
+  // All four sections start expanded.
+  await expect(page.getByText('Customer name')).toBeVisible();
+  await expect(page.getByRole('button', { name: '+ Add card manually' })).toBeVisible();
+
+  // Collapsing "Quote details" hides its fields but leaves the others alone.
+  const detailsHeader = page.locator('.section-label', { hasText: 'Quote details' });
+  await detailsHeader.click();
+  await expect(page.getByText('Customer name')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '+ Add card manually' })).toBeVisible();
+
+  // Collapsing "Cards" independently hides the add-card buttons.
+  const cardsHeader = page.locator('.section-label', { hasText: 'Cards (' });
+  await cardsHeader.click();
+  await expect(page.getByRole('button', { name: '+ Add card manually' })).toHaveCount(0);
+
+  // Re-expanding "Quote details" brings its fields back.
+  await detailsHeader.click();
+  await expect(page.getByText('Customer name')).toBeVisible();
+});
+
 test('cancelling a never-saved new quote leaves no trace — nothing to resume, no quote created', async ({ page }) => {
   await page.getByRole('button', { name: '+ New Quote' }).click();
   await page.getByPlaceholder('e.g. Jake binder proposal').fill('Abandoned attempt');

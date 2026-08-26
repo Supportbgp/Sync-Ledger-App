@@ -24,6 +24,11 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
   const [addMode, setAddMode] = useState(null); // null | 'scan' | 'import'
   const [saving, setSaving] = useState(false);
   const [printMode, setPrintMode] = useState(null); // null | 'quote' | 'release'
+  const [openSections, setOpenSections] = useState({ details: true, release: true, cards: true, total: true });
+
+  function toggleSection(key) {
+    setOpenSections(s => ({ ...s, [key]: !s[key] }));
+  }
 
   // Printing works off `draft` (whatever's currently on screen, saved or
   // not) — staff often want the Release Form the moment a customer's cards
@@ -78,6 +83,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
   const tiers = computeOfferTiers(total, tierSettings);
 
   return (
+    <>
     <div className="overlay show">
       <div className="modal xwide">
         <div className="modal-head">
@@ -92,7 +98,8 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
             <button className="btn secondary small" onClick={() => setPrintMode('quote')}>Print Quote</button>
             <button className="btn secondary small" onClick={() => setPrintMode('release')}>Print Release Form</button>
           </div>
-          <div className="section-label">Quote details</div>
+          <SectionHeader title="Quote details" open={openSections.details} onToggle={() => toggleSection('details')} />
+          {openSections.details && (
           <div className="form-section">
             <div className="field-row2">
               <div className="field-group"><label>Customer name</label><input type="text" value={draft.customerName} onChange={(e) => set('customerName', e.target.value)} /></div>
@@ -100,16 +107,18 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Phone #</label><input type="text" value={draft.phone} onChange={(e) => set('phone', e.target.value)} /></div>
-              <div className="field-group"><label>Email</label><input type="email" value={draft.customerEmail} onChange={(e) => set('customerEmail', e.target.value)} /></div>
+              <div className="field-group"><label>Email</label><input type="text" placeholder="e.g. jane@email.com" value={draft.customerEmail} onChange={(e) => set('customerEmail', e.target.value)} /></div>
             </div>
             <div className="field-row2">
-              <div className="field-group"><label>Date quoted</label><input type="date" value={draft.dateQuoted || ''} onChange={(e) => set('dateQuoted', e.target.value)} /></div>
+              <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
               <div className="field-group"><label>Employee</label><input type="text" placeholder="e.g. John Doe" value={draft.employee} onChange={(e) => set('employee', e.target.value)} /></div>
             </div>
-            <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
+            <div className="field-group"><label>Date quoted</label><input type="date" value={draft.dateQuoted || ''} onChange={(e) => set('dateQuoted', e.target.value)} /></div>
           </div>
+          )}
 
-          <div className="section-label">Release form info</div>
+          <SectionHeader title="Release form info" open={openSections.release} onToggle={() => toggleSection('release')} />
+          {openSections.release && (
           <div className="form-section">
             <div className="field-group">
               <label>Does the customer have a price in mind, a perceived value, or an offer they've already been given?</label>
@@ -135,8 +144,10 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
               <textarea rows={4} value={draft.intakeNotes} onChange={(e) => set('intakeNotes', e.target.value)} />
             </div>
           </div>
+          )}
 
-          <div className="section-label">Cards ({draft.items.length})</div>
+          <SectionHeader title={`Cards (${draft.items.length})`} open={openSections.cards} onToggle={() => toggleSection('cards')} />
+          {openSections.cards && (
           <div className="form-section">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
               {draft.items.map(item => (
@@ -156,8 +167,10 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
               <button className="btn secondary small" onClick={() => setAddMode('import')}>+ Add cards by import</button>
             </div>
           </div>
+          )}
 
-          <div className="section-label">Total &amp; offer</div>
+          <SectionHeader title="Total & offer" open={openSections.total} onToggle={() => toggleSection('total')} />
+          {openSections.total && (
           <div className="form-section">
             <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '13px', marginBottom: '10px' }}>
               <div>
@@ -207,6 +220,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
               </div>
             )}
           </div>
+          )}
         </div>
         <div className="modal-foot">
           {quote.id ? <button className="btn ghost" onClick={handleDelete}>Delete</button> : <span />}
@@ -260,14 +274,31 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           </div>
         </div>
       )}
+    </div>
 
-      {/* Invisible on screen, shown only under @media print — see
-          .print-sheet in index.css. Prints whatever's on screen right now
-          (`draft`), saved or not, since staff often need the Release Form
-          the moment cards arrive, before there's any reason to have saved
-          the quote yet. */}
-      {printMode === 'quote' && <QuotePrintSheet quote={draft} tierSettings={tierSettings} />}
-      {printMode === 'release' && <ReleaseFormPrintSheet quote={draft} />}
+    {/* Rendered OUTSIDE .overlay on purpose — .overlay is `position: fixed`
+        with `overflow-y: auto` to bound the on-screen modal, and a long
+        quote's print output was getting silently clipped to that same
+        bounded box (content past what fits in the overlay's own visible
+        area never made it onto the printed page). Sitting outside that
+        subtree entirely lets the sheet's own `.print-sheet` positioning
+        (see index.css) paginate normally regardless of quote length.
+        Invisible on screen either way — only @media print shows it. */}
+    {printMode === 'quote' && <QuotePrintSheet quote={draft} tierSettings={tierSettings} />}
+    {printMode === 'release' && <ReleaseFormPrintSheet quote={draft} />}
+    </>
+  );
+}
+
+function SectionHeader({ title, open, onToggle }) {
+  return (
+    <div
+      className="section-label"
+      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', userSelect: 'none' }}
+      onClick={onToggle}
+    >
+      <span style={{ display: 'inline-block', fontSize: '10px', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
+      {title}
     </div>
   );
 }
