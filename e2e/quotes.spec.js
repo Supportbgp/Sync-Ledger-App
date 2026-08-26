@@ -49,12 +49,17 @@ test('create from scratch, add cards via the catalog typeahead and freeform, acc
 
   await page.locator('.tab', { hasText: 'Quote' }).click();
   // Saving is what actually creates the row — it should now show up in the
-  // list with a real quote number and the Accepted Cash status/green tint.
+  // list (identified by collection name, not a gapped quote number — see
+  // CLAUDE.md) with the Accepted Cash status/green tint.
   const quoteRow = page.locator('table tbody tr', { hasText: 'Jake binder proposal' });
   await expect(quoteRow).toBeVisible();
-  await expect(quoteRow).toContainText('#1');
   await expect(quoteRow).toContainText('Accepted Cash');
   await expect(quoteRow).toHaveClass(/quote-row-accepted/);
+
+  // The quote number still shows inside its own detail view, just not in
+  // the list — reopening it should read "Quote #1", not "New quote".
+  await quoteRow.click();
+  await expect(page.locator('.modal-head .name', { hasText: 'Quote #1' })).toBeVisible();
 });
 
 test('cancelling a never-saved new quote leaves no trace — nothing to resume, no quote created', async ({ page }) => {

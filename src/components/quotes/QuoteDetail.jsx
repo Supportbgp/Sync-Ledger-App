@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, itemsFromCatalogRows } from '../../lib/quoteUtils.js';
 import QuoteLineItemRow from './QuoteLineItemRow.jsx';
 import ScannerPanel from '../scanner/ScannerPanel.jsx';
 import ImportPanel from '../importexport/ImportPanel.jsx';
+import { QuotePrintSheet, ReleaseFormPrintSheet } from './QuotePrintViews.jsx';
 
 const OFFER_STATUS_OPTIONS = [
   { value: '', label: '— Still deciding —' },
@@ -22,6 +23,22 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
   const [draft, setDraft] = useState(() => ({ ...quote, items: quote.items.map(normalizeQuoteItem) }));
   const [addMode, setAddMode] = useState(null); // null | 'scan' | 'import'
   const [saving, setSaving] = useState(false);
+  const [printMode, setPrintMode] = useState(null); // null | 'quote' | 'release'
+
+  // Printing works off `draft` (whatever's currently on screen, saved or
+  // not) — staff often want the Release Form the moment a customer's cards
+  // arrive, before there's any reason to have saved the quote yet.
+  useEffect(() => {
+    if (!printMode) return;
+    const t = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(t);
+  }, [printMode]);
+
+  useEffect(() => {
+    function handleAfterPrint() { setPrintMode(null); }
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
 
   function set(field, value) {
     setDraft(d => ({ ...d, [field]: value }));
@@ -71,6 +88,10 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           </div>
         </div>
         <div className="modal-body">
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <button className="btn secondary small" onClick={() => setPrintMode('quote')}>Print Quote</button>
+            <button className="btn secondary small" onClick={() => setPrintMode('release')}>Print Release Form</button>
+          </div>
           <div className="section-label">Quote details</div>
           <div className="form-section">
             <div className="field-row2">
@@ -79,11 +100,39 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
             </div>
             <div className="field-row2">
               <div className="field-group"><label>Phone #</label><input type="text" value={draft.phone} onChange={(e) => set('phone', e.target.value)} /></div>
-              <div className="field-group"><label>Date quoted</label><input type="date" value={draft.dateQuoted || ''} onChange={(e) => set('dateQuoted', e.target.value)} /></div>
+              <div className="field-group"><label>Email</label><input type="email" value={draft.customerEmail} onChange={(e) => set('customerEmail', e.target.value)} /></div>
             </div>
             <div className="field-row2">
+              <div className="field-group"><label>Date quoted</label><input type="date" value={draft.dateQuoted || ''} onChange={(e) => set('dateQuoted', e.target.value)} /></div>
               <div className="field-group"><label>Employee</label><input type="text" placeholder="e.g. John Doe" value={draft.employee} onChange={(e) => set('employee', e.target.value)} /></div>
-              <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
+            </div>
+            <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
+          </div>
+
+          <div className="section-label">Release form info</div>
+          <div className="form-section">
+            <div className="field-group">
+              <label>Does the customer have a price in mind, a perceived value, or an offer they've already been given?</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button" className={`btn small${draft.hasExpectedPrice === true ? '' : ' ghost'}`}
+                  onClick={() => set('hasExpectedPrice', draft.hasExpectedPrice === true ? null : true)}
+                >Yes</button>
+                <button
+                  type="button" className={`btn small${draft.hasExpectedPrice === false ? '' : ' ghost'}`}
+                  onClick={() => set('hasExpectedPrice', draft.hasExpectedPrice === false ? null : false)}
+                >No</button>
+              </div>
+            </div>
+            {draft.hasExpectedPrice === true && (
+              <div className="field-group">
+                <label>If so, what is that number?</label>
+                <input type="text" placeholder="e.g. $150" value={draft.expectedPriceAmount} onChange={(e) => set('expectedPriceAmount', e.target.value)} />
+              </div>
+            )}
+            <div className="field-group">
+              <label>Description of product being left (# of cards, box or binder they're in, condition notes, specific cards of value…)</label>
+              <textarea rows={4} value={draft.intakeNotes} onChange={(e) => set('intakeNotes', e.target.value)} />
             </div>
           </div>
 
@@ -211,6 +260,14 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           </div>
         </div>
       )}
+
+      {/* Invisible on screen, shown only under @media print — see
+          .print-sheet in index.css. Prints whatever's on screen right now
+          (`draft`), saved or not, since staff often need the Release Form
+          the moment cards arrive, before there's any reason to have saved
+          the quote yet. */}
+      {printMode === 'quote' && <QuotePrintSheet quote={draft} tierSettings={tierSettings} />}
+      {printMode === 'release' && <ReleaseFormPrintSheet quote={draft} />}
     </div>
   );
 }

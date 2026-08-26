@@ -2336,6 +2336,75 @@ harness) surfaced several real issues, fixed in one pass:
   external search would be — building or editing a quote can never change
   anything already in Catalog.
 
+## Quote tab: intake/release form, printing, and dropping the # from the list
+
+Another round of real-usage feedback — quote numbers jumping unpredictably
+in the list, and two new print features requested to replace a paper
+process the shop was still doing by hand.
+
+- **The quote list no longer shows `quote_number` at all** — a real
+  `bigserial`, so gaps (e.g. #1 then #4) are normal and expected (an
+  abandoned-but-saved quote still consumes one, same as invoice/ticket
+  numbers anywhere), but showing a visibly gapped, non-meaningful number as
+  the primary way to tell rows apart just read as broken. Collection name
+  is the real identifier now — dropped from `QuotesTab`'s table columns,
+  the sortable-columns list, and the "Resume a collection" picker inside
+  "+ New Quote". Default sort changed from `quoteNumber` to `dateQuoted`
+  (most recent first) to match. **Not removed everywhere** — `QuoteDetail`'s
+  own title still reads "Quote #14 — &lt;name&gt;" once saved, since a
+  stable short reference is still genuinely useful when staff are looking
+  at (or printing) one specific quote, just not as a list column full of
+  gaps.
+- **New Release Form / intake fields** (`phase9_quote_intake_release.sql`):
+  `customer_email`, `has_expected_price` (tri-state boolean — `null` means
+  "not asked yet", never coerced to `false`), `expected_price_amount`
+  (free text, not numeric — matches the paper form's own free-text blank,
+  e.g. "$150" or "around 200"), and `intake_notes`. These map directly onto
+  the shop's real paper "Quote Release Form" (a physical form signed when a
+  customer drops cards off, before any pricing happens) — captured on the
+  same `quotes` row rather than a separate intake entity, since an
+  in-progress quote already represents exactly what the release form is
+  about: cards currently in the shop's custody being evaluated. Surfaced in
+  `QuoteDetail` as a new "Release form info" section — a Yes/No toggle pair
+  for the price-expectation question (clicking the already-selected option
+  again resets to unanswered) plus a conditional amount field, and a
+  Description-of-product textarea.
+- **Print Quote / Print Release Form** — two buttons in `QuoteDetail` that
+  print off `draft` (whatever's on screen right now, saved or not — staff
+  need the Release Form the moment cards arrive, often before there's any
+  reason to have saved the quote yet). Implementation is deliberately the
+  simplest thing that works: no PDF library, no new dependency — a
+  `.print-sheet` element (`src/components/quotes/QuotePrintViews.jsx`,
+  `QuotePrintSheet`/`ReleaseFormPrintSheet`) stays in the DOM at
+  `display:none`, and a new `@media print` block in `index.css` hides
+  everything else on the page (`visibility:hidden` on `body *`) and shows
+  only the sheet, positioned `absolute` so it prints cleanly regardless of
+  where it happens to sit in the component tree (nested inside an open
+  modal, in this case). `printMode` state + a short `setTimeout` calls
+  `window.print()` once the sheet has actually rendered; a window
+  `afterprint` listener resets `printMode` back to `null` once the print
+  dialog closes.
+  - `ReleaseFormPrintSheet` reproduces the shop's real paper form verbatim
+    (wording confirmed against an uploaded photo of the actual form, not
+    paraphrased) — the Yes/No question is rendered as both words with the
+    answered one bolded+underlined (both plain if `hasExpectedPrice` is
+    still `null`), and **Signature is left as a blank underline on
+    purpose** — this prints and gets physically signed with a pen, same as
+    the original paper form; it's not a digital-signature feature.
+  - `QuotePrintSheet` is a plainer internal record: header fields, every
+    line item, the computed total/tier amounts, and the offer
+    status/payout/paid-out decision — reuses `computeQuoteTotals`/
+    `computeOfferTiers` from `quoteUtils.js` rather than duplicating that
+    math.
+  - Verified with a Vitest/RTL component test
+    (`QuotePrintViews.test.jsx`) rather than e2e — asserting `window.print()`
+    actually opens/closes a dialog isn't meaningfully testable in a headless
+    browser, and the real risk here (wrong or missing pre-filled text) is
+    exactly what a plain component render-and-assert test catches.
+
+**Requires running `phase9_quote_intake_release.sql`** in the Supabase SQL
+Editor before this code can save/read the new intake fields.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,

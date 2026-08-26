@@ -1779,3 +1779,32 @@
         text-align: center;
       }
     }
+
+    /* Print Quote / Print Release Form (Quote tab) — the sheet renders
+       permanently in the DOM but stays invisible on screen; @media print
+       hides literally everything else and shows only this, positioned
+       absolute so it doesn't matter where it happens to sit in the tree.
+       The visibility (not display) trick on `body *` is what lets a sheet
+       nested deep inside an open modal still print cleanly on its own. */
+    .print-sheet {
+      display: none;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+
+      .print-sheet, .print-sheet * {
+        visibility: visible;
+      }
+
+      .print-sheet {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 24px;
+      }
+    }

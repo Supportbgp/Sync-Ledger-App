@@ -163,6 +163,14 @@ export function rowToQuote(r) {
     customerName: r.customer_name || '',
     customerId: r.customer_id || '',
     phone: r.phone || '',
+    // Release Form intake fields (phase9_quote_intake_release.sql) —
+    // hasExpectedPrice stays a real tri-state (null = not asked yet), not
+    // coerced to false, since the paper form's Yes/No is genuinely unset
+    // until staff actually asks the customer.
+    customerEmail: r.customer_email || '',
+    hasExpectedPrice: r.has_expected_price,
+    expectedPriceAmount: r.expected_price_amount || '',
+    intakeNotes: r.intake_notes || '',
     dateQuoted: r.date_quoted,
     employee: r.employee || '',
     timeTaken: r.time_taken || '',
@@ -186,6 +194,10 @@ function quoteToRow(q) {
     customer_name: q.customerName || null,
     customer_id: q.customerId || null,
     phone: q.phone || null,
+    customer_email: q.customerEmail || null,
+    has_expected_price: q.hasExpectedPrice ?? null,
+    expected_price_amount: q.expectedPriceAmount || null,
+    intake_notes: q.intakeNotes || null,
     employee: q.employee || null,
     time_taken: q.timeTaken || null,
     items: q.items || [],

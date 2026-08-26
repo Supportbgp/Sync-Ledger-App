@@ -30,7 +30,6 @@ const STATUS_FILTERS = [
 ];
 
 const QUOTE_SORT_COLUMNS = {
-  quoteNumber: q => q.quoteNumber || 0,
   collectionName: q => (q.collectionName || '').toLowerCase(),
   customerName: q => (q.customerName || '').toLowerCase(),
   dateQuoted: q => q.dateQuoted || '',
@@ -59,7 +58,7 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
   const [showSettings, setShowSettings] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [sortState, setSortState] = useState({ col: 'quoteNumber', dir: -1 });
+  const [sortState, setSortState] = useState({ col: 'dateQuoted', dir: -1 });
 
   const inProgress = quotes.filter(q => !q.offerStatus);
   const selected = selectedId ? quotes.find(q => q.id === selectedId) : null;
@@ -76,7 +75,7 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
   }, [quotes, search, statusFilter]);
 
   const sortedQuotes = useMemo(() => {
-    const keyFn = QUOTE_SORT_COLUMNS[sortState.col] || QUOTE_SORT_COLUMNS.quoteNumber;
+    const keyFn = QUOTE_SORT_COLUMNS[sortState.col] || QUOTE_SORT_COLUMNS.dateQuoted;
     const rows = filteredQuotes.slice();
     rows.sort((a, b) => {
       const av = keyFn(a), bv = keyFn(b);
@@ -97,7 +96,8 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
     setNewName('');
     setNewDraft({
       id: null, quoteNumber: null, collectionName,
-      customerName: '', customerId: '', phone: '', employee: '', timeTaken: '',
+      customerName: '', customerId: '', phone: '', customerEmail: '', employee: '', timeTaken: '',
+      hasExpectedPrice: null, expectedPriceAmount: '', intakeNotes: '',
       dateQuoted: new Date().toISOString().slice(0, 10),
       items: [], offerStatus: null, payoutAmount: null, paidOut: false, convertedToCatalog: false,
     });
@@ -152,7 +152,6 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
               <table>
                 <thead>
                   <tr>
-                    <th className="sortable" onClick={() => setSort('quoteNumber')}>Quote #{sortState.col === 'quoteNumber' ? (sortState.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
                     <th className="sortable" onClick={() => setSort('collectionName')}>Collection{sortState.col === 'collectionName' ? (sortState.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
                     <th className="sortable" onClick={() => setSort('customerName')}>Customer{sortState.col === 'customerName' ? (sortState.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
                     <th className="sortable" onClick={() => setSort('dateQuoted')}>Date{sortState.col === 'dateQuoted' ? (sortState.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
@@ -166,7 +165,6 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
                     const { total } = computeQuoteTotals(q.items);
                     return (
                       <tr key={q.id} className={statusRowClass(q)} style={{ cursor: 'pointer' }} onClick={() => setSelectedId(q.id)}>
-                        <td>#{q.quoteNumber}</td>
                         <td>{q.collectionName}</td>
                         <td>{q.customerName || '—'}</td>
                         <td>{q.dateQuoted}</td>
@@ -202,7 +200,7 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
                         style={{ textAlign: 'left' }}
                         onClick={() => resumeCollection(q.id)}
                       >
-                        #{q.quoteNumber} — {q.collectionName}{q.customerName ? ` (${q.customerName})` : ''}
+                        {q.collectionName}{q.customerName ? ` (${q.customerName})` : ''}
                       </button>
                     ))}
                   </div>
