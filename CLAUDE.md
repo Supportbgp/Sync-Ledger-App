@@ -1132,8 +1132,8 @@ can pull it up on a phone before ever signing in, bookmark it, or print it.
   jump straight to that section instead of just scrolling to it.
 - **`src/components/docs/sections/*.jsx`** — one file per topic (Getting
   started, Catalog, Editing an item, Selling an item, Sync Queue,
-  Import/Export, Scan Binder, Pricing settings, the public binder page,
-  Concepts & glossary, Known quirks), each a `<DocsSection>` with real
+  Import/Export, Scan Binder, Quote, Sorting, Pricing settings, the public
+  binder page, Concepts & glossary, Known quirks), each a `<DocsSection>` with real
   field/button labels from the actual UI. Deliberately split this way so a
   future feature (e.g. the TCG Player export below) only means adding a
   paragraph to one existing section file — nothing else about this page
@@ -2592,6 +2592,51 @@ exactly what this replaces.
   no code-side default masks a missing table here. `sorting_queue` also
   needs the same one-time manual add to Supabase's `supabase_realtime`
   publication (Database → Publications) that `quotes` needed.
+
+## Staff docs: Quote + Sorting sections added
+
+The Quote tab and the Sorting stage/Bulk item type both shipped without any
+staff-facing documentation — the no-login `?help=1` page (see "Staff
+documentation" above) still only covered the original Catalog/Scanner/
+Import feature set. Added two new section files following that page's
+existing one-file-per-topic convention:
+
+- **`QuoteSection.jsx`** (`#quote`, nav label "Quote") — starting a quote
+  (resume vs. from scratch), the three add-card methods and how they mix,
+  why Condition is never pre-filled, the total/tiers/offer-status flow,
+  the accept → **Sorting** handoff (explicitly called out as a
+  `DocsCallout kind="warn"`, since it's the single most likely thing to
+  surprise someone expecting accepted cards to land straight in Catalog
+  the way earlier features here did), Release form info, Print Quote/
+  Print Release Form, and the list's search/filter/sort.
+- **`SortingSection.jsx`** (`#sorting`, nav label "Sorting") — the two
+  placement modes and, in its own `DocsCallout kind="warn"`, what Bulk
+  actually is: scoped per binder+game, no per-print fields, never listed
+  anywhere, excluded from the public binder page.
+- Inserted into `StaffDocs.jsx`'s `SECTIONS` array right after Scan Binder
+  and before Pricing settings — both Quote and Sorting reference Scan/
+  Import by cross-reference link, so they read better placed after those
+  rather than before.
+- **The section label is "Quote", not "Quote (buying cards)"** — the
+  parenthetical (originally in both the nav label and this file's own PR
+  description) was dropped once writing the section, since
+  `e2e/staff-docs.spec.js`'s existing stepper test builds a `RegExp` out
+  of each section's title (`` `^Next: ${title}` ``) and unescaped
+  parentheses in a title would be parsed as a regex capture group instead
+  of literal characters, silently breaking that match. "Quote" alone
+  also happens to match the app's own tab label exactly, which the
+  parenthetical version didn't.
+- `GlossarySection.jsx`'s existing "Single vs. slab" entry retitled to
+  "Single vs. slab vs. bulk" with a one-line Bulk definition + link to
+  `#sorting`, and `KnownQuirksSection.jsx` gained one new bullet (editing
+  a Bulk row's now-irrelevant Set/Rarity/Condition fields directly in
+  Catalog is harmless, not a bug — matches this section's existing
+  "expected, not broken" framing).
+- `e2e/staff-docs.spec.js`'s stepper test's hardcoded `titles` array
+  updated to include both new titles at their real position (required —
+  the test walks "Next" by exact title text); a new test covers the
+  Quote→Sorting and Glossary→Sorting cross-reference links specifically,
+  matching the file's existing per-cross-reference-link coverage.
 
 ## Testing
 

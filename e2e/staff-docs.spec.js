@@ -33,7 +33,8 @@ test('the Next stepper walks through every section in order, and wraps at the en
   await page.goto('./?help=1');
   const titles = [
     'Getting started', 'Catalog', 'Editing an item', 'Selling an item',
-    'Sync Queue', 'Import / Export', 'Scan Binder', 'Pricing settings',
+    'Sync Queue', 'Import / Export', 'Scan Binder', 'Quote',
+    'Sorting', 'Pricing settings',
     'The public binder page', 'Concepts & glossary', 'Known quirks',
   ];
 
@@ -54,4 +55,16 @@ test('cross-reference links inside a section jump straight to the referenced sec
   await page.locator('#catalog').getByRole('link', { name: 'Selling an item' }).click();
   await expect(page).toHaveURL(/#selling-an-item$/);
   await expect(page.getByRole('heading', { name: 'Selling an item' })).toBeVisible();
+});
+
+test('the Quote section links straight to Sorting, and back', async ({ page }) => {
+  await page.goto('./?help=1#quote');
+  await expect(page.getByRole('heading', { name: 'Quote', exact: true })).toBeVisible();
+  await page.locator('#quote').getByRole('link', { name: 'Sorting' }).click();
+  await expect(page).toHaveURL(/#sorting$/);
+  await expect(page.getByRole('heading', { name: 'Sorting', exact: true })).toBeVisible();
+
+  await page.goto('./?help=1#glossary');
+  await page.locator('#glossary').getByRole('link', { name: 'Sorting' }).click();
+  await expect(page).toHaveURL(/#sorting$/);
 });

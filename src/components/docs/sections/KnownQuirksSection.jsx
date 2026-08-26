@@ -40,6 +40,13 @@ export default function KnownQuirksSection() {
           <strong>Reset all data affects everyone</strong> sharing this
           login, not just your own session, and can't be undone.
         </li>
+        <li>
+          <strong>Editing a Bulk row directly in Catalog shows normal
+          Set/Rarity/Condition fields, even though Bulk doesn't use
+          them.</strong> Harmless to leave blank — Bulk rows are meant to be
+          created and incremented through <a href="#sorting">Sorting</a>,
+          not hand-edited.
+        </li>
       </ul>
     </DocsSection>
   );

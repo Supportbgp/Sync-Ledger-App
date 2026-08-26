@@ -4,13 +4,15 @@ export default function GlossarySection() {
   return (
     <DocsSection id="glossary" title="Concepts & glossary">
       <dl className="docs-glossary">
-        <dt>Single vs. slab</dt>
+        <dt>Single vs. slab vs. bulk</dt>
         <dd>
           A "single" is a raw, ungraded card — it has a quantity, since you
           might have several identical copies. A "slab" is a graded card in
           a professional grading company's case (PSA, BGS, CGC, etc.) —
           always unique, so it has no quantity field, but does have
-          Grader/Grade/Cert fields instead.
+          Grader/Grade/Cert fields instead. "Bulk" is a running count for a
+          binder+game — not a specific card at all, see{' '}
+          <a href="#sorting">Sorting</a>.
         </dd>
 
         <dt>Channels</dt>
