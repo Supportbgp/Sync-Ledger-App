@@ -4,8 +4,10 @@ import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
   dbLoadSettings, dbSaveSettings,
+  dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
 } from './lib/db.js';
 import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition, DEFAULT_CONDITION_MULTIPLIERS } from './lib/cardUtils.js';
+import { buildCatalogItemsFromQuoteItems, DEFAULT_QUOTE_TIER_PCTS } from './lib/quoteUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -15,12 +17,14 @@ import SyncQueueTab from './components/queue/SyncQueueTab.jsx';
 import ImportExportPanel from './components/importexport/ImportExportPanel.jsx';
 import ScannerPanel from './components/scanner/ScannerPanel.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
+import QuotesTab from './components/quotes/QuotesTab.jsx';
 
 const TABS = [
   { key: 'catalog', label: 'Catalog' },
   { key: 'queue', label: 'Sync Queue' },
   { key: 'import', label: 'Import / Export' },
   { key: 'scanner', label: 'Scan Binder' },
+  { key: 'quote', label: 'Quote' },
 ];
 
 const CONDITION_RANK = { NM: 0, LP: 1, MP: 2, HP: 3, DMG: 4 };
@@ -80,6 +84,10 @@ export default function App() {
   // with zero feedback. Real settings just overwrite this once loaded.
   const [multipliers, setMultipliers] = useState(DEFAULT_CONDITION_MULTIPLIERS);
   const [showSettings, setShowSettings] = useState(false);
+  const [quotes, setQuotes] = useState([]);
+  // Same "usable immediately, real settings overwrite once loaded" reasoning
+  // as `multipliers` above.
+  const [tierSettings, setTierSettings] = useState(DEFAULT_QUOTE_TIER_PCTS);
 
   useEffect(() => {
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -96,6 +104,8 @@ export default function App() {
     // instead — the .catch keeps that from silently leaving `multipliers`
     // on a stale value with no feedback.
     dbLoadSettings(toast).then(setMultipliers).catch(() => setMultipliers(DEFAULT_CONDITION_MULTIPLIERS));
+    dbLoadQuotes(toast).then(setQuotes);
+    dbLoadQuoteSettings(toast).then(setTierSettings).catch(() => setTierSettings(DEFAULT_QUOTE_TIER_PCTS));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
 
@@ -106,7 +116,7 @@ export default function App() {
     toast("Pricing settings saved");
   }
 
-  useRealtimeSync({ enabled: signedIn, setCatalog, setQueue });
+  useRealtimeSync({ enabled: signedIn, setCatalog, setQueue, setQuotes });
 
   const locations = useMemo(
     () => Array.from(new Set(catalog.map(c => c.location).filter(Boolean))).sort(),
@@ -246,6 +256,51 @@ export default function App() {
     toast("All data cleared");
   }
 
+  // Returns the saved quote (with its real id/quote_number once persisted)
+  // so QuotesTab can open a freshly-created quote's detail view right away.
+  // The accept-time catalog handoff lives here: a quote transitioning into
+  // an Accepted status (and not already converted) gets each line item
+  // turned into a new Catalog row before the quote itself is saved, guarded
+  // by `convertedToCatalog` so re-saving an already-accepted quote never
+  // creates duplicates.
+  async function handleSaveQuote(quoteDraft) {
+    const toSave = { ...quoteDraft };
+    const isAccepted = toSave.offerStatus === 'accepted_cash' || toSave.offerStatus === 'accepted_store_credit';
+    if (isAccepted && !toSave.convertedToCatalog) {
+      const newCards = buildCatalogItemsFromQuoteItems(toSave.items);
+      if (newCards.length) {
+        await dbUpsertCards(newCards, toast);
+        setCatalog(prev => [...prev, ...newCards]);
+      }
+      toSave.convertedToCatalog = true;
+    }
+    const saved = await dbUpsertQuote(toSave, toast);
+    if (saved) {
+      setQuotes(prev => {
+        const idx = prev.findIndex(q => q.id === saved.id);
+        if (idx === -1) return [saved, ...prev];
+        const next = prev.slice();
+        next[idx] = saved;
+        return next;
+      });
+      toast(`Quote #${saved.quoteNumber} saved`
+        + (isAccepted && toSave.convertedToCatalog && !quoteDraft.convertedToCatalog ? ` — ${toSave.items.length} item(s) added to Catalog` : ''));
+    }
+    return saved;
+  }
+
+  async function handleDeleteQuote(id) {
+    await dbDeleteQuote(id, toast);
+    setQuotes(prev => prev.filter(q => q.id !== id));
+    toast("Quote deleted");
+  }
+
+  async function handleSaveTierSettings(next) {
+    setTierSettings(next);
+    await dbSaveQuoteSettings(next, toast);
+    toast("Quote settings saved");
+  }
+
   async function handleLogout() {
     await supabaseClient.auth.signOut();
     location.reload();
@@ -274,6 +329,7 @@ export default function App() {
             {t.label}
             {t.key === 'catalog' && <span className="count">{catalog.length}</span>}
             {t.key === 'queue' && <span className="count">{pendingCount}</span>}
+            {t.key === 'quote' && <span className="count">{quotes.filter(q => !q.offerStatus).length}</span>}
           </div>
         ))}
       </div>
@@ -304,6 +360,18 @@ export default function App() {
       </div>
       <div className={`panel${tab === 'scanner' ? ' active' : ''}`}>
         <ScannerPanel catalog={catalog} locations={locations} onImport={handleImport} multipliers={multipliers} />
+      </div>
+      <div className={`panel${tab === 'quote' ? ' active' : ''}`}>
+        <QuotesTab
+          quotes={quotes}
+          catalog={catalog}
+          locations={locations}
+          multipliers={multipliers}
+          tierSettings={tierSettings}
+          onSaveQuote={handleSaveQuote}
+          onDeleteQuote={handleDeleteQuote}
+          onSaveTierSettings={handleSaveTierSettings}
+        />
       </div>
 
       <div className="footnote">

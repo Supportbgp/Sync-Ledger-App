@@ -279,18 +279,27 @@ Everything else found:
 
 - `src/lib/` — all non-React logic. `db.js` (Supabase reads/writes + row↔card
   mapping), `cardUtils.js` (`normalizeCard`, game-name canonicalization,
-  platform-status-reset logic), `cardSearch.js` (Scryfall/pokemontcg.io/
-  YGOPRODeck card+image lookup), `csv.js`/`importParse.js`/`exportFormats.js`
-  (import/export), `image.js` (client-side photo resize), `scanner.js`
-  (binder-scan Edge Function client), `qr.js` (QR generation), `supabase.js`
-  (client init).
+  platform-status-reset logic, the canonical `GAMES` list), `cardSearch.js`
+  (Scryfall/pokemontcg.io/YGOPRODeck card+image lookup), `csv.js`/
+  `importParse.js`/`exportFormats.js` (import/export), `quoteUtils.js`
+  (Quote tab totals/tiers/catalog-conversion logic), `image.js`
+  (client-side photo resize), `scanner.js` (binder-scan Edge Function
+  client), `qr.js` (QR generation), `supabase.js` (client init).
 - `src/components/catalog/` — main catalog table, edit/sell modals, batch
   actions.
 - `src/components/queue/` — the Sync Queue tab (POS/TCG Player/Collectr
   three-stamp tracking).
-- `src/components/importexport/` — CSV import, the consolidated Export
-  modal, and the Binder QR modal.
-- `src/components/scanner/` — the binder-page scanner review queue.
+- `src/components/importexport/` — `ImportPanel.jsx` (the CSV/XLSX import
+  flow, standalone enough to also be embedded in the Quote tab),
+  `ExportPanel.jsx` (Export/Binder-QR/Reset-all-data), and
+  `ImportExportPanel.jsx` (a thin composer of both — the real Import/Export
+  tab).
+- `src/components/scanner/` — the binder-page scanner review queue
+  (`ScannerPanel.jsx`, also embeddable in the Quote tab).
+- `src/components/quotes/` — the Quote tab: `QuotesTab.jsx` (landing list +
+  new-quote entry point), `QuoteDetail.jsx` (one quote's detail view),
+  `QuoteLineItemRow.jsx`, `CatalogItemPicker.jsx` (the local-catalog
+  typeahead).
 - `src/components/BinderView.jsx` — the public, read-only binder page (no
   `UIContext`, no auth).
 - `src/components/docs/` — the standalone staff documentation page (also no
@@ -2096,6 +2105,363 @@ since they have very different feasibility:
     working": it still does, it just needs an eBay account signed in
     first, unlike the TCGPlayer link, which assumes nothing about login.
     eBay has not said whether this is permanent.
+
+## Quote tab — trade-in/buylist quoting
+
+A new top-level tab, the reverse workflow of everything else in Ledger:
+Catalog/Scanner/Import are about the shop's own *outbound* stock; this is
+about *buying cards in* from a walk-in customer. Ported from a manual Excel
+sheet the shop was already using (reverse-engineered from a real uploaded
+copy, not guessed): a header block (customer info, date, employee, time
+taken), a line-item grid, an auto-computed total and three offer tiers
+(percentages of that total), and a final decision (Offer Status: Accepted
+Cash / Accepted Store Credit / Rejected Offer, a Payout Amount, an
+independent Paid Out checkbox).
+
+- **One `quotes` row is both a "collection" and, once decided, the
+  finalized transaction — no separate collection entity.** A "collection"
+  (e.g. "Jake binder proposal") is just a quote row before its
+  `offer_status` is set: staff can create it, add cards to it over time,
+  and come back to it. Once `offer_status` becomes one of the two Accepted
+  values or `'rejected'`, it's done — it stops showing up as a resumable
+  collection. This was an explicit design call (confirmed with the user)
+  over inventing a second table, since a quote row already models "staged,
+  then decided" with nothing else needing to reference a collection
+  independently of its eventual quote.
+- **Line items live in a single `items` jsonb array on the `quotes` row**
+  (`phase8_quotes.sql`), not a `quote_items` child table — matches this
+  app's existing preference for denormalized snapshots over relational
+  child tables (e.g. `sync_queue` tickets already snapshot fields rather
+  than joining back to `catalog`), and line items are never queried
+  independently of their parent quote. Each item: `{ id, name, game, set,
+  number, rarity, printing, condition, basePrice, price, qty, notes }`.
+  `quote_number` (a `bigserial`) is a human-friendly display id ("Quote
+  #14") — the uuid primary key isn't something staff should ever need to
+  read or type.
+- **Condition is deliberately never defaulted** — not even to Near Mint,
+  unlike every other Condition picker in the app. Staff make a real,
+  on-the-spot physical assessment of a card they're about to pay for, and a
+  silent default would stand in for that judgment call instead of forcing
+  it. The field starts on its real placeholder (`SelectWithCustom`'s
+  existing escape-hatch pattern, just with no pre-selected value) and
+  `marketValueForCondition` already returns `null` for a blank condition —
+  no code change was needed there, only in never pre-filling the value.
+- **Offer tiers are a store-configurable setting, not a hardcoded
+  constant** (unlike the source sheet, which hardcoded 50/60/70%
+  everywhere) — a new `quote_settings` singleton row
+  (`tier1_pct`/`tier2_pct`/`tier3_pct`, defaulting 50/60/70), same
+  `id=1`/`maybeSingle()`/fallback-to-defaults pattern as `store_settings`'s
+  condition multipliers (`dbLoadQuoteSettings`/`dbSaveQuoteSettings` in
+  `db.js`). Kept as its own settings row rather than added to
+  `store_settings` — condition multipliers are a Catalog pricing concern,
+  tier percentages are a quoting concern. Editable via a small dedicated
+  "Quote settings" modal in the Quote tab itself, not the existing Pricing
+  Settings modal.
+- **Two ways into a quote, then three ways to add cards to it** — an
+  explicit design decision after real back-and-forth about UX (see the
+  section below). "+ New Quote" offers **Create from collection** (resume
+  an in-progress one, `offer_status IS NULL`) or **Create from scratch**
+  (name it, create a blank quote). Inside a quote's detail view
+  (`QuoteDetail.jsx`, one scrollable page matching the source sheet's own
+  single-page feel), staff can add cards via:
+  - **Manual entry** (`QuoteLineItemRow.jsx`) — same field set as
+    `EditModal` (Game/Set/Number/Rarity/Printing/Condition) so an accepted
+    item arrives in Catalog with good data. The Name field is a new
+    **`CatalogItemPicker.jsx`** — a lightweight, client-side-only typeahead
+    over the shop's own already-loaded `catalog` array (no network call at
+    all) — picking a match backfills game/set/rarity/printing/basePrice;
+    typing a name with no match is just as valid, staff fill in the rest by
+    hand. This was an explicit, deliberate choice over reusing the live
+    external card search (Scryfall/pokemontcg.io/etc.) that Scanner/
+    EditModal use — the user's own words: "we work based on already
+    established data not a hub with a search toolset like Scan or Import."
+  - **Scan** — the existing `ScannerPanel` mounted as-is inside a modal,
+    with its `onImport` callback redirected to append to this quote's items
+    instead of writing to Catalog. `ScannerPanel` never touched `db.js`
+    directly to begin with (its confirm flow already just calls whatever
+    `onImport(cards, mode)` callback it's given — the same one `App.jsx`
+    normally wires to the catalog-writing handler), so embedding it here
+    needed no refactor — only a new, purely cosmetic `destinationLabel`
+    prop (default `'catalog'`) so its button/description text can say
+    "quote" instead when embedded, with zero change to the real Scanner
+    tab's own wording.
+  - **Import** — required one real extraction: the original
+    `ImportExportPanel.jsx` bundled the CSV/XLSX import flow together with
+    Export/Binder-QR/Reset-all-data in one file, none of which belong in a
+    Quote context. Split into `ImportPanel.jsx` (the file-drop → sheet-pick
+    → column-mapping → confirm flow, self-contained already, now takes an
+    `embedded` prop that hides the "Replace entire catalog" import-mode
+    option — destructive and catalog-only, meaningless for a quote's item
+    list) and `ExportPanel.jsx` (Export/QR/Reset). `ImportExportPanel.jsx`
+    is now a thin composer of both, so the real Import/Export tab's
+    behavior is byte-for-byte unchanged.
+  - Both Scan and Import route through a shared `quoteUtils.itemsFromCatalogRows(cards)`
+    adapter — both already produce fully-formed `normalizeCard(...)`-shaped
+    objects before calling `onImport`, so this just reshapes each one into
+    a quote item, dropping the generated `sku` (quote items don't need
+    one) and giving each a fresh client-side id. **`number` (collector
+    number) is left blank by this adapter** — it was never part of
+    `normalizeCard`'s saved shape to begin with (Scanner/Import already
+    discard it as a transient, never-saved search-only hint before calling
+    `onImport`, same as when they write straight to Catalog), so there's
+    nothing to carry over; staff can still type it in by hand.
+  - All three methods are freely mixable on the same quote — e.g. scan a
+    binder page, then manually add a couple more cards — since they all
+    just append to the same local `items` array before Save.
+- **`GAMES` finally hoisted into `cardUtils.js` as a real export** —
+  previously duplicated verbatim in `EditModal.jsx` and `ScannerPanel.jsx`
+  with no single source of truth; a third consumer needing the identical
+  list (`QuoteLineItemRow.jsx`) was the trigger to stop tripling it.
+- **Accepted quotes auto-create Catalog rows** — the moment `offer_status`
+  becomes `'accepted_cash'` or `'accepted_store_credit'` and the quote
+  isn't already `converted_to_catalog`, `App.jsx`'s `handleSaveQuote`
+  builds new catalog rows via `quoteUtils.buildCatalogItemsFromQuoteItems`
+  (the exact same `normalizeCard(...)` shape `EditModal`/`ScannerPanel`
+  already build, `basePrice` carried over so Market Value keeps working on
+  the new row) and writes them with the same `dbUpsertCards` bulk-upsert
+  ScannerPanel's own confirm flow already uses — no new catalog-write
+  primitive needed. `converted_to_catalog` (set `true` right after) guards
+  against creating duplicate Catalog rows if an already-accepted quote is
+  edited and saved again.
+- **Quote collections are never visible from Catalog** — an explicit user
+  requirement. Every quote has its own dedicated view inside the Quote tab
+  ("Quote #14 — Jake binder proposal"); Catalog only ever sees the cards
+  that come out the other end, once Accepted.
+- **No tracked "bounce"/counter-offer state** — confirmed with the user
+  that a rejected-then-re-offered negotiation happens verbally and is never
+  recorded; only the final Accepted/Rejected outcome and Payout Amount
+  matter.
+- **Realtime**: `quotes` extends the existing single `'ledger-realtime'`
+  channel in `useRealtimeSync.js` (one more `.on('postgres_changes', ...)`
+  registration, keyed by `id`) rather than a second channel — same
+  reasoning as every other table already on it. Like `catalog`/
+  `sync_queue` when they were first set up, `quotes` needs a one-time
+  manual add to Supabase's `supabase_realtime` publication (Database →
+  Replication) — not something any migration file in this repo does.
+- **The "how should staff add cards" UX question went through two rounds**,
+  worth recording since the first answer was reversed: the initial plan
+  ruled out reusing Scanner/Import entirely (to avoid Quote becoming a
+  second Scanner) in favor of manual-entry-plus-catalog-typeahead only.
+  After the user described the full intended flow — cards get staged into
+  a named collection first, then a quote is built from either an existing
+  collection or from scratch, with staff choosing however they want to
+  add cards — Scanner and Import were explicitly brought back in as two of
+  three add-card methods, confirmed feasible with no deep refactor once
+  actually checked (both already took an `onImport` callback prop rather
+  than writing to `db.js` internally). The lesson wasn't "reuse
+  everything" or "reuse nothing" — it was that the right amount of reuse
+  depends on the actual intended workflow, which only became clear once
+  the user walked through it end to end.
+
+**Requires running `phase8_quotes.sql`** in the Supabase SQL Editor before
+this code can save/read quotes (creates both `quotes` and
+`quote_settings`), plus the manual Realtime-publication step above.
+
+## Quote tab: real-usage fixes after first hands-on test
+
+A first real test pass against a live Supabase project (not just the mock
+harness) surfaced several real issues, fixed in one pass:
+
+- **A new quote is no longer persisted the instant "Create" is clicked.**
+  The original flow called `dbUpsertQuote` immediately, before the detail
+  view even opened — so clicking "+ New Quote" → "Create" → Cancel still
+  left a permanent blank row behind, and consumed a real `quote_number`
+  from the sequence for a quote that was never actually used. `QuotesTab`
+  now builds a client-only draft object (`id: null`) and only calls
+  `onSaveQuote` on the first real Save inside `QuoteDetail` — matching how
+  `EditModal` already treats a new catalog item (nothing exists until
+  Save). `QuoteDetail`'s title reads "New quote — &lt;name&gt;" before that
+  first save and "Quote #N — &lt;name&gt;" after; its Delete button only
+  renders once `quote.id` is real, since there's nothing to delete before
+  that.
+  - **This also fixes what looked like a documentation bug but wasn't**:
+    an earlier manual test checklist claimed "resuming a draft opens it
+    with everything you'd already entered intact" after Cancel — that was
+    simply wrong. Cancel has always discarded unsaved edits, matching
+    every other modal's explicit-button-only-close convention in this
+    app; the checklist description was corrected, not the behavior.
+  - **`quote_number` gaps are still normal and expected** even with this
+    fix (a genuinely abandoned mid-edit quote that reaches one real Save
+    still consumes a number) — same as invoice/ticket numbers everywhere;
+    a `bigserial` doesn't roll back on its own. Not treated as a bug.
+- **`QuoteDetail`'s modal was too narrow for its own content.** It used
+  `.modal.wide` (560px, tuned for `EditModal`'s image+form layout) for a
+  line-item grid with *more* fields per row than `EditModal` has — real
+  testing showed this as visibly cramped/truncated fields. New `.modal.xwide`
+  (1040px) is used for `QuoteDetail`'s main modal and its embedded Scan/
+  Import sub-modals instead — `.modal.wide` itself is untouched, still used
+  by `EditModal` alone.
+- **Employee field placeholder no longer shows a real staff name** — was
+  `"e.g. Noah, or Noah / Richard"` (actual example names from earlier
+  testing), now generic `"e.g. John Doe"`.
+- **Quote line items now carry an image**, same dual-image model
+  (`imageUrl`/`imageData`/`photoUrl`/`photoData`/`activeImage`) a catalog
+  row already has, rendered via the same `activeImageSrc` helper — added
+  to `normalizeQuoteItem`/`itemsFromCatalogRows`/
+  `buildCatalogItemsFromQuoteItems` in `quoteUtils.js` so a picked catalog
+  reference, a scanned crop, or a live "Find image" result all carry
+  through to the row's thumbnail and, on Accept, onto the new Catalog row.
+- **Live external card search is back on quote rows — "Find image"/
+  "Find price" buttons, reusing `searchCardImage`** (Scryfall/pokemontcg.io/
+  etc., the exact same function `EditModal`/`ScannerPanel` call) — plus the
+  manual TCGPlayer/eBay fallback links, matching `ScanRow`'s own thumb-col
+  layout. **This reverses this doc's own earlier "no live external card
+  search for Quote" decision** — the catalog-only typeahead's real
+  limitation is that a genuinely new trade-in card has no catalog history
+  to reference at all, and real use found the live search "the most
+  important time saver" once available elsewhere in the app. Search state
+  (`candidates`/`candidateMode`/`activeSearch`) is scoped locally per
+  `QuoteLineItemRow`, mirroring `EditModal`'s own local search state rather
+  than lifting it into `QuoteDetail` — each row searches independently.
+- **`QuotesTab`'s list gained status color-coding, a status filter, a
+  search box, and sortable columns** — real feedback that a growing quote
+  list needed to be scannable/filterable, not just chronological. Rows are
+  tinted by outcome using the same semantic tokens as everywhere else in
+  this app (`--amber-soft` in progress, `--green-soft` accepted,
+  `--rust-soft` rejected — applied to `td`, not `tr`, so it isn't fought by
+  the existing global `tbody tr:hover` rule). Status filter is a row of
+  quick toggle buttons (All/In progress/Accepted Cash/Accepted Store
+  Credit/Rejected), not a dropdown — matches "quick filter" as asked, not a
+  slower two-click pick. Search matches collection name + customer name.
+  Sortable column headers reuse the exact `.sortable`/click-to-toggle-
+  direction pattern `CatalogTable` already established, with a small local
+  `QUOTE_SORT_COLUMNS` key map (not exported/shared — Quote's column set is
+  different enough from Catalog's own `SORT_COLUMNS` that a shared export
+  wasn't worth it for five columns).
+- **Clarified, not changed**: what the catalog typeahead actually does when
+  picking a reference card — it only copies field *values* (game/set/
+  rarity/printing/basePrice/image) onto the new quote line item; it never
+  links to, modifies, or flags the original catalog row in any way. The
+  shop's Catalog is a read-only reference for this picker, same as a live
+  external search would be — building or editing a quote can never change
+  anything already in Catalog.
+
+## Quote tab: intake/release form, printing, and dropping the # from the list
+
+Another round of real-usage feedback — quote numbers jumping unpredictably
+in the list, and two new print features requested to replace a paper
+process the shop was still doing by hand.
+
+- **The quote list no longer shows `quote_number` at all** — a real
+  `bigserial`, so gaps (e.g. #1 then #4) are normal and expected (an
+  abandoned-but-saved quote still consumes one, same as invoice/ticket
+  numbers anywhere), but showing a visibly gapped, non-meaningful number as
+  the primary way to tell rows apart just read as broken. Collection name
+  is the real identifier now — dropped from `QuotesTab`'s table columns,
+  the sortable-columns list, and the "Resume a collection" picker inside
+  "+ New Quote". Default sort changed from `quoteNumber` to `dateQuoted`
+  (most recent first) to match. **Not removed everywhere** — `QuoteDetail`'s
+  own title still reads "Quote #14 — &lt;name&gt;" once saved, since a
+  stable short reference is still genuinely useful when staff are looking
+  at (or printing) one specific quote, just not as a list column full of
+  gaps.
+- **New Release Form / intake fields** (`phase9_quote_intake_release.sql`):
+  `customer_email`, `has_expected_price` (tri-state boolean — `null` means
+  "not asked yet", never coerced to `false`), `expected_price_amount`
+  (free text, not numeric — matches the paper form's own free-text blank,
+  e.g. "$150" or "around 200"), and `intake_notes`. These map directly onto
+  the shop's real paper "Quote Release Form" (a physical form signed when a
+  customer drops cards off, before any pricing happens) — captured on the
+  same `quotes` row rather than a separate intake entity, since an
+  in-progress quote already represents exactly what the release form is
+  about: cards currently in the shop's custody being evaluated. Surfaced in
+  `QuoteDetail` as a new "Release form info" section — a Yes/No toggle pair
+  for the price-expectation question (clicking the already-selected option
+  again resets to unanswered) plus a conditional amount field, and a
+  Description-of-product textarea.
+- **Print Quote / Print Release Form** — two buttons in `QuoteDetail` that
+  print off `draft` (whatever's on screen right now, saved or not — staff
+  need the Release Form the moment cards arrive, often before there's any
+  reason to have saved the quote yet). Implementation is deliberately the
+  simplest thing that works: no PDF library, no new dependency — a
+  `.print-sheet` element (`src/components/quotes/QuotePrintViews.jsx`,
+  `QuotePrintSheet`/`ReleaseFormPrintSheet`) stays in the DOM at
+  `display:none`, and a new `@media print` block in `index.css` hides
+  everything else on the page (`visibility:hidden` on `body *`) and shows
+  only the sheet, positioned `absolute` so it prints cleanly regardless of
+  where it happens to sit in the component tree (nested inside an open
+  modal, in this case). `printMode` state + a short `setTimeout` calls
+  `window.print()` once the sheet has actually rendered; a window
+  `afterprint` listener resets `printMode` back to `null` once the print
+  dialog closes.
+  - `ReleaseFormPrintSheet` reproduces the shop's real paper form verbatim
+    (wording confirmed against an uploaded photo of the actual form, not
+    paraphrased) — the Yes/No question is rendered as both words with the
+    answered one bolded+underlined (both plain if `hasExpectedPrice` is
+    still `null`), and **Signature is left as a blank underline on
+    purpose** — this prints and gets physically signed with a pen, same as
+    the original paper form; it's not a digital-signature feature.
+  - `QuotePrintSheet` is a plainer internal record: header fields, every
+    line item, the computed total/tier amounts, and the offer
+    status/payout/paid-out decision — reuses `computeQuoteTotals`/
+    `computeOfferTiers` from `quoteUtils.js` rather than duplicating that
+    math.
+  - Verified with a Vitest/RTL component test
+    (`QuotePrintViews.test.jsx`) rather than e2e — asserting `window.print()`
+    actually opens/closes a dialog isn't meaningfully testable in a headless
+    browser, and the real risk here (wrong or missing pre-filled text) is
+    exactly what a plain component render-and-assert test catches.
+
+**Requires running `phase9_quote_intake_release.sql`** in the Supabase SQL
+Editor before this code can save/read the new intake fields.
+
+## Quote tab: field layout, print pagination fix, collapsible sections
+
+A fourth round of real-usage feedback, this time from a screenshot of an
+actual printed Quote for a large card list that cut off partway through.
+
+- **Email field restyled to match Employee's** — was a bare `type="email"`
+  input with no placeholder, visually inconsistent with every other text
+  field in the section (Employee's `placeholder="e.g. John Doe"` was the
+  template every other field in this section already follows). Now
+  `type="text" placeholder="e.g. jane@email.com"` — a plain text input like
+  the rest, not relying on the browser's native email-format validation
+  UI, which this app doesn't use anywhere else either.
+- **"Quote details" fields reordered**: Date quoted moves to its own
+  full-width field-group at the end of the section (was paired with
+  Employee); Time taken to quote takes over that now-vacant slot next to
+  Employee instead. Purely a field-ordering change — no field
+  added/removed/renamed.
+- **Print Quote was silently truncating long quotes** — traced to
+  `.print-sheet` (the hidden-until-`@media print` element `QuotePrintSheet`/
+  `ReleaseFormPrintSheet` render into) being a DOM *descendant* of
+  `.overlay show`, whose CSS is `position: fixed; inset: 0; overflow-y:
+  auto` to bound the on-screen modal to the viewport. Overflow clipping on
+  a fixed-position ancestor applies to everything painted within that
+  subtree regardless of a descendant's own `position: absolute` — so a
+  print sheet taller than the overlay's own on-screen scrollable box was
+  getting cut off at print time exactly where the overlay's own bounds
+  ended, which is what a screenshot of a long quote's printed output
+  showed as "looks incomplete." Fixed by moving both print-sheet renders
+  in `QuoteDetail.jsx` to be top-level siblings of the `.overlay` div
+  (wrapping the component's whole return in a Fragment) instead of nested
+  inside it — the sheet is invisible on screen either way (only `@media
+  print` ever shows it), so this has zero visible effect outside of print,
+  and print output now paginates normally regardless of quote length.
+- **Collapsible sections**: `QuoteDetail`'s four `.form-section` blocks
+  (Quote details / Release form info / Cards / Total & offer) can now each
+  be independently collapsed via a click on their header — new local
+  `openSections` state (`{details, release, cards, total}`, all default
+  expanded so nothing changes for existing muscle memory) plus a small new
+  `SectionHeader` component (a rotating `▶` chevron + click handler,
+  replacing the previously-inert `.section-label` divider). Lets staff
+  jump straight to, say, Total & offer on a long card-heavy quote without
+  scrolling past the whole Cards list first — the actual ask, once a real
+  quote's card list got long enough that "quickly move between" sections
+  stopped being quick. No section is ever forced closed automatically
+  (e.g. based on item count) — purely a manual toggle, so a section
+  staff want open while editing (Cards, most of the time) just stays that
+  way.
+- Covered by a new e2e test (`e2e/quotes.spec.js`) asserting a section's
+  fields actually disappear/reappear on toggle and that two sections
+  collapse independently of each other. The print-pagination fix itself
+  isn't independently e2e-tested — same reasoning already established for
+  `QuotePrintViews.test.jsx`: asserting real paginated print output isn't
+  meaningfully testable in a headless browser — it was verified by tracing
+  the CSS root cause (`.overlay`'s `overflow-y: auto` clipping a nested
+  absolutely-positioned descendant) rather than by a repro screenshot
+  alone, and the DOM-nesting fix is a straightforward, low-risk structural
+  change with no new runtime logic to test.
 
 ## Testing
 

@@ -46,6 +46,13 @@ function canonicalizeGame(raw) {
   return GAME_ALIASES[g.toLowerCase()] || g;
 }
 
+// The canonical game list for every game dropdown in the app (EditModal,
+// ScannerPanel, and now the Quote tab) — previously duplicated verbatim in
+// EditModal.jsx and ScannerPanel.jsx with no single source of truth; a
+// third consumer needing the exact same list is the trigger to hoist it
+// here instead of tripling the copy.
+export const GAMES = ["Magic", "Pokemon", "Yugioh", "Lorcana", "One Piece", "Sports Singles", "SWU", "Riftbound", "Gundam", "Other"];
+
 // A small colored tag per game, shown next to the item name so a mixed-game
 // catalog (this shop carries 9+ lines) scans by color at a glance, not just
 // by reading text. Originally reused the 6 shared UI accent tokens (some

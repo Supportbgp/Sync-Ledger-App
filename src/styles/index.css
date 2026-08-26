@@ -421,6 +421,13 @@
       max-width: 560px;
     }
 
+    /* The Quote tab's line-item grid packs more fields per row than
+       .modal.wide has room for (5-6 dense fields plus a thumbnail),
+       which read as cramped/truncated at 560px in real testing. */
+    .modal.xwide {
+      max-width: 1040px;
+    }
+
     .modal-head {
       padding: 16px 20px;
       border-bottom: 1px solid var(--border);
@@ -1095,6 +1102,61 @@
       border-color: var(--amber);
     }
 
+    .catalog-item-picker {
+      position: relative;
+    }
+
+    .catalog-item-picker-menu {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0;
+      right: 0;
+      z-index: 20;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .catalog-item-picker-option {
+      padding: 6px 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .catalog-item-picker-option:hover {
+      background: var(--surface-alt);
+    }
+
+    .catalog-item-picker-name {
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .catalog-item-picker-meta {
+      font-size: 11px;
+      color: var(--ink-faint);
+    }
+
+    /* Quote list rows tinted by outcome — same semantic colors as
+       everywhere else (amber=pending, green=success, rust=danger) so a
+       long quote list scans by color, not just by reading the Status cell. */
+    .quote-row-progress td {
+      background: var(--amber-soft);
+    }
+
+    .quote-row-accepted td {
+      background: var(--green-soft);
+    }
+
+    .quote-row-rejected td {
+      background: var(--rust-soft);
+    }
+
     .checkbox-row {
       display: flex;
       align-items: center;
@@ -1715,5 +1777,34 @@
       .docs-stepper .btn {
         width: 100%;
         text-align: center;
+      }
+    }
+
+    /* Print Quote / Print Release Form (Quote tab) — the sheet renders
+       permanently in the DOM but stays invisible on screen; @media print
+       hides literally everything else and shows only this, positioned
+       absolute so it doesn't matter where it happens to sit in the tree.
+       The visibility (not display) trick on `body *` is what lets a sheet
+       nested deep inside an open modal still print cleanly on its own. */
+    .print-sheet {
+      display: none;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+
+      .print-sheet, .print-sheet * {
+        visibility: visible;
+      }
+
+      .print-sheet {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 24px;
       }
     }

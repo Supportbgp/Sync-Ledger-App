@@ -15,6 +15,8 @@ const PRIMARY_KEY = {
   sync_queue: 'id',
   store_settings: 'id',
   catalog_public_view: 'sku',
+  quotes: 'id',
+  quote_settings: 'id',
 };
 
 function defaultSeed() {
@@ -23,6 +25,8 @@ function defaultSeed() {
     sync_queue: [],
     store_settings: [{ id: 1, lp_pct: 85, mp_pct: 65, hp_pct: 45, dmg_pct: 25 }],
     catalog_public_view: [],
+    quotes: [],
+    quote_settings: [{ id: 1, tier1_pct: 50, tier2_pct: 60, tier3_pct: 70 }],
   };
 }
 
@@ -44,33 +48,53 @@ function matchesFilters(row, filters) {
   });
 }
 
-function execute(table, op, filters) {
+let harnessQuoteNumberCounter = 0;
+
+function execute(table, op, filters, single, order) {
   const db = getDb();
   const key = PRIMARY_KEY[table];
   const rows = db[table] || (db[table] = []);
 
   if (op.type === 'select') {
-    const matched = rows.filter((r) => matchesFilters(r, filters));
-    return { data: op.single ? matched[0] ?? null : matched, error: null };
-  }
-  if (op.type === 'upsert') {
-    const payload = Array.isArray(op.payload) ? op.payload : [op.payload];
-    for (const item of payload) {
-      const idx = rows.findIndex((r) => r[key] === item[key]);
-      if (idx === -1) rows.push(item);
-      else rows[idx] = item;
+    let matched = rows.filter((r) => matchesFilters(r, filters));
+    if (order) {
+      matched = matched.slice().sort((a, b) => {
+        const av = a[order.field], bv = b[order.field];
+        if (av === bv) return 0;
+        return (av < bv ? -1 : 1) * (order.ascending ? 1 : -1);
+      });
     }
-    return { data: null, error: null };
+    return { data: single ? matched[0] ?? null : matched, error: null };
   }
-  if (op.type === 'insert') {
+  if (op.type === 'upsert' || op.type === 'insert') {
     const payload = Array.isArray(op.payload) ? op.payload : [op.payload];
-    rows.push(...payload);
+    const affected = [];
+    for (const item of payload) {
+      // Fake the DB-generated primary key (and, for `quotes`, the
+      // auto-incrementing quote_number) a real insert-with-no-id would
+      // produce in Postgres — dbUpsertQuote's .upsert(...).select().single()
+      // round-trip depends on getting a real key/number back the same way
+      // it would against real Supabase.
+      let row = item;
+      if (key && row[key] == null) {
+        row = { ...row, [key]: `harness-${table}-${rows.length}-${Math.random().toString(36).slice(2, 8)}` };
+      }
+      if (table === 'quotes' && row.quote_number == null) {
+        row = { ...row, quote_number: ++harnessQuoteNumberCounter };
+      }
+      const idx = rows.findIndex((r) => r[key] === row[key]);
+      if (idx === -1) rows.push(row); else rows[idx] = row;
+      affected.push(row);
+    }
+    if (op.returning) return { data: single ? affected[0] ?? null : affected, error: null };
     return { data: null, error: null };
   }
   if (op.type === 'update') {
+    const affected = [];
     for (const r of rows) {
-      if (matchesFilters(r, filters)) Object.assign(r, op.payload);
+      if (matchesFilters(r, filters)) { Object.assign(r, op.payload); affected.push(r); }
     }
+    if (op.returning) return { data: single ? affected[0] ?? null : affected, error: null };
     return { data: null, error: null };
   }
   if (op.type === 'delete') {
@@ -83,8 +107,16 @@ function execute(table, op, filters) {
 function makeBuilder(table) {
   const filters = [];
   let op = { type: 'select' };
+  let single = false;
+  let order = null;
   const builder = {
-    select() { op = { type: 'select' }; return builder; },
+    select() {
+      // Real supabase-js: .select() after a mutation means "return the
+      // affected row(s)"; a bare .select() with no prior mutation is just a
+      // normal read. Only the former should touch `op`.
+      if (op.type !== 'select') op = { ...op, returning: true };
+      return builder;
+    },
     upsert(payload) { op = { type: 'upsert', payload }; return builder; },
     insert(payload) { op = { type: 'insert', payload }; return builder; },
     update(payload) { op = { type: 'update', payload }; return builder; },
@@ -92,9 +124,11 @@ function makeBuilder(table) {
     eq(field, value) { filters.push(['eq', field, value]); return builder; },
     neq(field, value) { filters.push(['neq', field, value]); return builder; },
     in(field, values) { filters.push(['in', field, values]); return builder; },
-    maybeSingle() { op = { ...op, single: true }; return builder; },
+    order(field, opts) { order = { field, ascending: !(opts && opts.ascending === false) }; return builder; },
+    maybeSingle() { single = true; return builder; },
+    single() { single = true; return builder; },
     then(resolve, reject) {
-      return Promise.resolve().then(() => execute(table, op, filters)).then(resolve, reject);
+      return Promise.resolve().then(() => execute(table, op, filters, single, order)).then(resolve, reject);
     },
   };
   return builder;
