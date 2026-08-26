@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   await page.locator('.tab', { hasText: 'Quote' }).click();
 });
 
-test('create from scratch, add cards via the catalog typeahead and freeform, accept, and see them land in Catalog', async ({ page }) => {
+test('create from scratch, add cards via the catalog typeahead and freeform, accept, and see them land in Sorting', async ({ page }) => {
   await page.getByRole('button', { name: '+ New Quote' }).click();
   await page.getByPlaceholder('e.g. Jake binder proposal').fill('Jake binder proposal');
   await page.getByRole('button', { name: 'Create' }).click();
@@ -43,9 +43,19 @@ test('create from scratch, add cards via the catalog typeahead and freeform, acc
 
   await expect(page.locator('.modal-head .name')).toHaveCount(0);
 
+  // Accepting no longer writes straight to Catalog — both items move to
+  // the Sorting queue to be placed individually (see the Sorting stage in
+  // CLAUDE.md); Catalog stays untouched until that happens. (Charizard
+  // already exists in Catalog from this file's own seed — used above for
+  // the typeahead match — so "Unlisted Promo Card" is the one that proves
+  // this: it has no other way to end up in Catalog.)
   await page.locator('.tab', { hasText: 'Catalog' }).click();
-  await expect(page.getByText('Charizard').first()).toBeVisible();
-  await expect(page.getByText('Unlisted Promo Card')).toBeVisible();
+  await expect(page.locator('.panel.active').getByText('Unlisted Promo Card')).toHaveCount(0);
+
+  await page.locator('.tab', { hasText: 'Sorting' }).click();
+  const sortingPanel = page.locator('.panel.active');
+  await expect(sortingPanel.getByText('Charizard')).toBeVisible();
+  await expect(sortingPanel.getByText('Unlisted Promo Card')).toBeVisible();
 
   await page.locator('.tab', { hasText: 'Quote' }).click();
   // Saving is what actually creates the row — it should now show up in the

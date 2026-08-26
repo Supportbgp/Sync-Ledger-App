@@ -99,7 +99,7 @@ export default function QuotesTab({ quotes, catalog, locations, multipliers, tie
       customerName: '', customerId: '', phone: '', customerEmail: '', employee: '', timeTaken: '',
       hasExpectedPrice: null, expectedPriceAmount: '', intakeNotes: '',
       dateQuoted: new Date().toISOString().slice(0, 10),
-      items: [], offerStatus: null, payoutAmount: null, paidOut: false, convertedToCatalog: false,
+      items: [], offerStatus: null, payoutAmount: null, paidOut: false, movedToSorting: false,
     });
   }
 

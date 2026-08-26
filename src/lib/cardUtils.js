@@ -358,6 +358,19 @@ export const PRINTING_OPTIONS_BY_GAME = {
   Gundam: ["Normal", "Alternate Art", "Alternate Art (Case Hit)"],
 };
 
+// Three real values now: 'single' (default), 'slab' (grader/grade/cert —
+// see detectGrading above), and 'bulk' (a location+game-scoped running
+// count, no individual card identity — see buildBulkCatalogItem below).
+// Substring match rather than exact, same as the original slab-only
+// coercion, so a stray case/whitespace variant from an import column still
+// lands on the right value instead of silently collapsing to 'single'.
+function normalizeItemType(raw) {
+  const t = (raw || "").toString().toLowerCase();
+  if (t.indexOf("slab") !== -1) return "slab";
+  if (t.indexOf("bulk") !== -1) return "bulk";
+  return "single";
+}
+
 export function normalizeCard(c) {
   return {
     sku: c.sku || "",
@@ -375,7 +388,7 @@ export function normalizeCard(c) {
     price: parseMoney(c.price),
     notes: c.notes || "",
     imageUrl: c.imageUrl || "",
-    itemType: (c.itemType && c.itemType.toString().toLowerCase().indexOf("slab") !== -1) ? "slab" : (c.itemType || "single"),
+    itemType: normalizeItemType(c.itemType),
     grader: c.grader || "",
     grade: c.grade || "",
     certNumber: c.certNumber || "",
@@ -429,6 +442,43 @@ export function channelDefaultsForLocation(catalog, location) {
     tcgplayerChannel: majority('tcgplayerChannel'),
     collectrChannel: majority('collectrChannel'),
   };
+}
+
+// Bulk is a catalog row (itemType 'bulk') scoped to one (location, game)
+// pair rather than one physical print — see phase10_sorting_bulk.sql for
+// the full reasoning. findBulkRow locates the existing row for a given
+// binder+game, if this isn't the first card sorted there yet.
+export function findBulkRow(catalog, location, game) {
+  const canonicalGame = canonicalizeGame(game);
+  return catalog.find(c => c.itemType === 'bulk' && c.location === location && c.game === canonicalGame) || null;
+}
+
+// Builds the catalog row a Sorting-queue item becomes once sorted into
+// Bulk: either the existing (location, game) row with its qty incremented
+// by this item's qty, or — the first card sorted into that binder+game —
+// a brand-new one. A Bulk row carries no per-item identity (no set/
+// rarity/condition/price, matching "should not hold an inventory" of
+// individual prints) and is never individually listed on any platform —
+// posChannel/tcgplayerChannel/collectrChannel are always false here,
+// unlike a normal new item's "assumed everywhere" default, since a pile
+// of loose bulk cards isn't a sellable SKU on its own.
+export function buildBulkCatalogItem(sortingItem, location, existingRow) {
+  const game = canonicalizeGame(sortingItem.game);
+  const addQty = Number(sortingItem.qty) || 1;
+  if (existingRow) {
+    return { ...existingRow, qty: existingRow.qty + addQty, lastUpdated: Date.now() };
+  }
+  return normalizeCard({
+    sku: `bulk-${Date.now()}`,
+    name: `Bulk — ${game}`,
+    game,
+    itemType: 'bulk',
+    location,
+    qty: addQty,
+    posChannel: false,
+    tcgplayerChannel: false,
+    collectrChannel: false,
+  });
 }
 
 // A ticket only needs stamping on the platforms it was actually relevant to

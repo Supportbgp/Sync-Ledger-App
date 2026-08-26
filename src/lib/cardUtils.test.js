@@ -5,7 +5,7 @@ import {
   timeAgo, canonicalizeCondition, marketValueForCondition,
   resolveActiveImage, activeImageSrc, SORT_COLUMNS, DEFAULT_CONDITION_MULTIPLIERS,
   RARITY_OPTIONS_BY_GAME, CONDITION_TIERS, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME,
-  mergeScanDuplicates,
+  mergeScanDuplicates, findBulkRow, buildBulkCatalogItem,
 } from './cardUtils.js';
 
 describe('parseMoney', () => {
@@ -74,10 +74,11 @@ describe('normalizeCard', () => {
     expect(card.collectrChannel).toBe(true);
     expect(normalizeCard({ posChannel: false }).posChannel).toBe(false);
   });
-  it('defaults itemType to "single" unless the string contains "slab"', () => {
+  it('defaults itemType to "single" unless the string contains "slab" or "bulk"', () => {
     expect(normalizeCard({}).itemType).toBe('single');
     expect(normalizeCard({ itemType: 'Slab' }).itemType).toBe('slab');
     expect(normalizeCard({ itemType: 'single' }).itemType).toBe('single');
+    expect(normalizeCard({ itemType: 'Bulk' }).itemType).toBe('bulk');
   });
   it('parses price and basePrice through parseMoney', () => {
     const card = normalizeCard({ price: '$5.00', basePrice: '$10.00' });
@@ -197,6 +198,47 @@ describe('channelDefaultsForLocation', () => {
   it('ignores items from other locations entirely', () => {
     const catalog = [{ location: 'Binder B', posChannel: false, tcgplayerChannel: false, collectrChannel: false }];
     expect(channelDefaultsForLocation(catalog, 'Binder A')).toEqual({ posChannel: true, tcgplayerChannel: true, collectrChannel: true });
+  });
+});
+
+describe('findBulkRow', () => {
+  it('finds the existing bulk row for a given location + game', () => {
+    const catalog = [
+      { itemType: 'bulk', location: 'Red binder', game: 'Pokemon', qty: 40 },
+      { itemType: 'single', location: 'Red binder', game: 'Pokemon', qty: 1 },
+      { itemType: 'bulk', location: 'Blue binder', game: 'Pokemon', qty: 5 },
+    ];
+    expect(findBulkRow(catalog, 'Red binder', 'Pokemon')).toEqual(catalog[0]);
+  });
+  it('returns null when no bulk row exists yet for that location + game', () => {
+    expect(findBulkRow([], 'Red binder', 'Pokemon')).toBeNull();
+  });
+  it('canonicalizes the game before comparing, same as normalizeCard', () => {
+    const catalog = [{ itemType: 'bulk', location: 'Red binder', game: 'Magic', qty: 10 }];
+    expect(findBulkRow(catalog, 'Red binder', 'MTG')).toEqual(catalog[0]);
+  });
+});
+
+describe('buildBulkCatalogItem', () => {
+  it('creates a new bulk row with no channels when none exists yet', () => {
+    const card = buildBulkCatalogItem({ game: 'Pokemon', qty: 3 }, 'Red binder', null);
+    expect(card.itemType).toBe('bulk');
+    expect(card.location).toBe('Red binder');
+    expect(card.game).toBe('Pokemon');
+    expect(card.qty).toBe(3);
+    expect(card.posChannel).toBe(false);
+    expect(card.tcgplayerChannel).toBe(false);
+    expect(card.collectrChannel).toBe(false);
+  });
+  it('increments an existing bulk row\'s qty instead of creating a second one', () => {
+    const existing = { sku: 'bulk-1', itemType: 'bulk', location: 'Red binder', game: 'Pokemon', qty: 40, posChannel: false, tcgplayerChannel: false, collectrChannel: false };
+    const card = buildBulkCatalogItem({ game: 'Pokemon', qty: 5 }, 'Red binder', existing);
+    expect(card.sku).toBe('bulk-1');
+    expect(card.qty).toBe(45);
+  });
+  it('treats a blank/missing qty as 1, same as everywhere else in this app', () => {
+    const card = buildBulkCatalogItem({ game: 'Pokemon' }, 'Red binder', null);
+    expect(card.qty).toBe(1);
   });
 });
 

@@ -2463,6 +2463,136 @@ actual printed Quote for a large card list that cut off partway through.
   alone, and the DOM-nesting fix is a straightforward, low-risk structural
   change with no new runtime logic to test.
 
+## Sorting stage + Bulk item type (supersedes the accept-time destination modal)
+
+Real staff feedback, just one round after the accept-time destination
+modal shipped (PR #40): *"They need to be individual. Cards from the same
+quote could go to several different places. Bulk also needs to be one of
+those options and should not hold an inventory. but it should be after
+they are accepted. not during the quote."* — a genuinely different
+requirement, not a refinement of the same idea. **PR #40 was closed
+unmerged** rather than iterated on, since its whole mechanism (one
+location+channels decision for the entire quote, made at accept time) is
+exactly what this replaces.
+
+- **Accepting a quote now moves its items into a new "needs to process"
+  stage instead of writing Catalog rows directly.** `sorting_queue`
+  (`phase10_sorting_bulk.sql`) is a new table, one row per quote line item
+  (its own qty carries over as one unit of work — a stack of 3 identical
+  copies almost always gets sorted together, not one row per physical
+  card). `App.jsx`'s `handleSaveQuote` calls
+  `buildSortingItemsFromQuoteItems(items, quoteId, collectionName)`
+  (`quoteUtils.js`) instead of `buildCatalogItemsFromQuoteItems` at
+  accept time — the same guard field that used to gate the catalog
+  conversion (`converted_to_catalog` in the DB, kept as-is rather than
+  migrated — see below) now gates this move instead, renamed
+  `movedToSorting` at the JS boundary so its current meaning is honest.
+  Applies to **either** Accepted status (cash or credit) — this was never
+  cash-only.
+- **A sorted row is deleted from `sorting_queue` once resolved** — the
+  resulting Catalog row (or the incremented Bulk row) is the durable
+  record from then on, not this table, matching this app's general
+  preference for "the current record is the source of truth" over parallel
+  history. An explicit, deliberate choice over `sync_queue`'s
+  keep-and-mark-complete pattern, since sorting has no equivalent
+  multi-platform-stamp reason to keep a completed row visible.
+- **New top-level "Sorting" tab** (`src/components/sorting/SortingTab.jsx`),
+  same tier as Catalog/Sync Queue/Import-Export/Scan Binder/Quote — a flat
+  list of everything still waiting, each row showing its thumbnail (same
+  `activeImageSrc` dual-image model a quote item already carries),
+  name/game/set/rarity/condition, which quote it came from
+  (`quoteCollectionName`, snapshotted so the row still reads sensibly if
+  that quote is later deleted — `sorting_queue.quote_id` uses `on delete
+  set null`), and a Sort button. Count badge on the tab itself, same
+  pattern as Sync Queue's pending count.
+- **`src/components/sorting/SortItemModal.jsx`** — one card's placement
+  decision, asked individually, reusing the same `LocationPicker` +
+  channel-checkbox UI `EditModal`/the old `AcceptQuoteModal` used, now
+  with an explicit mode toggle:
+  - **"Place individually"** (default) — a real binder/case + the usual
+    POS/TCG Player/Collectr checkboxes, same "follow the majority of this
+    location's existing items until manually touched" default
+    (`channelDefaultsForLocation`) as everywhere else. Becomes a real
+    Catalog row (`itemType: 'single'`) via `buildCatalogItemsFromQuoteItems`
+    — that function kept its `(items, destination)` shape from PR #40,
+    just called with a single-item array from the Sorting flow instead of
+    a whole quote's items at once.
+  - **"Add to Bulk"** — only a binder/case, no channels at all (a pile of
+    loose bulk cards isn't a sellable SKU on its own). Confirm is disabled
+    until a location is picked; individual mode additionally requires at
+    least one channel checked, same gate as PR #40's modal had.
+  - The confirm button is always labeled "Confirm" (not "Sort"/"Add to
+    Bulk") — an earlier draft echoed the mode-toggle button's own label,
+    which made the two indistinguishable both visually and to
+    `getByRole('button', {name})` in tests.
+- **Bulk is a THIRD `catalog.item_type` value (`'single' | 'slab' |
+  'bulk'`), not a separate table.** A Bulk "item" is a normal catalog row
+  scoped to one **(location, game)** pair (confirmed with the user —
+  not per-location-only, and not per-set/per-card), with `qty` as its
+  running count — sorting a card into Bulk finds the existing
+  `(location, game)` row and increments its `qty`, or creates one if this
+  is the first card sorted there (`findBulkRow`/`buildBulkCatalogItem` in
+  `cardUtils.js`). Deliberately reuses every bit of existing Catalog
+  infrastructure (`CatalogTable`, export, realtime sync, selling it back
+  down via the normal qty-decrement flow) instead of inventing a parallel
+  `bulk_counts` table — a Bulk row genuinely IS a catalog row, just one
+  representing a pile instead of a single print. Carries no per-print
+  identity (no set/rarity/condition/price) and **never** has any channel
+  enabled (`posChannel`/`tcgplayerChannel`/`collectrChannel` all
+  explicitly `false` — the one place in this app a new item's channels
+  don't default to "everywhere").
+  - `normalizeCard`'s `itemType` coercion (`normalizeItemType` in
+    `cardUtils.js`) now recognizes `'bulk'` alongside the existing `'slab'`
+    substring check, falling back to `'single'` for anything else — same
+    lenient-substring-match discipline as the original slab-only version,
+    so a stray case/whitespace variant still lands correctly.
+  - `CatalogToolbar`'s type filter gained a "Bulk only" option (plain
+    string equality already worked automatically for the status filter —
+    `CatalogPanel`'s `typeFilter !== c.itemType` check needed no change).
+  - `CatalogTable`'s `deriveRow` gives a Bulk row with no set/condition/
+    printing a subtitle of "Bulk lot — not tracked individually" instead
+    of an empty string, and both the desktop table and mobile card views
+    gained a `.badge.bulk` (amber, matching `.badge.slab`'s purple)
+    alongside the existing Slab badge.
+  - **Excluded from `catalog_public_view`** (`item_type <> 'bulk'` added
+    to the view's `where` clause in `phase10_sorting_bulk.sql`) — a Bulk
+    lot isn't a specific card a customer browses/buys off the public
+    binder page, just an internal holding count.
+  - **Deliberately NOT wired into `EditModal`** beyond not crashing — a
+    Bulk row falls through the existing "not slab" path, showing normal
+    single-item fields (Set/Rarity/Condition etc.) blank and technically
+    editable. Accepted as a known v1 limitation rather than adding a
+    third `isSlab`-style form-type toggle right away: Bulk rows are
+    created/incremented via the Sorting flow, not manually via "+ Add
+    item," so this only matters if staff go hand-editing a Bulk row's qty
+    directly in Catalog instead of through Sorting — still works, just
+    shows some irrelevant blank fields alongside it.
+- **`converted_to_catalog` (the DB column) is unchanged** — renaming it
+  would mean an extra migration on a column already run against the real
+  project for arguably cosmetic reasons. Its real meaning today is "moved
+  to Sorting," not "in Catalog," so the JS-side field is renamed
+  `movedToSorting` in `db.js`'s `rowToQuote`/`quoteToRow`, with a comment
+  at both mapping points explaining the DB/JS name mismatch is
+  deliberate.
+- Covered by `cardUtils.test.js` (`findBulkRow`/`buildBulkCatalogItem`,
+  including the increment-vs-create branch and game canonicalization),
+  `quoteUtils.test.js` (`buildSortingItemsFromQuoteItems`, and
+  `buildCatalogItemsFromQuoteItems`'s per-item `destination` param), and a
+  new `e2e/sorting.spec.js`: accepting moves items to Sorting (not
+  Catalog) regardless of viewport, individual placement creates a real
+  Catalog row at the chosen location, two Bulk sorts into the same
+  binder+game increment one row rather than creating two, and cancelling
+  the sort modal leaves the item untouched in the queue. `e2e/quotes.spec.js`'s
+  own accept-flow test was updated to assert items land in **Sorting**
+  now, not Catalog — its old assertion was checking behavior this PR
+  intentionally replaces.
+- **`phase10_sorting_bulk.sql` needs to be run** in the Supabase SQL
+  Editor (creates `sorting_queue`, recreates `catalog_public_view` with
+  the Bulk exclusion) before this code can move quote items to Sorting —
+  no code-side default masks a missing table here. `sorting_queue` also
+  needs the same one-time manual add to Supabase's `supabase_realtime`
+  publication (Database → Publications) that `quotes` needed.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,

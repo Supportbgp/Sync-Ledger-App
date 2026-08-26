@@ -214,9 +214,9 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
               <input type="checkbox" id="q_paidOut" checked={draft.paidOut} onChange={(e) => set('paidOut', e.target.checked)} />
               <label htmlFor="q_paidOut" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Paid out</label>
             </div>
-            {(draft.offerStatus === 'accepted_cash' || draft.offerStatus === 'accepted_store_credit') && !draft.convertedToCatalog && (
+            {(draft.offerStatus === 'accepted_cash' || draft.offerStatus === 'accepted_store_credit') && !draft.movedToSorting && (
               <div className="status-line ok" style={{ marginTop: '8px' }}>
-                Saving with this status will add {draft.items.length} item(s) to the Catalog.
+                Saving with this status will move {draft.items.length} item(s) to Sorting, to be placed individually.
               </div>
             )}
           </div>

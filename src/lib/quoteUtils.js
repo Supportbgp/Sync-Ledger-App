@@ -103,13 +103,24 @@ export function itemsFromCatalogRows(cards) {
   }));
 }
 
-// Accept-time conversion: turns this quote's line items into new Catalog
-// rows via the exact same normalizeCard(...) shape EditModal/ScannerPanel
-// already build before calling dbUpsertCard(s) — no new catalog-write
-// primitive needed. basePrice carries over so Market Value keeps working
-// on the new row going forward; price/condition/qty/notes carry over as
-// entered on the quote.
-export function buildCatalogItemsFromQuoteItems(items) {
+// Sort-time conversion: turns ONE sorting-queue item (see
+// phase10_sorting_bulk.sql) into a new Catalog row via the exact same
+// normalizeCard(...) shape EditModal/ScannerPanel already build before
+// calling dbUpsertCard(s) — no new catalog-write primitive needed.
+// basePrice carries over so Market Value keeps working on the new row
+// going forward; price/condition/qty/notes carry over as entered on the
+// quote. Called with a single-item array from App.jsx's handleSortItem —
+// each sorting-queue row is placed individually, one destination at a
+// time, not as a whole-quote batch (see the Sorting stage in CLAUDE.md
+// for why that changed from this function's original whole-quote-accept
+// callers).
+//
+// `destination` — { location, posChannel, tcgplayerChannel, collectrChannel }
+// — is staff's answer to "where is this card going?" for this one row.
+// Omitting it (e.g. existing callers/tests) falls back to normalizeCard's
+// own defaults — blank location, channels defaulting to "everywhere".
+export function buildCatalogItemsFromQuoteItems(items, destination) {
+  const dest = destination || {};
   return (items || []).map((item, i) => normalizeCard({
     sku: `quote-${Date.now()}-${i}`,
     name: item.name,
@@ -121,6 +132,40 @@ export function buildCatalogItemsFromQuoteItems(items) {
     qty: item.qty,
     price: item.price,
     basePrice: item.basePrice,
+    notes: item.notes,
+    imageUrl: item.imageUrl,
+    imageData: item.imageData,
+    photoUrl: item.photoUrl,
+    photoData: item.photoData,
+    activeImage: item.activeImage,
+    location: dest.location || '',
+    posChannel: dest.posChannel,
+    tcgplayerChannel: dest.tcgplayerChannel,
+    collectrChannel: dest.collectrChannel,
+  }));
+}
+
+// Accept-time move: turns every line item of a newly-accepted quote into a
+// sorting_queue row instead of a Catalog row — accepting no longer asks
+// "where are these going" itself; that question moves entirely to the
+// Sorting tab, one card at a time (see CLAUDE.md's "Sorting stage"
+// section). quoteId/quoteCollectionName are snapshotted onto every row so
+// the Sorting tab can show which quote a pending item came from without a
+// join, and so the row still reads sensibly if the quote is later deleted.
+export function buildSortingItemsFromQuoteItems(items, quoteId, quoteCollectionName) {
+  return (items || []).map(item => ({
+    quoteId,
+    quoteCollectionName: quoteCollectionName || '',
+    name: item.name,
+    game: item.game,
+    set: item.set,
+    number: item.number,
+    rarity: item.rarity,
+    printing: item.printing,
+    condition: item.condition,
+    price: item.price,
+    basePrice: item.basePrice,
+    qty: item.qty,
     notes: item.notes,
     imageUrl: item.imageUrl,
     imageData: item.imageData,
