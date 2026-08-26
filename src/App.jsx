@@ -5,9 +5,13 @@ import {
   dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
   dbLoadSettings, dbSaveSettings,
   dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
+  dbLoadSortingQueue, dbInsertSortingItems, dbDeleteSortingItem,
 } from './lib/db.js';
-import { needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition, DEFAULT_CONDITION_MULTIPLIERS } from './lib/cardUtils.js';
-import { buildCatalogItemsFromQuoteItems, DEFAULT_QUOTE_TIER_PCTS } from './lib/quoteUtils.js';
+import {
+  needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition,
+  DEFAULT_CONDITION_MULTIPLIERS, findBulkRow, buildBulkCatalogItem,
+} from './lib/cardUtils.js';
+import { buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems, DEFAULT_QUOTE_TIER_PCTS } from './lib/quoteUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -18,6 +22,7 @@ import ImportExportPanel from './components/importexport/ImportExportPanel.jsx';
 import ScannerPanel from './components/scanner/ScannerPanel.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import QuotesTab from './components/quotes/QuotesTab.jsx';
+import SortingTab from './components/sorting/SortingTab.jsx';
 
 const TABS = [
   { key: 'catalog', label: 'Catalog' },
@@ -25,6 +30,7 @@ const TABS = [
   { key: 'import', label: 'Import / Export' },
   { key: 'scanner', label: 'Scan Binder' },
   { key: 'quote', label: 'Quote' },
+  { key: 'sorting', label: 'Sorting' },
 ];
 
 const CONDITION_RANK = { NM: 0, LP: 1, MP: 2, HP: 3, DMG: 4 };
@@ -88,6 +94,10 @@ export default function App() {
   // Same "usable immediately, real settings overwrite once loaded" reasoning
   // as `multipliers` above.
   const [tierSettings, setTierSettings] = useState(DEFAULT_QUOTE_TIER_PCTS);
+  // Sorting stage — accepted quote items awaiting an individual placement
+  // decision (a real binder/case, or Bulk). See db.js/quoteUtils.js and
+  // CLAUDE.md's "Sorting stage" section.
+  const [sorting, setSorting] = useState([]);
 
   useEffect(() => {
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -106,6 +116,7 @@ export default function App() {
     dbLoadSettings(toast).then(setMultipliers).catch(() => setMultipliers(DEFAULT_CONDITION_MULTIPLIERS));
     dbLoadQuotes(toast).then(setQuotes);
     dbLoadQuoteSettings(toast).then(setTierSettings).catch(() => setTierSettings(DEFAULT_QUOTE_TIER_PCTS));
+    dbLoadSortingQueue(toast).then(setSorting);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
 
@@ -116,7 +127,7 @@ export default function App() {
     toast("Pricing settings saved");
   }
 
-  useRealtimeSync({ enabled: signedIn, setCatalog, setQueue, setQuotes });
+  useRealtimeSync({ enabled: signedIn, setCatalog, setQueue, setQuotes, setSorting });
 
   const locations = useMemo(
     () => Array.from(new Set(catalog.map(c => c.location).filter(Boolean))).sort(),
@@ -258,21 +269,28 @@ export default function App() {
 
   // Returns the saved quote (with its real id/quote_number once persisted)
   // so QuotesTab can open a freshly-created quote's detail view right away.
-  // The accept-time catalog handoff lives here: a quote transitioning into
-  // an Accepted status (and not already converted) gets each line item
-  // turned into a new Catalog row before the quote itself is saved, guarded
-  // by `convertedToCatalog` so re-saving an already-accepted quote never
-  // creates duplicates.
+  // The accept-time handoff lives here: a quote transitioning into an
+  // Accepted status (cash or credit — either counts) and not already moved
+  // gets each line item turned into a sorting_queue row (a "needs to
+  // process" stage), NOT a Catalog row directly — cards from the same
+  // quote can end up in several different places, so that decision is
+  // made individually, per card, from the Sorting tab, not once for the
+  // whole quote at accept time. Guarded by `movedToSorting` so re-saving
+  // an already-accepted quote never creates duplicate sorting rows.
   async function handleSaveQuote(quoteDraft) {
     const toSave = { ...quoteDraft };
     const isAccepted = toSave.offerStatus === 'accepted_cash' || toSave.offerStatus === 'accepted_store_credit';
-    if (isAccepted && !toSave.convertedToCatalog) {
-      const newCards = buildCatalogItemsFromQuoteItems(toSave.items);
-      if (newCards.length) {
-        await dbUpsertCards(newCards, toast);
-        setCatalog(prev => [...prev, ...newCards]);
+    let movedCount = 0;
+    if (isAccepted && !toSave.movedToSorting) {
+      const newSortingItems = buildSortingItemsFromQuoteItems(toSave.items, quoteDraft.id, toSave.collectionName);
+      if (newSortingItems.length) {
+        const inserted = await dbInsertSortingItems(newSortingItems, toast);
+        if (inserted.length) {
+          setSorting(prev => [...prev, ...inserted]);
+          movedCount = inserted.length;
+        }
       }
-      toSave.convertedToCatalog = true;
+      toSave.movedToSorting = true;
     }
     const saved = await dbUpsertQuote(toSave, toast);
     if (saved) {
@@ -284,7 +302,7 @@ export default function App() {
         return next;
       });
       toast(`Quote #${saved.quoteNumber} saved`
-        + (isAccepted && toSave.convertedToCatalog && !quoteDraft.convertedToCatalog ? ` — ${toSave.items.length} item(s) added to Catalog` : ''));
+        + (movedCount ? ` — ${movedCount} item(s) moved to Sorting` : ''));
     }
     return saved;
   }
@@ -293,6 +311,36 @@ export default function App() {
     await dbDeleteQuote(id, toast);
     setQuotes(prev => prev.filter(q => q.id !== id));
     toast("Quote deleted");
+  }
+
+  // The Sorting tab's per-item placement decision. `destination.mode` is
+  // 'individual' (a real binder/case, same channel checkboxes as any other
+  // new item) or 'bulk' (no channels — see findBulkRow/buildBulkCatalogItem
+  // in cardUtils.js for why this finds-or-creates a running (location,
+  // game) count instead of a per-print row). Either way, the sorting_queue
+  // row is deleted once resolved — the new/updated Catalog row is the
+  // durable record from here on, not this table.
+  async function handleSortItem(item, destination) {
+    let resultCard;
+    if (destination.mode === 'bulk') {
+      const existing = findBulkRow(catalog, destination.location, item.game);
+      resultCard = buildBulkCatalogItem(item, destination.location, existing);
+    } else {
+      resultCard = buildCatalogItemsFromQuoteItems([item], destination)[0];
+    }
+    await dbUpsertCard(resultCard, toast);
+    setCatalog(prev => {
+      const idx = prev.findIndex(c => c.sku === resultCard.sku);
+      if (idx === -1) return [...prev, resultCard];
+      const next = prev.slice();
+      next[idx] = resultCard;
+      return next;
+    });
+    await dbDeleteSortingItem(item.id, toast);
+    setSorting(prev => prev.filter(s => s.id !== item.id));
+    toast(destination.mode === 'bulk'
+      ? `${item.qty} × ${item.name} added to Bulk (${destination.location})`
+      : `${item.name} sorted to ${destination.location}`);
   }
 
   async function handleSaveTierSettings(next) {
@@ -330,6 +378,7 @@ export default function App() {
             {t.key === 'catalog' && <span className="count">{catalog.length}</span>}
             {t.key === 'queue' && <span className="count">{pendingCount}</span>}
             {t.key === 'quote' && <span className="count">{quotes.filter(q => !q.offerStatus).length}</span>}
+            {t.key === 'sorting' && <span className="count">{sorting.length}</span>}
           </div>
         ))}
       </div>
@@ -372,6 +421,10 @@ export default function App() {
           onDeleteQuote={handleDeleteQuote}
           onSaveTierSettings={handleSaveTierSettings}
         />
+      </div>
+
+      <div className={`panel${tab === 'sorting' ? ' active' : ''}`}>
+        <SortingTab sorting={sorting} catalog={catalog} locations={locations} onSortItem={handleSortItem} />
       </div>
 
       <div className="footnote">

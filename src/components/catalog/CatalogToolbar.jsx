@@ -26,9 +26,10 @@ export default function CatalogToolbar({
         {locations.map(l => <option key={l} value={l}>{l}</option>)}
       </select>
       <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-        <option value="">Singles + Slabs</option>
+        <option value="">Singles + Slabs + Bulk</option>
         <option value="single">Singles only</option>
         <option value="slab">Slabs only</option>
+        <option value="bulk">Bulk only</option>
       </select>
       <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
         <option value="">All items</option>

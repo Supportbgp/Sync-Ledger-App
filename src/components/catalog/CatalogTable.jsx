@@ -62,6 +62,10 @@ function deriveRow(c) {
     const gradeText = [c.grader, c.grade].filter(Boolean).join(" ");
     if (gradeText) subParts.push(gradeText);
   }
+  // A Bulk row has none of set/condition/printing (no per-print identity —
+  // see cardUtils.js's buildBulkCatalogItem) so the usual subtitle parts
+  // would otherwise just be blank.
+  if (c.itemType === "bulk" && !subParts.length) subParts.push("Bulk lot — not tracked individually");
   return {
     qtyClass: c.qty <= 0 ? "qty-zero" : (c.qty <= 2 ? "qty-low" : ""),
     isSold: c.sold || c.qty <= 0,
@@ -163,6 +167,7 @@ export default function CatalogTable({
                     <div className="n-sub">{sub || '—'}</div>
                     <div className="catalog-card-row2" style={{ marginTop: '6px' }}>
                       {c.itemType === "slab" && <span className="badge slab">Slab</span>}
+                      {c.itemType === "bulk" && <span className="badge bulk">Bulk</span>}
                       {c.location && <span className="badge location" title="Binder / case">{c.location}</span>}
                       {c.sourceUrl && (
                         <a href={c.sourceUrl} target="_blank" rel="noopener" className="notes-pin" title="Open source link">link</a>
@@ -237,6 +242,7 @@ export default function CatalogTable({
                       {c.name}
                       <span className={`badge ${tagClass}`}>{c.game}</span>
                       {c.itemType === "slab" && <span className="badge slab">Slab</span>}
+                      {c.itemType === "bulk" && <span className="badge bulk">Bulk</span>}
                       {isSold && <span className="badge sold">Sold</span>}
                       {c.notes && <span className="notes-pin" title={c.notes}>note</span>}
                       {c.sourceUrl && (

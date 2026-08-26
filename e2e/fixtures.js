@@ -33,5 +33,6 @@ export function catalogSeed(rows) {
     catalog_public_view: [],
     quotes: [],
     quote_settings: [{ id: 1, tier1_pct: 50, tier2_pct: 60, tier3_pct: 70 }],
+    sorting_queue: [],
   };
 }

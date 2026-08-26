@@ -12,7 +12,7 @@ function baseQuote(overrides = {}) {
       { id: 'i1', name: 'Charizard', game: 'Pokemon', set: 'Base Set', rarity: 'Rare Holo', condition: 'Near Mint', qty: 1, price: 40 },
       { id: 'i2', name: 'Unlisted Promo Card', game: '', set: '', rarity: '', condition: '', qty: 2, price: 5 },
     ],
-    offerStatus: null, payoutAmount: null, paidOut: false, convertedToCatalog: false,
+    offerStatus: null, payoutAmount: null, paidOut: false, movedToSorting: false,
     ...overrides,
   };
 }

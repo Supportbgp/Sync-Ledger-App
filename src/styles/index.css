@@ -893,6 +893,11 @@
       color: var(--purple);
     }
 
+    .badge.bulk {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
     .badge.sold {
       background: var(--rust-soft);
       color: var(--rust);

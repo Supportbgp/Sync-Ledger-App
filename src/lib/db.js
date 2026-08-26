@@ -178,7 +178,14 @@ export function rowToQuote(r) {
     offerStatus: r.offer_status || null,
     payoutAmount: r.payout_amount,
     paidOut: !!r.paid_out,
-    convertedToCatalog: !!r.converted_to_catalog,
+    // Guards against re-moving an already-accepted quote's items into
+    // sorting_queue if it's saved again — the column is still named
+    // converted_to_catalog in the DB (unchanged from before the Sorting
+    // stage existed, to avoid an unnecessary migration on an already-run
+    // one), but its real meaning today is "moved to Sorting", not "in
+    // Catalog" — items land in sorting_queue at accept time now, not
+    // Catalog directly. Renamed here at the JS boundary to match.
+    movedToSorting: !!r.converted_to_catalog,
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
     updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now(),
   };
@@ -204,7 +211,7 @@ function quoteToRow(q) {
     offer_status: q.offerStatus || null,
     payout_amount: q.payoutAmount ?? null,
     paid_out: !!q.paidOut,
-    converted_to_catalog: !!q.convertedToCatalog,
+    converted_to_catalog: !!q.movedToSorting,
     updated_at: new Date().toISOString(),
   };
   if (q.id) row.id = q.id;
@@ -259,6 +266,87 @@ export async function dbSaveQuoteSettings(tiers, toast) {
     updated_at: new Date().toISOString(),
   }).eq('id', 1);
   if (error) toast('Failed to save quote settings: ' + error.message, true);
+}
+
+// Sorting stage — items land here the moment a quote is Accepted, before
+// staff pick a final destination (a real binder/case, or Bulk). One row
+// per quote line item (its own qty carries over as one unit of work);
+// deleted once sorted — the resulting Catalog row (or the incremented
+// Bulk row) is the durable record, not this table. See
+// phase10_sorting_bulk.sql.
+export function rowToSortingItem(r) {
+  return {
+    id: r.id,
+    quoteId: r.quote_id,
+    quoteCollectionName: r.quote_collection_name || '',
+    name: r.name || '',
+    game: r.game || '',
+    set: r.set || '',
+    number: r.number || '',
+    rarity: r.rarity || '',
+    printing: r.printing || '',
+    condition: r.condition || '',
+    price: r.price,
+    basePrice: r.base_price,
+    qty: r.qty || 1,
+    notes: r.notes || '',
+    imageUrl: r.image_data ? 'local' : (r.image_url || ''),
+    imageData: r.image_data || '',
+    photoUrl: r.photo_data ? 'local' : (r.photo_url || ''),
+    photoData: r.photo_data || '',
+    activeImage: r.active_image === 'stock' ? 'stock' : 'photo',
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  };
+}
+
+function sortingItemToRow(s) {
+  return {
+    quote_id: s.quoteId || null,
+    quote_collection_name: s.quoteCollectionName || '',
+    name: s.name,
+    game: s.game || null,
+    set: s.set || null,
+    number: s.number || null,
+    rarity: s.rarity || null,
+    printing: s.printing || null,
+    condition: s.condition || null,
+    price: s.price ?? null,
+    base_price: s.basePrice ?? null,
+    qty: s.qty || 1,
+    notes: s.notes || null,
+    image_url: (s.imageUrl && s.imageUrl.startsWith('http')) ? s.imageUrl : '',
+    image_data: s.imageUrl === 'local' ? (s.imageData || '') : '',
+    photo_url: (s.photoUrl && s.photoUrl.startsWith('http')) ? s.photoUrl : '',
+    photo_data: s.photoUrl === 'local' ? (s.photoData || '') : '',
+    active_image: s.activeImage === 'stock' ? 'stock' : 'photo',
+  };
+}
+
+export async function dbLoadSortingQueue(toast) {
+  const { data, error } = await supabaseClient.from('sorting_queue').select('*').order('created_at', { ascending: true });
+  if (error) {
+    toast('Failed to load sorting queue: ' + error.message, true);
+    return [];
+  }
+  return (data || []).map(rowToSortingItem);
+}
+
+// Returns the inserted rows (via .select()) so the caller gets their
+// DB-generated ids back immediately — same reasoning as dbUpsertQuote's
+// .select().single(), just for a batch insert instead of one row.
+export async function dbInsertSortingItems(items, toast) {
+  if (!items.length) return [];
+  const { data, error } = await supabaseClient.from('sorting_queue').insert(items.map(sortingItemToRow)).select();
+  if (error) {
+    toast('Failed to move items to sorting: ' + error.message, true);
+    return [];
+  }
+  return (data || []).map(rowToSortingItem);
+}
+
+export async function dbDeleteSortingItem(id, toast) {
+  const { error } = await supabaseClient.from('sorting_queue').delete().eq('id', id);
+  if (error) toast('Delete failed: ' + error.message, true);
 }
 
 // Public binder lookup (QR-code page) — reads from catalog_public_view, a

@@ -17,6 +17,7 @@ const PRIMARY_KEY = {
   catalog_public_view: 'sku',
   quotes: 'id',
   quote_settings: 'id',
+  sorting_queue: 'id',
 };
 
 function defaultSeed() {
@@ -27,6 +28,7 @@ function defaultSeed() {
     catalog_public_view: [],
     quotes: [],
     quote_settings: [{ id: 1, tier1_pct: 50, tier2_pct: 60, tier3_pct: 70 }],
+    sorting_queue: [],
   };
 }
 

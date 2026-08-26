@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { supabaseClient } from '../lib/supabase.js';
-import { rowToCard, rowToTicket, rowToQuote } from '../lib/db.js';
+import { rowToCard, rowToTicket, rowToQuote, rowToSortingItem } from '../lib/db.js';
 
 // Merges one postgres_changes event into local state by primary key.
 // Works the same whether the event is our own write echoing back (a no-op
@@ -22,12 +22,12 @@ function applyChange(prev, payload, mapRow, keyField) {
   return next;
 }
 
-// Subscribes to live catalog/sync_queue/quotes changes so every open tab
-// reflects edits from any other tab or device without needing a manual
-// reload. Requires the `catalog`, `sync_queue`, and `quotes` tables to be
-// added to Supabase's `supabase_realtime` publication (Database →
-// Replication in the dashboard).
-export function useRealtimeSync({ enabled, setCatalog, setQueue, setQuotes }) {
+// Subscribes to live catalog/sync_queue/quotes/sorting_queue changes so
+// every open tab reflects edits from any other tab or device without
+// needing a manual reload. Requires the `catalog`, `sync_queue`, `quotes`,
+// and `sorting_queue` tables to be added to Supabase's `supabase_realtime`
+// publication (Database → Publications in the dashboard).
+export function useRealtimeSync({ enabled, setCatalog, setQueue, setQuotes, setSorting }) {
   useEffect(() => {
     if (!enabled) return;
     const channel = supabaseClient
@@ -41,10 +41,13 @@ export function useRealtimeSync({ enabled, setCatalog, setQueue, setQuotes }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, (payload) => {
         setQuotes(prev => applyChange(prev, payload, rowToQuote, 'id'));
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sorting_queue' }, (payload) => {
+        setSorting(prev => applyChange(prev, payload, rowToSortingItem, 'id'));
+      })
       .subscribe();
 
     return () => {
       supabaseClient.removeChannel(channel);
     };
-  }, [enabled, setCatalog, setQueue, setQuotes]);
+  }, [enabled, setCatalog, setQueue, setQuotes, setSorting]);
 }

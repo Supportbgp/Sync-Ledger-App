@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_QUOTE_TIER_PCTS, normalizeQuoteItem, computeQuoteTotals, computeOfferTiers,
-  itemsFromCatalogRows, buildCatalogItemsFromQuoteItems,
+  itemsFromCatalogRows, buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems,
 } from './quoteUtils.js';
 
 describe('normalizeQuoteItem', () => {
@@ -158,5 +158,63 @@ describe('buildCatalogItemsFromQuoteItems', () => {
     const cards = buildCatalogItemsFromQuoteItems(items);
     expect(cards[0].imageUrl).toBe('https://x/stock.jpg');
     expect(cards[0].activeImage).toBe('stock');
+  });
+
+  it('applies a per-item destination (location + channels) rather than a whole-quote one', () => {
+    const items = [normalizeQuoteItem({ name: 'A' })];
+    const cards = buildCatalogItemsFromQuoteItems(items, {
+      location: 'Red binder', posChannel: true, tcgplayerChannel: false, collectrChannel: false,
+    });
+    expect(cards[0].location).toBe('Red binder');
+    expect(cards[0].posChannel).toBe(true);
+    expect(cards[0].tcgplayerChannel).toBe(false);
+    expect(cards[0].collectrChannel).toBe(false);
+  });
+
+  it('falls back to normalizeCard\'s own defaults (blank location, every channel on) when no destination is given', () => {
+    const items = [normalizeQuoteItem({ name: 'A' })];
+    const cards = buildCatalogItemsFromQuoteItems(items);
+    expect(cards[0].location).toBe('');
+    expect(cards[0].posChannel).toBe(true);
+    expect(cards[0].tcgplayerChannel).toBe(true);
+    expect(cards[0].collectrChannel).toBe(true);
+  });
+});
+
+describe('buildSortingItemsFromQuoteItems', () => {
+  it('reshapes every quote item into a sorting-queue row, snapshotting the quote id + collection name', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Charizard', game: 'Pokemon', set: 'Base Set', condition: 'Lightly Played', qty: 2, price: 40, basePrice: 50 }),
+      normalizeQuoteItem({ name: 'Unlisted Promo Card', qty: 1, price: 5 }),
+    ];
+    const rows = buildSortingItemsFromQuoteItems(items, 'quote-id-1', 'Jake binder proposal');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      quoteId: 'quote-id-1', quoteCollectionName: 'Jake binder proposal',
+      name: 'Charizard', game: 'Pokemon', set: 'Base Set', condition: 'Lightly Played',
+      qty: 2, price: 40, basePrice: 50,
+    });
+    expect(rows[1]).toMatchObject({ quoteId: 'quote-id-1', quoteCollectionName: 'Jake binder proposal', name: 'Unlisted Promo Card' });
+  });
+
+  it('never assigns a sku — sorting-queue rows are not yet Catalog items', () => {
+    const rows = buildSortingItemsFromQuoteItems([normalizeQuoteItem({ name: 'A' })], 'q1', 'Test');
+    expect(rows[0]).not.toHaveProperty('sku');
+  });
+
+  it('carries image fields over so the Sorting tab can show a thumbnail', () => {
+    const items = [normalizeQuoteItem({ name: 'A', imageUrl: 'https://x/stock.jpg', activeImage: 'stock' })];
+    const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
+    expect(rows[0].imageUrl).toBe('https://x/stock.jpg');
+    expect(rows[0].activeImage).toBe('stock');
+  });
+
+  it('handles an empty item list', () => {
+    expect(buildSortingItemsFromQuoteItems([], 'q1', 'Test')).toEqual([]);
+  });
+
+  it('defaults quoteCollectionName to an empty string when not given', () => {
+    const rows = buildSortingItemsFromQuoteItems([normalizeQuoteItem({ name: 'A' })], 'q1');
+    expect(rows[0].quoteCollectionName).toBe('');
   });
 });
