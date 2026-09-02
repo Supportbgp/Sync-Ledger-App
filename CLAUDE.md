@@ -2571,6 +2571,73 @@ actual printed Quote for a large card list that cut off partway through.
   alone, and the DOM-nesting fix is a straightforward, low-risk structural
   change with no new runtime logic to test.
 
+## Quote tab: Print buttons moved into their sections, Employee/Time taken reordered
+
+A small round of real-usage UI feedback on `QuoteDetail.jsx`, independent of
+the sections/print-pagination work above:
+
+- **"Print Quote" and "Print Release Form" moved out of a shared button row
+  at the top of the modal and into the section each one actually prints.**
+  "Print Release Form" now sits at the top of the Release form info
+  section's own `.form-section`; "Print Quote" sits the same way at the top
+  of Total & offer's. Real feedback found the old shared row confusing once
+  both buttons lived in one place with no visual tie to what they printed —
+  each button now reads as part of the section it summarizes. Both still
+  print off `draft` (whatever's on screen, saved or not) via the same
+  `printMode` state/effect — this was a placement-only change, no print
+  logic touched. A side effect worth knowing: since each button now lives
+  inside its own collapsible section (see the round above), collapsing that
+  section hides its Print button along with the rest of the section's
+  fields — accepted as reasonable, since printing a section's content isn't
+  meaningful with that section collapsed/hidden either.
+- **Employee and Time taken to quote swapped order** in the Quote details
+  field row — now Employee first, Time taken to quote second. Purely a
+  field-ordering change, same as the earlier Date-quoted reorder in this
+  section; no field added/removed/renamed.
+
+## Sorting tab: multi-select and batch placement
+
+Real feedback: sorting cards from the same quote one at a time was tedious
+when a whole group was headed to the same binder/case anyway (e.g. a stack
+of commons all going into the same bulk box, or several cards from one
+quote all landing in the same binder) — staff wanted the same batch-select
+pattern Catalog already has, applied here.
+
+- **`SortingTab.jsx` gained per-row checkboxes, a "Select all" toggle, and a
+  batch action bar** (reusing the existing `.batch-bar`/`.checkbox-row`
+  styles Catalog's own `BatchBar.jsx` already established, rather than
+  inventing new ones) — "Sort selected (N)" opens the same `SortItemModal`
+  used by a single row's own "Sort" button, just with every selected item
+  handed to it at once. Selecting/deselecting doesn't remove a row from the
+  queue or otherwise change it — purely a selection state layered on top,
+  same as Catalog's checkboxes.
+- **`SortItemModal` now takes `items` (an array) instead of a single
+  `item`** — one destination decision (Place individually vs. Add to Bulk,
+  one binder/case, one set of channels in individual mode) applies to every
+  item in the array. A single-item array (the per-row "Sort" button) renders
+  byte-for-byte the same modal title/copy as before (`Sort: <name>`) so the
+  existing e2e coverage needed no changes; a multi-item array instead shows
+  `Sort <N> items` and a generic bulk-mode explainer, since per-item detail
+  doesn't fit a batch header.
+- **`App.jsx`'s `handleSortItem` renamed `handleSortItems` and now takes an
+  array** — individual-mode placement reuses
+  `buildCatalogItemsFromQuoteItems(items, destination)` as-is (it already
+  accepted an array with one shared destination); bulk mode is processed
+  sequentially, folding each result back into a working copy of `catalog`
+  before the next item looks up its own `findBulkRow` — two items in the
+  same batch sharing a (location, game) pair must increment ONE row, not
+  each race against the same stale `catalog` snapshot and create two. The
+  per-sku results are deduped before writing, so a shared bulk row is
+  upserted once with its final accumulated qty, not once per contributing
+  item. A mixed-game batch (e.g. sorting a Pokemon card and a Magic card
+  into Bulk in the same click) still resolves correctly, since each item
+  looks up its own row by its own game — same reasoning `buildBulkCatalogItem`
+  already relied on for a single item.
+- `quoteUtils.js`'s `buildCatalogItemsFromQuoteItems` comment updated to
+  reflect that it's called with either a single- or multi-item array now,
+  not just one row at a time — no code change there, since it already took
+  an array.
+
 ## Sorting stage + Bulk item type (supersedes the accept-time destination modal)
 
 Real staff feedback, just one round after the accept-time destination

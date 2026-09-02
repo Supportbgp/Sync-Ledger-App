@@ -100,6 +100,40 @@ test('adding a card to Bulk increments a running (location, game) count instead 
   await expect(activePanel(page).getByText('Bulk — Pokemon')).toHaveCount(1);
 });
 
+test('batch-selecting several items sorts them all to the same location at once', async ({ page }) => {
+  await page.locator('.tab', { hasText: 'Quote' }).click();
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Multi-card collection');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  for (const name of ['Card A', 'Card B']) {
+    await page.getByRole('button', { name: '+ Add card manually' }).click();
+    const row = page.locator('.scan-row').last();
+    await row.locator('input[placeholder="Card name"]').fill(name);
+    await row.locator('select').first().selectOption('Pokemon');
+    await row.locator('input[placeholder="Price"]').fill('5');
+  }
+  await page.locator('.field-group', { hasText: 'Offer status' }).locator('select').selectOption('accepted_cash');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.modal-head .name')).toHaveCount(0);
+
+  await page.locator('.tab', { hasText: 'Sorting' }).click();
+  const panel = activePanel(page);
+  await panel.getByText('Select all').click();
+  await panel.getByRole('button', { name: /Sort selected/ }).click();
+
+  const sortModal = page.locator('.modal', { hasText: 'Sort 2 items' });
+  await expect(sortModal).toBeVisible();
+  await page.getByLabel('Binder / case / collection').fill('Shared binder');
+  await sortModal.locator('#si_posChannel').check();
+  await sortModal.getByRole('button', { name: 'Confirm' }).click();
+
+  await expect(panel.getByText('Nothing waiting')).toBeVisible();
+  await page.locator('.tab', { hasText: 'Catalog' }).click();
+  await expect(activePanel(page).getByText('Card A')).toBeVisible();
+  await expect(activePanel(page).getByText('Card B')).toBeVisible();
+});
+
 test('cancelling the sort modal leaves the item in Sorting, unplaced', async ({ page }) => {
   await acceptQuoteWithOneItem(page, { collectionName: 'Jake binder proposal', cardName: 'Charizard', price: 40 });
   await page.locator('.tab', { hasText: 'Sorting' }).click();

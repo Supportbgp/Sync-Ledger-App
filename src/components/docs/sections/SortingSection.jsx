@@ -17,6 +17,13 @@ export default function SortingSection() {
         from, and a <strong>Sort</strong> button. That opens a placement
         decision with two modes:
       </p>
+      <DocsCallout kind="note">
+        Check the boxes on several rows (or <strong>Select all</strong>) to
+        reveal a <strong>Sort selected</strong> button — one destination
+        decision then applies to every checked card at once, same batch
+        pattern as Catalog's own checkboxes. Handy when a whole group from
+        one quote is headed to the same binder/case or the same Bulk lot.
+      </DocsCallout>
       <ul>
         <li>
           <strong>Place individually</strong> (default) — pick a real

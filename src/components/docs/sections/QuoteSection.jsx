@@ -88,11 +88,13 @@ export default function QuoteSection() {
         A separate section for the shop's real paper intake form — whether
         the customer already has a price in mind, what number if so, and a
         free-text description of what's actually being left with the shop.
-        <strong> Print Quote</strong> and <strong>Print Release Form</strong>{' '}
-        at the top of a quote print off, respectively, an internal record of
-        the whole quote, or a physical copy of the intake form matching the
-        shop's paper original — meant to be signed with a pen on the spot,
-        not a digital signature feature.
+        <strong> Print Release Form</strong> lives at the top of this section
+        and prints a physical copy of the intake form matching the shop's
+        paper original — meant to be signed with a pen on the spot, not a
+        digital signature feature.
+        <strong> Print Quote</strong>, an internal record of the whole quote,
+        lives the same way at the top of the Total &amp; offer section below
+        instead.
       </p>
 
       <h3>Collapsible sections</h3>

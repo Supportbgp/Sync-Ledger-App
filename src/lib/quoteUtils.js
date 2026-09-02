@@ -103,20 +103,19 @@ export function itemsFromCatalogRows(cards) {
   }));
 }
 
-// Sort-time conversion: turns ONE sorting-queue item (see
-// phase10_sorting_bulk.sql) into a new Catalog row via the exact same
+// Sort-time conversion: turns one or more sorting-queue items (see
+// phase10_sorting_bulk.sql) into new Catalog rows via the exact same
 // normalizeCard(...) shape EditModal/ScannerPanel already build before
 // calling dbUpsertCard(s) — no new catalog-write primitive needed.
-// basePrice carries over so Market Value keeps working on the new row
+// basePrice carries over so Market Value keeps working on each new row
 // going forward; price/condition/qty/notes carry over as entered on the
-// quote. Called with a single-item array from App.jsx's handleSortItem —
-// each sorting-queue row is placed individually, one destination at a
-// time, not as a whole-quote batch (see the Sorting stage in CLAUDE.md
-// for why that changed from this function's original whole-quote-accept
-// callers).
+// quote. Called from App.jsx's handleSortItems — every item passed shares
+// this one destination decision (a single sorting-queue row via the per-row
+// "Sort" button, or several batch-selected rows headed to the same binder/
+// case at once — see the Sorting stage in CLAUDE.md).
 //
 // `destination` — { location, posChannel, tcgplayerChannel, collectrChannel }
-// — is staff's answer to "where is this card going?" for this one row.
+// — is staff's answer to "where are these cards going?".
 // Omitting it (e.g. existing callers/tests) falls back to normalizeCard's
 // own defaults — blank location, channels defaulting to "everywhere".
 export function buildCatalogItemsFromQuoteItems(items, destination) {
