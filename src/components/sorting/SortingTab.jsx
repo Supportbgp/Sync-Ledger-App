@@ -10,16 +10,46 @@ import SortItemModal from './SortItemModal.jsx';
 // it's placed — the resulting Catalog row is the durable record from
 // then on, not this queue (see CLAUDE.md's "Sorting stage" section for
 // why history isn't kept here).
-export default function SortingTab({ sorting, catalog, locations, onSortItem }) {
+export default function SortingTab({ sorting, catalog, locations, onSortItems }) {
   const { openLightbox } = useUI();
-  const [sortingId, setSortingId] = useState(null);
-  const activeItem = sorting.find(s => s.id === sortingId) || null;
+  // `sortingItems` holds whichever item(s) the open SortItemModal is
+  // currently deciding a destination for — a single-item array from a
+  // row's own "Sort" button, or the whole batch-selected set from "Sort
+  // selected" below. The modal itself doesn't care which; it just asks one
+  // destination question and hands the array back.
+  const [sortingItems, setSortingItems] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
+  function toggleSelected(id, checked) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(ids, checked) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      for (const id of ids) { if (checked) next.add(id); else next.delete(id); }
+      return next;
+    });
+  }
 
   async function handleConfirm(destination) {
-    if (!activeItem) return;
-    await onSortItem(activeItem, destination);
-    setSortingId(null);
+    if (!sortingItems || !sortingItems.length) return;
+    await onSortItems(sortingItems, destination);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      for (const item of sortingItems) next.delete(item.id);
+      return next;
+    });
+    setSortingItems(null);
   }
+
+  const allIds = sorting.map(s => s.id);
+  const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
+  const selectedItems = sorting.filter(s => selectedIds.has(s.id));
 
   return (
     <div>
@@ -29,45 +59,71 @@ export default function SortingTab({ sorting, catalog, locations, onSortItem }) 
         </div>
       </div>
       {sorting.length ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {sorting.map(item => {
-            const displaySrc = activeImageSrc(item);
-            return (
-              <div className="scan-row" key={item.id}>
-                <div className="scan-row-thumb-col">
-                  <div
-                    className="scan-row-thumb"
-                    onClick={() => { if (displaySrc) openLightbox(displaySrc); }}
-                    style={{ cursor: displaySrc ? 'pointer' : 'default' }}
-                    title={displaySrc ? 'Click to zoom' : ''}
-                  >
-                    {displaySrc ? <img src={displaySrc} /> : <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{item.game || 'No image'}</span>}
+        <>
+          <label className="checkbox-row" style={{ marginBottom: '8px' }}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={(e) => toggleSelectAll(allIds, e.target.checked)}
+            />
+            <span style={{ fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Select all</span>
+          </label>
+          {selectedItems.length > 0 && (
+            <div className="batch-bar show">
+              <span>{selectedItems.length} selected</span>
+              <div className="spacer"></div>
+              <button className="btn small" onClick={() => setSortingItems(selectedItems)}>
+                Sort selected ({selectedItems.length})
+              </button>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {sorting.map(item => {
+              const displaySrc = activeImageSrc(item);
+              const isChecked = selectedIds.has(item.id);
+              return (
+                <div className={`scan-row${isChecked ? ' row-selected' : ''}`} key={item.id}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => toggleSelected(item.id, e.target.checked)}
+                    style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                  />
+                  <div className="scan-row-thumb-col">
+                    <div
+                      className="scan-row-thumb"
+                      onClick={() => { if (displaySrc) openLightbox(displaySrc); }}
+                      style={{ cursor: displaySrc ? 'pointer' : 'default' }}
+                      title={displaySrc ? 'Click to zoom' : ''}
+                    >
+                      {displaySrc ? <img src={displaySrc} /> : <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{item.game || 'No image'}</span>}
+                    </div>
                   </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600 }}>{item.name}{item.qty > 1 ? ` × ${item.qty}` : ''}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
+                      {[item.game, item.set, item.rarity, item.condition].filter(Boolean).join(' · ')}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>
+                      From {item.quoteCollectionName || 'a quote'}{item.price != null ? ` · $${Number(item.price).toFixed(2)}` : ''}
+                    </div>
+                  </div>
+                  <button className="btn small" onClick={() => setSortingItems([item])}>Sort</button>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{item.name}{item.qty > 1 ? ` × ${item.qty}` : ''}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
-                    {[item.game, item.set, item.rarity, item.condition].filter(Boolean).join(' · ')}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>
-                    From {item.quoteCollectionName || 'a quote'}{item.price != null ? ` · $${Number(item.price).toFixed(2)}` : ''}
-                  </div>
-                </div>
-                <button className="btn small" onClick={() => setSortingId(item.id)}>Sort</button>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <div className="empty"><span className="mark">Nothing waiting</span>Cards from accepted quotes will show up here to be sorted.</div>
       )}
-      {activeItem && (
+      {sortingItems && (
         <SortItemModal
-          item={activeItem}
+          items={sortingItems}
           catalog={catalog}
           locations={locations}
           onConfirm={handleConfirm}
-          onCancel={() => setSortingId(null)}
+          onCancel={() => setSortingItems(null)}
         />
       )}
     </div>

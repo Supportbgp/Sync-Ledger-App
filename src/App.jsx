@@ -313,34 +313,54 @@ export default function App() {
     toast("Quote deleted");
   }
 
-  // The Sorting tab's per-item placement decision. `destination.mode` is
-  // 'individual' (a real binder/case, same channel checkboxes as any other
-  // new item) or 'bulk' (no channels — see findBulkRow/buildBulkCatalogItem
-  // in cardUtils.js for why this finds-or-creates a running (location,
-  // game) count instead of a per-print row). Either way, the sorting_queue
-  // row is deleted once resolved — the new/updated Catalog row is the
-  // durable record from here on, not this table.
-  async function handleSortItem(item, destination) {
-    let resultCard;
+  // The Sorting tab's placement decision — for one item (the per-row "Sort"
+  // button) or several at once (batch-selecting a group headed to the same
+  // binder/case, same reasoning as Catalog's own multi-select). `destination.
+  // mode` is 'individual' (a real binder/case, same channel checkboxes as
+  // any other new item) or 'bulk' (no channels — see findBulkRow/
+  // buildBulkCatalogItem in cardUtils.js for why this finds-or-creates a
+  // running (location, game) count instead of a per-print row). Either way,
+  // every sorting_queue row involved is deleted once resolved — the new/
+  // updated Catalog row is the durable record from here on, not this table.
+  async function handleSortItems(items, destination) {
+    let resultCards;
     if (destination.mode === 'bulk') {
-      const existing = findBulkRow(catalog, destination.location, item.game);
-      resultCard = buildBulkCatalogItem(item, destination.location, existing);
+      // Processed sequentially, folding each result back into `working`
+      // before the next item looks up its own (location, game) row — two
+      // items in the same batch sharing that pair must increment ONE row,
+      // not each create/upsert their own separate copy against the same
+      // stale snapshot of `catalog`. Deduped by sku afterward so that shared
+      // row is only written to the DB once, with its final accumulated qty,
+      // instead of once per contributing item.
+      let working = catalog;
+      const bySku = new Map();
+      for (const item of items) {
+        const existing = findBulkRow(working, destination.location, item.game);
+        const resultCard = buildBulkCatalogItem(item, destination.location, existing);
+        const idx = working.findIndex(c => c.sku === resultCard.sku);
+        working = idx === -1 ? [...working, resultCard] : working.map((c, i) => (i === idx ? resultCard : c));
+        bySku.set(resultCard.sku, resultCard);
+      }
+      resultCards = Array.from(bySku.values());
+      for (const resultCard of resultCards) await dbUpsertCard(resultCard, toast);
     } else {
-      resultCard = buildCatalogItemsFromQuoteItems([item], destination)[0];
+      resultCards = buildCatalogItemsFromQuoteItems(items, destination);
+      await dbUpsertCards(resultCards, toast);
     }
-    await dbUpsertCard(resultCard, toast);
     setCatalog(prev => {
-      const idx = prev.findIndex(c => c.sku === resultCard.sku);
-      if (idx === -1) return [...prev, resultCard];
-      const next = prev.slice();
-      next[idx] = resultCard;
+      let next = prev.slice();
+      for (const resultCard of resultCards) {
+        const idx = next.findIndex(c => c.sku === resultCard.sku);
+        if (idx === -1) next.push(resultCard); else next[idx] = resultCard;
+      }
       return next;
     });
-    await dbDeleteSortingItem(item.id, toast);
-    setSorting(prev => prev.filter(s => s.id !== item.id));
+    for (const item of items) await dbDeleteSortingItem(item.id, toast);
+    const ids = new Set(items.map(i => i.id));
+    setSorting(prev => prev.filter(s => !ids.has(s.id)));
     toast(destination.mode === 'bulk'
-      ? `${item.qty} × ${item.name} added to Bulk (${destination.location})`
-      : `${item.name} sorted to ${destination.location}`);
+      ? `${items.length} item(s) added to Bulk (${destination.location})`
+      : `${items.length} item(s) sorted to ${destination.location}`);
   }
 
   async function handleSaveTierSettings(next) {
@@ -424,7 +444,7 @@ export default function App() {
       </div>
 
       <div className={`panel${tab === 'sorting' ? ' active' : ''}`}>
-        <SortingTab sorting={sorting} catalog={catalog} locations={locations} onSortItem={handleSortItem} />
+        <SortingTab sorting={sorting} catalog={catalog} locations={locations} onSortItems={handleSortItems} />
       </div>
 
       <div className="footnote">

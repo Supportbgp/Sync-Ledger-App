@@ -94,10 +94,6 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           </div>
         </div>
         <div className="modal-body">
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-            <button className="btn secondary small" onClick={() => setPrintMode('quote')}>Print Quote</button>
-            <button className="btn secondary small" onClick={() => setPrintMode('release')}>Print Release Form</button>
-          </div>
           <SectionHeader title="Quote details" open={openSections.details} onToggle={() => toggleSection('details')} />
           {openSections.details && (
           <div className="form-section">
@@ -110,8 +106,8 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
               <div className="field-group"><label>Email</label><input type="text" placeholder="e.g. jane@email.com" value={draft.customerEmail} onChange={(e) => set('customerEmail', e.target.value)} /></div>
             </div>
             <div className="field-row2">
-              <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
               <div className="field-group"><label>Employee</label><input type="text" placeholder="e.g. John Doe" value={draft.employee} onChange={(e) => set('employee', e.target.value)} /></div>
+              <div className="field-group"><label>Time taken to quote</label><input type="text" placeholder="e.g. 20 min" value={draft.timeTaken} onChange={(e) => set('timeTaken', e.target.value)} /></div>
             </div>
             <div className="field-group"><label>Date quoted</label><input type="date" value={draft.dateQuoted || ''} onChange={(e) => set('dateQuoted', e.target.value)} /></div>
           </div>
@@ -120,6 +116,9 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           <SectionHeader title="Release form info" open={openSections.release} onToggle={() => toggleSection('release')} />
           {openSections.release && (
           <div className="form-section">
+            <div style={{ marginBottom: '12px' }}>
+              <button className="btn secondary small" onClick={() => setPrintMode('release')}>Print Release Form</button>
+            </div>
             <div className="field-group">
               <label>Does the customer have a price in mind, a perceived value, or an offer they've already been given?</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -172,6 +171,9 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           <SectionHeader title="Total & offer" open={openSections.total} onToggle={() => toggleSection('total')} />
           {openSections.total && (
           <div className="form-section">
+            <div style={{ marginBottom: '12px' }}>
+              <button className="btn secondary small" onClick={() => setPrintMode('quote')}>Print Quote</button>
+            </div>
             <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '13px', marginBottom: '10px' }}>
               <div>
                 <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Qty</div>

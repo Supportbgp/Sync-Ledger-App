@@ -1367,6 +1367,11 @@
       .scan-row { animation: none; }
     }
 
+    .scan-row.row-selected {
+      background: var(--blue-soft);
+      border-color: var(--blue);
+    }
+
     .scan-row-thumb-col {
       flex-shrink: 0;
       width: 64px;

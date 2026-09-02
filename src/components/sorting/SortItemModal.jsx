@@ -2,19 +2,26 @@ import { useEffect, useState } from 'react';
 import { channelDefaultsForLocation } from '../../lib/cardUtils.js';
 import LocationPicker from '../LocationPicker.jsx';
 
-// One card's placement decision, asked individually per Sorting-queue row —
-// real feedback on the earlier whole-quote AcceptQuoteModal (see CLAUDE.md's
-// "Sorting stage" section): cards from the same quote can go to several
-// different places, so this can't be a single decision made once at accept
-// time. Two modes:
+// One placement decision for `items` — either a single Sorting-queue row
+// (the row's own "Sort" button) or several batch-selected rows headed to
+// the same binder/case at once (Catalog's own multi-select pattern, applied
+// here since real use found staff sorting a whole group of cards from the
+// same quote into one collection at a time). Real feedback on the earlier
+// whole-quote AcceptQuoteModal (see CLAUDE.md's "Sorting stage" section):
+// cards from the same quote can go to several different places, so this
+// can't be a single decision forced on an entire quote — batch-selecting a
+// subset here is an opt-in convenience, not a return to that all-or-nothing
+// model. Two modes:
 //   - "individual": a real binder/case + the same POS/TCG Player/Collectr
-//     channel checkboxes EditModal uses — this card becomes its own real
+//     channel checkboxes EditModal uses — each item becomes its own real
 //     Catalog row (itemType 'single').
 //   - "bulk": just a binder/case — no channels, since a pile of loose bulk
 //     cards isn't a sellable SKU on its own. Finds/increments the running
-//     count for that binder+game instead of creating a per-print row (see
-//     findBulkRow/buildBulkCatalogItem in cardUtils.js).
-export default function SortItemModal({ item, catalog, locations, onConfirm, onCancel }) {
+//     count for each item's own (binder, game) pair instead of creating a
+//     per-print row (see findBulkRow/buildBulkCatalogItem in cardUtils.js) —
+//     a mixed-game batch still resolves correctly since each item looks up
+//     its own row by its own game.
+export default function SortItemModal({ items, catalog, locations, onConfirm, onCancel }) {
   const [mode, setMode] = useState('individual');
   const [location, setLocation] = useState('');
   const [channels, setChannels] = useState({ posChannel: false, tcgplayerChannel: false, collectrChannel: false });
@@ -52,12 +59,20 @@ export default function SortItemModal({ item, catalog, locations, onConfirm, onC
     });
   }
 
+  const single = items.length === 1 ? items[0] : null;
+
   return (
     <div className="overlay show">
       <div className="modal">
         <div className="modal-head">
-          <div className="name">Sort: {item.name}{item.qty > 1 ? ` × ${item.qty}` : ''}</div>
-          <div className="meta">{[item.game, item.set, item.condition].filter(Boolean).join(' · ') || 'Where is this going?'}</div>
+          <div className="name">
+            {single ? <>Sort: {single.name}{single.qty > 1 ? ` × ${single.qty}` : ''}</> : `Sort ${items.length} items`}
+          </div>
+          <div className="meta">
+            {single
+              ? ([single.game, single.set, single.condition].filter(Boolean).join(' · ') || 'Where is this going?')
+              : `${items.map(i => i.name).join(', ')} — where are they going?`}
+          </div>
         </div>
         <div className="modal-body">
           <div className="field-group">
@@ -74,7 +89,9 @@ export default function SortItemModal({ item, catalog, locations, onConfirm, onC
             </div>
             {mode === 'bulk' && (
               <div className="status-line" style={{ marginTop: '6px' }}>
-                Adds {item.qty} to a running Bulk count for {item.game || 'this game'} in the binder/case below — not tracked as an individual card.
+                {single
+                  ? `Adds ${single.qty} to a running Bulk count for ${single.game || 'this game'} in the binder/case below — not tracked as an individual card.`
+                  : "Adds each selected card to a running Bulk count for its own game in the binder/case below — not tracked as individual cards."}
               </div>
             )}
           </div>
