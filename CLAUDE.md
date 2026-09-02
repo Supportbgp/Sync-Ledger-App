@@ -946,6 +946,23 @@ Everything else found:
   coverage. Covered by new `db.test.js` cases simulating a table just over
   1000 rows (a full first page + a second, short page) and asserting
   every row survives, not just the first 1000.
+- **`CatalogTable`'s separate 400-row render cap gained a "Load more…"
+  escape hatch** — a different limit from the 1000-row fetch cap above
+  (that one is fixed at the DB-fetch layer; this one is a deliberate
+  client-side render cap, since rendering thousands of `<tr>`/card
+  elements at once is real DOM cost, not a bug). Once a real catalog/
+  filtered view crosses 400 matches, staff previously had no way to see
+  the rest short of narrowing their search — now a `visibleCount` state
+  (default 400, desktop table and mobile cards share it) can jump straight
+  to showing every match in one click, e.g. before a "Select all visible"
+  that needs to reach a whole filtered collection (that checkbox already
+  selected every match regardless of the render cap — `onToggleSelectAll`
+  is built from the full `rows` array, not the capped slice — so this
+  fixes the *visibility* gap, not a real selection bug). Deliberately not
+  reset on filter/search changes: `rows.slice(0, visibleCount)` against a
+  newly-narrowed `rows` just naturally returns fewer rows on its own, so
+  an expanded view only ever needs to grow, never gets silently collapsed
+  by an unrelated realtime update elsewhere in the catalog.
 - TCG Player's **draft catalog accepts a bulk .xlsx/.csv upload for new
   products**, not just existing listings (confirmed by hands-on
   investigation, not docs) — corrects the earlier assumption that Export

@@ -40,6 +40,24 @@ test('adding a new item shows up in the catalog immediately', async ({ page }) =
   await expect(page.locator('.n-name', { hasText: 'Sol Ring' })).toBeVisible();
 });
 
+test('Load more reveals every match past the 400-row render cap', async ({ page }, testInfo) => {
+  const manyRows = Array.from({ length: 450 }, (_, i) => makeCardRow({ sku: `sku-many-${i}`, name: `Filler Card ${i}` }));
+  await seedHarness(page, { seed: catalogSeed(manyRows) });
+  await page.goto('./');
+
+  const rowLocator = testInfo.project.name === 'Mobile' ? page.locator('.catalog-card') : page.locator('table tbody tr');
+  await expect(page.getByText('Showing 400 of 450 matches.')).toBeVisible();
+  await expect(rowLocator).toHaveCount(400);
+
+  const loadMore = page.getByRole('button', { name: 'Load more…' });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+
+  await expect(page.getByText(/Showing \d+ of 450 matches\./)).toHaveCount(0);
+  await expect(loadMore).toHaveCount(0);
+  await expect(rowLocator).toHaveCount(450);
+});
+
 test('selling the last copy of an item marks it sold', async ({ page }, testInfo) => {
   // Blastoise (sku-2) was seeded with qty 1 — SellModal should skip the
   // quantity stepper and go straight to a plain confirmation. Default sort

@@ -18,9 +18,12 @@ export default function CatalogSection() {
         Type filters Singles vs. Slabs, Status filters Available vs. Sold.
       </p>
       <DocsCallout kind="note">
-        The table only shows the first 400 matching rows at a time. If a
-        card you know is in stock isn't showing up, narrow your search
-        further rather than assuming it's missing.
+        The table only renders the first 400 matching rows at a time, for
+        performance — a card you know is in stock but don't see is
+        probably just past that cut, not missing. Click{' '}
+        <strong>Load more…</strong> at the bottom to render every match at
+        once (useful before a "Select all visible" that needs to reach
+        everything), or narrow your search instead.
       </DocsCallout>
 
       <h3>Selecting and acting on multiple items</h3>
