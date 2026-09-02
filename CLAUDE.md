@@ -963,6 +963,21 @@ Everything else found:
   newly-narrowed `rows` just naturally returns fewer rows on its own, so
   an expanded view only ever needs to grow, never gets silently collapsed
   by an unrelated realtime update elsewhere in the catalog.
+- **`ImportPanel`'s "Skip automatic image search" checkbox is provisional,
+  not a settled feature** — added for a large synthetic/test-data import
+  (hundreds of rows with no real card behind them, where the auto-search
+  would just burn time finding nothing) and for bulk/legacy-data drops
+  staff already plan to image manually later. Defaults unchecked, so a
+  normal import's behavior is unchanged; when checked, `needsImage`
+  resolves to an empty list, so both the search loop and the "Found
+  images for…" status clause become no-ops for the whole batch, rather
+  than adding a second code path to keep in sync. No dedicated automated
+  test — `ImportPanel`'s file-parsing paths have never had one (see
+  Testing below), and this is a one-line ternary gating an already-
+  untested search path; verified manually instead (a real drag-drop
+  import with the box checked, confirming the status text never mentions
+  image search and the rows still save correctly). Keep or drop based on
+  whether staff actually reach for it in practice.
 - TCG Player's **draft catalog accepts a bulk .xlsx/.csv upload for new
   products**, not just existing listings (confirmed by hands-on
   investigation, not docs) — corrects the earlier assumption that Export
