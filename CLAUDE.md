@@ -2163,6 +2163,57 @@ since they have very different feasibility:
     first, unlike the TCGPlayer link, which assumes nothing about login.
     eBay has not said whether this is permanent.
 
+## PriceCharting as a third price reference, and a reference-links layout pass
+
+A third manual reference link, `priceChartingSearchUrl` in `cardSearch.js`,
+alongside TCGPlayer/eBay — PriceCharting aggregates its own sale-price
+index per card, a different methodology from either TCGPlayer's live-
+listing snapshot or eBay's raw sold-listing search, so it's a genuinely
+separate data point, not a duplicate of the other two. Same "manual link,
+no automated fetch/API" shape as the other two — free to browse, no
+account needed.
+
+- **Not confirmed via a direct live visit, unlike TCGPlayer/eBay above** —
+  `pricecharting.com` is blocked by this sandbox's egress proxy (confirmed
+  both via a fetch attempt and a raw `curl`, both a hard block, not a
+  transient failure). Corroborated instead via a third-party source (a
+  scraper product's own documentation quoting a real PriceCharting search
+  URL), confirming the search endpoint is `/search-products` with a
+  `type=prices` and a `q=<query>` param. Other params that source also
+  showed (sort/category/etc.) read as optional display preferences, not
+  required for the search itself, so they're left out rather than guessed
+  at. Flagged in the function's own comment as corroborated-not-verified —
+  worth revisiting if a staff report ever suggests the link doesn't work.
+- **Reference-links layout consolidated across all three call sites**, per
+  real feedback that the previous layout was inconsistent and, in two of
+  the three places, cramped: `EditModal`'s links were scattered across three
+  separate spots (a TCGPlayer-only fallback under the image on search
+  failure, an eBay button crammed next to "Find market price", and a
+  TCGPlayer live-link line under the Market Value breakdown); `ScannerPanel`'s
+  `ScanRow` and `QuoteLineItemRow` both stacked TCGPlayer/eBay as tiny
+  buttons in the already-narrow 64px thumbnail column. All three now group
+  TCGPlayer/eBay/PriceCharting into one row positioned under the price
+  inputs — the same spot `EditModal`'s Market Value breakdown box already
+  occupied (the "reference price... lays itself under the inputs" pattern
+  this was modeled on) — always visible off the row/form's own name+set,
+  independent of search/price state, so staff can jump to any of the three
+  without running a search first. The two search-failure-specific TCGPlayer
+  fallback links inside `EditModal` (shown only when an image/price search
+  comes back empty) were left in place, unchanged — those are contextual
+  "your search just failed, try this" prompts, a different purpose from the
+  three always-on reference links.
+  - `EditModal`'s TCGPlayer link still switches between a real listing
+    (`sourceUrl`, once known) and a manual search — unchanged logic, just
+    relocated into the new consolidated row and no longer gated on
+    `basePrice != null` (that gate only ever applied to the old link's
+    position inside the Market Value box, not to whether `sourceUrl` itself
+    existed).
+  - `QuoteLineItemRow` has no `sourceUrl`/`listingUrl` field on a quote
+    item at all (never added — quote items never carried one), so its
+    TCGPlayer link stays a manual search unconditionally, same as before
+    this pass — only its position and the addition of PriceCharting
+    changed.
+
 ## Quote tab — trade-in/buylist quoting
 
 A new top-level tab, the reverse workflow of everything else in Ledger:

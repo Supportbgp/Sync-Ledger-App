@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { GAMES, RARITY_OPTIONS_BY_GAME, PRINTING_OPTIONS_BY_GAME, CONDITION_OPTIONS, marketValueForCondition, activeImageSrc } from '../../lib/cardUtils.js';
-import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
 import CatalogItemPicker from './CatalogItemPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
 
@@ -129,14 +129,6 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
         >
           {activeSearch === 'price' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find price'}
         </button>
-        <a
-          href={tcgplayerSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
-        >TCGPlayer ↗</a>
-        <a
-          href={ebaySoldSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '2px' }}
-        >eBay sold ↗</a>
       </div>
 
       <div className="scan-row-fields">
@@ -226,6 +218,27 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
           <div className="scan-row-meta">
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
           </div>
+        </div>
+        {/* Three independent, always-available price references, grouped
+            under the fields — moved out of the cramped thumbnail column,
+            same links/reasoning as EditModal's/ScanRow's own "Reference
+            prices" block. No live-listing link is tracked for quote items
+            (unlike a saved catalog row's sourceUrl), so TCGPlayer is always
+            the manual-search link here. */}
+        <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <a
+            href={tcgplayerSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--blue)', fontWeight: 600 }}
+          >TCGPlayer ↗</a>
+          <a
+            href={ebaySoldSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--blue)', fontWeight: 600 }}
+            title="Requires being signed into eBay to see results."
+          >eBay sold ↗</a>
+          <a
+            href={priceChartingSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--blue)', fontWeight: 600 }}
+          >PriceCharting ↗</a>
         </div>
         {status.text && <div className={`status-line ${status.kind}`} style={{ fontSize: '11.5px' }}>{status.text}</div>}
         {candidates.length > 0 && (

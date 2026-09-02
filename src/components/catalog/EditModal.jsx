@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, GAMES } from '../../lib/cardUtils.js';
-import { searchCardImage as searchByGame, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage as searchByGame, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
@@ -524,25 +524,12 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               </div>
             </div>
             <div className="field-group">
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button className="btn secondary small" disabled={searching} onClick={runFindMarketPrice}>
-                  {activeSearch === 'price' ? (<><span className="spinner" /> Searching…</>) : 'Find market price'}
-                </button>
-                {/* A standalone reference, not a fallback for "Find market price" above — eBay's real
-                    sold+completed listings are a second, independent data point staff can check any time,
-                    whether or not a Market Value has been found yet. */}
-                <a
-                  className="btn secondary small"
-                  href={ebaySoldSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
-                >
-                  Check eBay sold listings ↗
-                </a>
-              </div>
+              <button className="btn secondary small" disabled={searching} onClick={runFindMarketPrice}>
+                {activeSearch === 'price' ? (<><span className="spinner" /> Searching…</>) : 'Find market price'}
+              </button>
               <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
-                "Find market price" looks up this card's real market price from the name/game/set/rarity above —
-                independent of whichever image is showing, and never changes either photo. "Check eBay sold
-                listings" opens eBay's own real sold/completed listings for this card in a new tab — a second,
-                independent reference, available any time. (Requires being signed into eBay to see results.)
+                Looks up this card's real market price from the name/game/set/rarity above — independent of
+                whichever image is showing, and never changes either photo.
               </div>
             </div>
             {candidateMode === 'price' && imageStatus.text && <div className={`status-line ${imageStatus.kind}`}>{imageStatus.text}</div>}
@@ -595,25 +582,6 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                     </div>
                   </div>
                 </div>
-                <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)', marginTop: '8px' }}>
-                  {form.sourceUrl ? (
-                    <span style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }} onClick={() => window.open(form.sourceUrl, '_blank')}>
-                      Check live TCGPlayer listing ↗
-                    </span>
-                  ) : (
-                    // Some providers (Yugioh, SWU today) never return a
-                    // direct per-print listing link — a manual search still gets
-                    // staff most of the way there instead of leaving them with
-                    // nothing to click once a price is already showing.
-                    <a
-                      href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
-                      style={{ fontWeight: 600, color: 'var(--blue)' }}
-                    >
-                      Search TCGPlayer manually ↗
-                    </a>
-                  )}
-                  {' '}— compare the real per-condition prices there against the estimate above; the % is a flat average and won't be exactly right for every card.
-                </div>
                 {Number(form.basePrice) >= HIGH_VALUE_THRESHOLD && (
                   <div className="status-line err" style={{ marginTop: '8px' }}>
                     Market value above is an estimate (NM reference price × a flat condition %), not real
@@ -622,6 +590,55 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                 )}
               </div>
             )}
+            {/* Three independent, always-available price references, grouped
+                together under the price inputs (same spot the Pricing
+                breakdown box above lays itself in) rather than scattered
+                across a button next to "Find market price" and a
+                thumbnail-column action list, per real feedback that the old
+                layout was cramped and inconsistent between EditModal/Scanner/
+                Quote. TCGPlayer switches between a real listing link (once
+                one is known, via sourceUrl) and a manual-search fallback;
+                eBay/PriceCharting are always manual-search links — neither
+                provider's data is fetched automatically here. */}
+            <div className="field-group">
+              <label>Reference prices</label>
+              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '11.5px' }}>
+                {form.sourceUrl.trim() ? (
+                  <span
+                    style={{ textTransform: 'none', fontFamily: "'Inter',sans-serif", fontWeight: 600, cursor: 'pointer', color: 'var(--blue)' }}
+                    onClick={() => window.open(form.sourceUrl, '_blank')}
+                  >
+                    Check live TCGPlayer listing ↗
+                  </span>
+                ) : (
+                  // Some providers (Yugioh, SWU today) never return a direct
+                  // per-print listing link — a manual search still gets staff
+                  // most of the way there instead of leaving nothing to click.
+                  <a
+                    href={tcgplayerSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
+                    style={{ fontWeight: 600, color: 'var(--blue)' }}
+                  >
+                    Search TCGPlayer manually ↗
+                  </a>
+                )}
+                <a
+                  href={ebaySoldSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
+                  style={{ fontWeight: 600, color: 'var(--blue)' }}
+                >
+                  Check eBay sold listings ↗
+                </a>
+                <a
+                  href={priceChartingSearchUrl(form.name.trim(), form.set.trim())} target="_blank" rel="noopener noreferrer"
+                  style={{ fontWeight: 600, color: 'var(--blue)' }}
+                >
+                  Check PriceCharting ↗
+                </a>
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                Three independent references — compare them against the estimate above; the % is a flat average
+                and won't be exactly right for every card. (eBay requires being signed in to see sold listings.)
+              </div>
+            </div>
           </div>
 
           <div className="section-label">Notes &amp; status</div>

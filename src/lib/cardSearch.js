@@ -714,6 +714,30 @@ export function ebaySoldSearchUrl(name, set) {
   return `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&LH_Sold=1&LH_Complete=1`;
 }
 
+// A third, independent price reference — PriceCharting aggregates its own
+// sale-price history/index per card, a different methodology from either
+// TCGPlayer's live-listing snapshot or eBay's raw sold-listing search, so
+// it's a genuinely separate data point rather than a duplicate of the other
+// two. Free to browse, no account/API key needed, same "manual link, not an
+// automated fetch" shape as the other two.
+// Unlike tcgplayerSearchUrl/ebaySoldSearchUrl above, this URL was NOT
+// confirmed via a direct live visit — pricecharting.com is blocked by this
+// sandbox's egress proxy (confirmed via both WebFetch and a raw curl, both
+// coming back as a hard block, not a transient failure). Corroborated
+// instead via a third-party source (a scraper product's own documentation
+// page quoting a real PriceCharting search URL) showing the search endpoint
+// is `/search-products` with a `type=prices` and a `q=<query>` param — those
+// two params are the only ones used here; the extra params that source URL
+// also included (sort/category/etc.) looked like optional display
+// preferences, not required for the search itself, so they're left out
+// rather than guessed at. Flagged here honestly as corroborated-not-verified,
+// unlike this file's usual "confirmed live" standard — revisit if a staff
+// report ever suggests this URL doesn't actually work.
+export function priceChartingSearchUrl(name, set) {
+  const q = [name, set].filter(Boolean).join(' ').trim();
+  return `https://www.pricecharting.com/search-products?type=prices&q=${encodeURIComponent(q)}`;
+}
+
 // Single dispatch table for "search a card image by game" — shared by every
 // entry point that needs it (EditModal's Find image/Find market price,
 // ScannerPanel's auto-fill, CSV/XLSX import's auto-fill) so adding a new

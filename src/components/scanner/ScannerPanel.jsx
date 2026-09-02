@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
-import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl } from '../../lib/cardSearch.js';
+import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
 import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates, GAMES } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
@@ -522,18 +522,6 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
         >
           {row.imageStatus === 'searching' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find another image'}
         </button>
-        {/* pokemontcg.io/the other providers sometimes genuinely have no
-            match or no price for a given print (see CLAUDE.md) — a direct
-            link to TCGPlayer's own search, pre-filled, gets staff most of
-            the way to the real listing themselves instead of a dead end. */}
-        {row.imageStatus === 'none' && (
-          <a
-            href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
-          >
-            Search TCGPlayer manually ↗
-          </a>
-        )}
         {row.basePrice == null && (
           <button
             className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
@@ -541,24 +529,6 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
             onClick={onFindMarketPrice}
           >Find market price</button>
         )}
-        {row.basePrice == null && row.pendingPrice == null && (
-          <a
-            href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600, marginTop: '3px' }}
-          >
-            Search TCGPlayer manually ↗
-          </a>
-        )}
-        {/* A standalone reference, not a fallback for "Find market price" above — eBay's real
-            sold+completed listings are a second, independent data point staff can check any
-            time, whether or not a Market Value has been found for this row yet. */}
-        <a
-          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
-          href={ebaySoldSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
-          title="Opens eBay's real sold/completed listings for this card in a new tab. Requires being signed into eBay to see results."
-        >
-          Check eBay sold listings ↗
-        </a>
       </div>
 
       <div className="scan-row-fields">
@@ -659,22 +629,6 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
                 <button type="button" className="btn ghost small" style={{ marginLeft: '8px' }} onClick={() => onChange({ price: marketValue })}>Use this</button>
               </>
             ) : 'market value —'}
-            {row.listingUrl ? (
-              <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }} onClick={() => window.open(row.listingUrl, '_blank')}>
-                Check live TCGPlayer listing ↗
-              </span>
-            ) : (
-              // Some providers (Yugioh, SWU today) never return a
-              // direct per-print listing link — a manual search still gets
-              // staff most of the way there instead of leaving them with
-              // nothing to click once a price is already showing.
-              <a
-                href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--blue)', fontWeight: 600, marginLeft: '8px' }}
-              >
-                Search TCGPlayer manually ↗
-              </a>
-            )}
           </div>
         )}
         {Number(row.basePrice) >= HIGH_VALUE_THRESHOLD && (
@@ -683,6 +637,43 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
             data — on a ${HIGH_VALUE_THRESHOLD}+ card that gap can be real money.
           </div>
         )}
+        {/* Three independent, always-available price references, grouped
+            under the fields (same spot the NM/Market value line above lays
+            itself in) rather than stacked as tiny buttons in the cramped
+            thumbnail column — same links/reasoning as EditModal's own
+            "Reference prices" block. TCGPlayer switches between a real
+            listing link (once row.listingUrl is known) and a manual-search
+            fallback; eBay/PriceCharting are always manual-search links. */}
+        <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          {row.listingUrl ? (
+            <span style={{ cursor: 'pointer', color: 'var(--blue)', fontWeight: 600 }} onClick={() => window.open(row.listingUrl, '_blank')}>
+              Check live TCGPlayer listing ↗
+            </span>
+          ) : (
+            // Some providers (Yugioh, SWU today) never return a direct
+            // per-print listing link — a manual search still gets staff
+            // most of the way there instead of leaving nothing to click.
+            <a
+              href={tcgplayerSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+              style={{ color: 'var(--blue)', fontWeight: 600 }}
+            >
+              Search TCGPlayer manually ↗
+            </a>
+          )}
+          <a
+            href={ebaySoldSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--blue)', fontWeight: 600 }}
+            title="Requires being signed into eBay to see results."
+          >
+            Check eBay sold listings ↗
+          </a>
+          <a
+            href={priceChartingSearchUrl(row.name, row.set)} target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--blue)', fontWeight: 600 }}
+          >
+            Check PriceCharting ↗
+          </a>
+        </div>
         {row.showCandidates && row.imageCandidates.length > 0 && (
           <div className="img-candidates">
             {row.imageCandidates.map((c, i) => (

@@ -7,6 +7,7 @@ vi.mock('../../lib/cardSearch.js', () => ({
   searchCardImage: (...args) => searchCardImageMock(...args),
   tcgplayerSearchUrl: (name, set) => `https://www.tcgplayer.com/search/all/product?q=${encodeURIComponent([name, set].filter(Boolean).join(' '))}&view=grid`,
   ebaySoldSearchUrl: (name, set) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent([name, set].filter(Boolean).join(' '))}&LH_Sold=1&LH_Complete=1`,
+  priceChartingSearchUrl: (name, set) => `https://www.pricecharting.com/search-products?type=prices&q=${encodeURIComponent([name, set].filter(Boolean).join(' '))}`,
 }));
 
 vi.mock('../../context/UIContext.jsx', () => ({
@@ -172,6 +173,15 @@ describe('EditModal — Pricing section listing link', () => {
     render(<EditModal card={baseCard({ basePrice: 40, sourceUrl: 'https://tcg/real-listing', condition: 'NM' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByText('Check eBay sold listings ↗')).toBeInTheDocument();
     expect(screen.getByText('Check live TCGPlayer listing ↗')).toBeInTheDocument();
+  });
+
+  it('shows a standalone PriceCharting reference link too, independent of whether a Market Value has been found', () => {
+    render(<EditModal card={baseCard({ basePrice: null })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const link = screen.getByText('Check PriceCharting ↗');
+    expect(link.closest('a')).toHaveAttribute(
+      'href',
+      'https://www.pricecharting.com/search-products?type=prices&q=Charizard%20Base%20Set',
+    );
   });
 });
 
