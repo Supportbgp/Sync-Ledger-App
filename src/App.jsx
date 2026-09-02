@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
-  dbInsertTicket, dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
+  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
   dbLoadSettings, dbSaveSettings,
   dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
   dbLoadSortingQueue, dbInsertSortingItems, dbDeleteSortingItem,
@@ -169,29 +169,6 @@ export default function App() {
     await dbDeleteCard(sku, toast);
     setCatalog(prev => prev.filter(c => c.sku !== sku));
     toast("Item deleted");
-  }
-
-  async function handleSellCard(card, qty) {
-    const updated = {
-      ...card, qty: card.qty - qty, lastUpdated: Date.now(),
-      posSynced: false, tcgplayerSynced: false, collectrSynced: false,
-    };
-    if (updated.qty <= 0) updated.sold = true;
-    const ticket = {
-      id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
-      sku: updated.sku, name: updated.name, set: updated.set, condition: updated.condition,
-      printing: updated.printing, price: updated.price, qtySold: qty, timestamp: Date.now(),
-      posDone: false, tcgplayerDone: false, collectrDone: false,
-      // Snapshot which platforms were relevant at sale time, same reasoning
-      // as the other snapshotted fields above — editing the item's channels
-      // later shouldn't retroactively change what this ticket requires.
-      posChannel: card.posChannel, tcgplayerChannel: card.tcgplayerChannel, collectrChannel: card.collectrChannel,
-    };
-    setCatalog(prev => prev.map(c => c.sku === card.sku ? updated : c));
-    setQueue(prev => [...prev, ticket]);
-    await dbUpsertCard(updated, toast);
-    await dbInsertTicket(ticket, toast);
-    toast(`Marked ${qty} × ${updated.name} sold`);
   }
 
   async function handleBatchDelete(skus) {
@@ -388,7 +365,6 @@ export default function App() {
           catalog={catalog}
           onSaveCard={handleSaveCard}
           onDeleteCard={handleDeleteCard}
-          onSellCard={handleSellCard}
           onBatchDelete={handleBatchDelete}
           onBatchSell={handleBatchSell}
           onTogglePlatformStatus={handleTogglePlatformStatus}

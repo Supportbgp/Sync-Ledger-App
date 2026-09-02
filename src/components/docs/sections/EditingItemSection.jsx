@@ -84,8 +84,11 @@ export default function EditingItemSection() {
       <h3>Notes &amp; status</h3>
       <p>
         A free-text Notes field (damage, provenance, buyer holds — anything
-        worth flagging), and a "Mark as sold" checkbox as an alternative to
-        using the Sell button.
+        worth flagging), and a "Mark as sold" checkbox as an alternative to{' '}
+        <a href="#selling-an-item">Mark sold</a> from Catalog. Unlike Mark
+        sold, checking this box and saving does <strong>not</strong> create a
+        Sync Queue ticket — use it for a correction, not a real sale you want
+        tracked.
       </p>
 
       <h3>Saving</h3>

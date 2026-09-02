@@ -74,11 +74,14 @@ function deriveRow(c) {
   };
 }
 
-function RowActions({ card, isSold, onEdit, onSell }) {
+// Edit is the only per-row action left now that Sell moved to the batch bar
+// (select item(s) → Mark sold) — sized up from .small so it's easier to hit
+// as the sole remaining button, especially now that it's a smaller target
+// among a row that's otherwise entirely a click-to-select surface.
+function RowActions({ card, onEdit }) {
   return (
     <div className="row-actions">
-      <button className="btn secondary small" onClick={() => onEdit(card.sku)}>Edit</button>
-      <button className="btn small" disabled={card.qty <= 0 || isSold} onClick={() => onSell(card.sku)}>Sell</button>
+      <button className="btn secondary" onClick={() => onEdit(card.sku)}>Edit</button>
     </div>
   );
 }
@@ -86,7 +89,7 @@ function RowActions({ card, isSold, onEdit, onSell }) {
 export default function CatalogTable({
   catalogEmpty, rows, sortState, onSort,
   selectedSkus, onToggleSelected, onToggleSelectAll,
-  onEdit, onSell, onTogglePlatformStatus,
+  onEdit, onTogglePlatformStatus,
 }) {
   const { openLightbox } = useUI();
   const isMobile = useIsMobile();
@@ -191,7 +194,7 @@ export default function CatalogTable({
                       <PlatformStatus card={c} onToggle={onTogglePlatformStatus} />
                     </div>
                     <div style={{ marginTop: '10px' }}>
-                      <RowActions card={c} isSold={isSold} onEdit={onEdit} onSell={onSell} />
+                      <RowActions card={c} onEdit={onEdit} />
                     </div>
                   </div>
                 )}
@@ -238,8 +241,13 @@ export default function CatalogTable({
               const { qtyClass, isSold, sub, tagClass } = deriveRow(c);
               const isChecked = selectedSkus.has(c.sku);
               return (
-                <tr key={c.sku} className={`${isSold ? 'sold-row' : ''} ${isChecked ? 'row-selected' : ''}`}>
-                  <td>
+                <tr
+                  key={c.sku}
+                  className={`${isSold ? 'sold-row' : ''} ${isChecked ? 'row-selected' : ''}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onToggleSelected(c.sku, !isChecked)}
+                >
+                  <td onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isChecked}
@@ -267,7 +275,7 @@ export default function CatalogTable({
                   <td className="mono">{c.price !== null ? "$" + Number(c.price).toFixed(2) : "—"}</td>
                   <td className="mono" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>{timeAgo(c.lastUpdated)}</td>
                   <td><PlatformStatus card={c} onToggle={onTogglePlatformStatus} /></td>
-                  <td><RowActions card={c} isSold={isSold} onEdit={onEdit} onSell={onSell} /></td>
+                  <td onClick={(e) => e.stopPropagation()}><RowActions card={c} onEdit={onEdit} /></td>
                 </tr>
               );
             })}

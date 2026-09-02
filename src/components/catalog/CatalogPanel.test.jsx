@@ -20,7 +20,7 @@ function makeCard(overrides = {}) {
 
 function baseProps(overrides = {}) {
   return {
-    catalog: [], onSaveCard: vi.fn(), onDeleteCard: vi.fn(), onSellCard: vi.fn(),
+    catalog: [], onSaveCard: vi.fn(), onDeleteCard: vi.fn(),
     onBatchDelete: vi.fn(), onBatchSell: vi.fn(), onTogglePlatformStatus: vi.fn(),
     multipliers: {},
     ...overrides,

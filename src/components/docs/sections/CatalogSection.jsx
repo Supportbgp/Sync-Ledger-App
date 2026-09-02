@@ -8,7 +8,7 @@ export default function CatalogSection() {
         The Catalog tab is the full inventory list. On a desktop it's a
         dense table; on a phone it switches to a stack of tappable cards —
         tap a card to expand it and see SKU, last-updated time, notes, and
-        the Edit/Sell buttons.
+        the Edit button.
       </p>
 
       <h3>Finding something</h3>
@@ -28,20 +28,23 @@ export default function CatalogSection() {
 
       <h3>Selecting and acting on multiple items</h3>
       <p>
-        Check the boxes on the left of any rows (or "Select all visible" —
-        it only selects what's currently filtered into view, not the whole
-        catalog) to reveal a batch action bar: <strong>Mark sold</strong> or{' '}
-        <strong>Delete</strong>, both of which ask you to confirm first.
-        Deleting is permanent.
+        On desktop, click anywhere on a row to select it — not just its
+        checkbox — for a quick way to grab the items you want. Checking a box
+        (or "Select all visible" — it only selects what's currently filtered
+        into view, not the whole catalog) works the same way. Either
+        reveals a batch action bar: <strong>Mark sold</strong> or{' '}
+        <strong>Delete</strong>, both of which ask you to confirm first. See{' '}
+        <a href="#selling-an-item">Selling an item</a> for what Mark sold
+        actually does. Deleting is permanent.
       </p>
 
       <h3>Per-row actions</h3>
       <p>
         <strong>Edit</strong> opens the full item editor (see{' '}
-        <a href="#editing-an-item">Editing an item</a>). <strong>Sell</strong>{' '}
-        marks it sold (see <a href="#selling-an-item">Selling an item</a>) —
-        it's greyed out for items that are already sold or have zero
-        quantity. Tapping the thumbnail image zooms it.
+        <a href="#editing-an-item">Editing an item</a>) — it's the only
+        per-row button now, so it's sized larger to hit easily. Selling is
+        done by selecting the item(s) and using Mark sold above, not a
+        per-row button. Tapping the thumbnail image zooms it.
       </p>
 
       <h3>The platform status chips (P / T / C)</h3>

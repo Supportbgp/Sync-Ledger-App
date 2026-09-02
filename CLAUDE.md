@@ -2746,6 +2746,63 @@ existing one-file-per-topic convention:
   Quote→Sorting and Glossary→Sorting cross-reference links specifically,
   matching the file's existing per-cross-reference-link coverage.
 
+## Catalog: click-to-select rows, per-row Sell removed, bigger Edit button
+
+Real feedback: selecting rows one checkbox at a time was slower than it
+needed to be, and the per-row Edit/Sell button pair left Edit (the more
+commonly used of the two) as a small, easy-to-miss target next to Sell.
+
+- **Clicking anywhere on a desktop table row now toggles its selection**,
+  not just its checkbox — `CatalogTable.jsx`'s `<tr>` gets an `onClick`
+  calling `onToggleSelected(sku, !isChecked)`, with every interactive child
+  (the checkbox's own `<td>`, the thumbnail's zoom click, the source-link
+  anchor, and the actions `<td>`) stopping propagation so clicking any of
+  those does its own thing instead of also toggling the row. Scoped to
+  desktop only — real feedback on mobile's existing tap-to-expand-a-card
+  behavior found no appetite for changing it, and tapping a card to expand
+  it was judged more valuable to preserve than adding click-to-select there
+  too (mobile still selects via its own checkbox only, unchanged).
+- **The per-row Sell button is gone.** Selling now goes exclusively through
+  the same multi-select flow Delete already used: select one or more rows
+  (checkbox, or now a row click on desktop), then click **Mark sold** in the
+  batch action bar — works identically for one item or several at once, so
+  there's no longer a special single-item path. `RowActions` dropped its
+  `onSell` prop entirely; `SellModal.jsx` (and its test) — which handled the
+  single-copy Yes/No vs. multi-copy quantity-stepper distinction — is no
+  longer reachable from anywhere and was deleted outright rather than left
+  as dead code, along with `App.jsx`'s `handleSellCard`/`onSellCard` and
+  `CatalogPanel`'s `sellingSku` state.
+  - **Real behavior change worth knowing**: the old per-row Sell flow
+    supported selling a *partial* quantity (e.g. 2 of 5 copies) and always
+    auto-created a Sync Queue ticket for exactly the amount sold. The batch
+    bar's "Mark sold" (`App.jsx`'s `handleBatchSell`, unchanged by this)
+    only ever sells a selected item's *entire* remaining quantity — there is
+    now no UI path to sell a partial quantity while still getting an
+    automatic Sync Queue ticket. A partial reduction is still possible by
+    editing the Quantity field directly in Edit and saving, but that does
+    **not** create a ticket the way Mark sold does (`handleSaveCard` only
+    resets platform-status chips, it was never wired to `dbInsertTicket`).
+    Accepted as part of this simplification rather than worked around —
+    revisit if partial-quantity selling with a ticket turns out to still be
+    needed in practice.
+  - Staff docs (`SellingItemSection.jsx`) rewritten to describe the new
+    select-then-Mark-sold flow and flag the partial-quantity gap explicitly
+    via a `DocsCallout kind="warn"`; `CatalogSection.jsx`'s and
+    `EditingItemSection.jsx`'s own stale "Sell button" references updated
+    to match.
+- **Edit's button grew from `.btn.secondary.small` to plain `.btn.secondary`**
+  (both desktop table and mobile card views) — no new CSS needed, just
+  dropping the `.small` modifier already gives real extra padding/font-size
+  headroom (7px/13px vs. 4px/12px) now that it's the only per-row action
+  left and, on desktop, sits inside a row that's otherwise an entire
+  click-to-select surface.
+- `e2e/catalog.spec.js`'s old single-copy-confirmation sell test (which
+  drove the now-deleted `SellModal`) was replaced with a test selecting an
+  item (checkbox on mobile, a row click on desktop) and confirming through
+  the batch bar's Mark sold instead; a new desktop-only test asserts a row
+  click selects it and that clicking Edit inside that row does not also
+  toggle its selection.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
@@ -2800,9 +2857,9 @@ without a physical phone every time.
     real backend would make the suite flaky/order-dependent and require
     shared-login credentials in a CI secret.
   - Covers: Catalog desktop-table vs. mobile-stacked-cards, add-item and
-    sell (single-copy confirmation) flows, the public `BinderView` page
-    (populated + empty states), and `Login` (form render, wrong-password
-    error, successful sign-in) — all against the mocked backend, so they're
+    select-then-Mark-sold flows, the public `BinderView` page (populated +
+    empty states), and `Login` (form render, wrong-password error,
+    successful sign-in) — all against the mocked backend, so they're
     deterministic and need no real credentials.
   - **Local Chromium path caveat**: this dev sandbox ships one pre-installed
     Chromium revision at a fixed path instead of one matching whatever
