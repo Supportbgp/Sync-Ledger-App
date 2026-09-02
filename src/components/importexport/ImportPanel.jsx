@@ -40,6 +40,13 @@ export default function ImportPanel({ catalog, locations, onImport, embedded = f
   const [showMapSection, setShowMapSection] = useState(false);
   const [channels, setChannels] = useState({ posChannel: true, tcgplayerChannel: true, collectrChannel: true });
   const [channelsTouched, setChannelsTouched] = useState(false);
+  // Provisional, not a settled feature — added for a large synthetic/
+  // test-data import (hundreds of rows with no real cards behind them,
+  // where the auto-search would just burn time finding nothing) and for
+  // bulk/legacy-data drops staff already plan to image manually later.
+  // Defaults unchecked so today's behavior is unchanged for a normal
+  // import; keep or drop based on whether staff actually reach for it.
+  const [skipImageSearch, setSkipImageSearch] = useState(false);
 
   // Same reasoning as the Edit modal and Scanner — one import is one batch
   // for one binder/case, so follow whatever channels that location already
@@ -66,6 +73,7 @@ export default function ImportPanel({ catalog, locations, onImport, embedded = f
     });
     setMapping(initialMapping);
     setImportLocation(newLocationDefault || "");
+    setSkipImageSearch(false);
     setShowMapSection(true);
   }
 
@@ -171,7 +179,10 @@ export default function ImportPanel({ catalog, locations, onImport, embedded = f
     // so unlike those two, there's no price/listing backfill and no per-row
     // review step: the top result just fills the image slot directly,
     // matching how little review any other imported field gets today.
-    const needsImage = newRows
+    // Skipped entirely (an empty needsImage list is a no-op below, and
+    // resulting status text) when "Skip automatic image search" is
+    // checked — see its own state comment above for why that exists.
+    const needsImage = skipImageSearch ? [] : newRows
       .map((card, i) => ({ card, rarityHint: rarityHints[i] }))
       .filter(({ card }) => !card.imageUrl);
     let foundCount = 0;
@@ -281,10 +292,21 @@ export default function ImportPanel({ catalog, locations, onImport, embedded = f
               Applies to every row in this import — edit an individual item afterward if one differs.
             </div>
           </div>
-          <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginBottom: '8px' }}>
-            Rows with no Image URL mapped (or blank for that row) get an automatic image search by name/game/set before
-            saving — same lookup as the binder scanner. This can take a moment for a large import; a wrong or missing
-            result can always be fixed afterward from the catalog table.
+          <div className="field-group" style={{ maxWidth: '420px' }}>
+            <div className="checkbox-row" style={{ marginBottom: 0 }}>
+              <input
+                type="checkbox" id="imp_skipImageSearch" checked={skipImageSearch}
+                onChange={(e) => setSkipImageSearch(e.target.checked)}
+              />
+              <label htmlFor="imp_skipImageSearch" style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>
+                Skip automatic image search
+              </label>
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+              {skipImageSearch
+                ? "Rows with no Image URL mapped will just be saved without one — add images manually later from the catalog table. Useful for a large test/bulk import where the search would just be spent finding nothing."
+                : "Rows with no Image URL mapped (or blank for that row) get an automatic image search by name/game/set before saving — same lookup as the binder scanner. This can take a moment for a large import; a wrong or missing result can always be fixed afterward from the catalog table."}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button className="btn" onClick={handleConfirmImport}>Import rows</button>

@@ -91,6 +91,15 @@ export default function CatalogTable({
   const { openLightbox } = useUI();
   const isMobile = useIsMobile();
   const [expandedSkus, setExpandedSkus] = useState(() => new Set());
+  // Rendering thousands of rows at once is what the 400 cap protects
+  // against — but staff sometimes genuinely need to see (or batch-select)
+  // every match in a big collection, not just the first 400. "Load
+  // more…" reveals everything at once rather than another partial batch,
+  // since the actual ask is "let me see/select all of them," not "give me
+  // a slightly bigger partial view." Not reset on filter changes — slicing
+  // an already-expanded count against a newly-narrowed `rows` just
+  // naturally returns fewer rows, so this only ever needs to grow.
+  const [visibleCount, setVisibleCount] = useState(400);
 
   if (catalogEmpty) {
     return (
@@ -111,7 +120,7 @@ export default function CatalogTable({
 
   const visibleSkus = rows.map(r => r.sku);
   const allVisibleSelected = visibleSkus.length > 0 && visibleSkus.every(s => selectedSkus.has(s));
-  const visibleRows = rows.slice(0, 400);
+  const visibleRows = rows.slice(0, visibleCount);
 
   function toggleExpanded(sku) {
     setExpandedSkus(prev => {
@@ -190,9 +199,10 @@ export default function CatalogTable({
             );
           })}
         </div>
-        {rows.length > 400 && (
-          <div style={{ padding: '10px', fontSize: '12px', color: 'var(--ink-soft)' }}>
-            Showing first 400 of {rows.length} matches — narrow your search to see more.
+        {rows.length > visibleRows.length && (
+          <div style={{ padding: '10px', fontSize: '12px', color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <span>Showing {visibleRows.length} of {rows.length} matches.</span>
+            <button type="button" className="btn secondary small" onClick={() => setVisibleCount(rows.length)}>Load more…</button>
           </div>
         )}
       </>
@@ -264,9 +274,10 @@ export default function CatalogTable({
           </tbody>
         </table>
       </div>
-      {rows.length > 400 && (
-        <div style={{ padding: '10px', fontSize: '12px', color: 'var(--ink-soft)' }}>
-          Showing first 400 of {rows.length} matches — narrow your search to see more.
+      {rows.length > visibleRows.length && (
+        <div style={{ padding: '10px', fontSize: '12px', color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <span>Showing {visibleRows.length} of {rows.length} matches.</span>
+          <button type="button" className="btn secondary small" onClick={() => setVisibleCount(rows.length)}>Load more…</button>
         </div>
       )}
     </>

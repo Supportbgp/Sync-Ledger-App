@@ -105,6 +105,37 @@ describe('CatalogTable — desktop table (deriveRow)', () => {
     fireEvent.click(headerCheckbox);
     expect(onToggleSelectAll).toHaveBeenCalledWith(['a', 'b'], true);
   });
+
+  it('calls onToggleSelectAll with every match, not just the first 400 rendered', () => {
+    const cards = Array.from({ length: 450 }, (_, i) => makeCard({ sku: `sku-${i}` }));
+    const onToggleSelectAll = vi.fn();
+    render(<CatalogTable {...baseProps({ rows: cards, onToggleSelectAll })} />);
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    expect(onToggleSelectAll.mock.calls[0][0]).toHaveLength(450);
+  });
+});
+
+describe('CatalogTable — Load more', () => {
+  it('renders only the first 400 matches and a Load more control past that', () => {
+    const cards = Array.from({ length: 450 }, (_, i) => makeCard({ sku: `sku-${i}`, name: `Card ${i}` }));
+    render(<CatalogTable {...baseProps({ rows: cards })} />);
+    expect(screen.getAllByRole('row')).toHaveLength(401); // 400 data rows + header
+    expect(screen.getByText('Showing 400 of 450 matches.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more…' })).toBeInTheDocument();
+  });
+
+  it('reveals every match at once when Load more is clicked', () => {
+    const cards = Array.from({ length: 450 }, (_, i) => makeCard({ sku: `sku-${i}`, name: `Card ${i}` }));
+    render(<CatalogTable {...baseProps({ rows: cards })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more…' }));
+    expect(screen.getAllByRole('row')).toHaveLength(451);
+    expect(screen.queryByRole('button', { name: 'Load more…' })).not.toBeInTheDocument();
+  }, 15000);
+
+  it('does not show Load more when every match already fits under the cap', () => {
+    render(<CatalogTable {...baseProps()} />);
+    expect(screen.queryByRole('button', { name: 'Load more…' })).not.toBeInTheDocument();
+  });
 });
 
 describe('CatalogTable — mobile stacked cards', () => {

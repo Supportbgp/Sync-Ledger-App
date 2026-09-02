@@ -921,6 +921,63 @@ Everything else found:
   working on GitHub Actions' runners (that's what the deploy workflow's
   `npm ci` step does on every run), but it'll fail in any environment
   without that egress (e.g. a network-restricted sandbox).
+- **Fixed**: the catalog (and every other full-table read — `sync_queue`,
+  `quotes`, `sorting_queue`, the public binder view) was silently
+  truncated once it crossed **1000 real rows** — a real production
+  incident, not a theoretical risk. Every `dbLoadX` in `db.js` used a bare
+  `.select('*')` with no `.range()`/`.order()`; Supabase/PostgREST caps a
+  bare select at the project's configured Max Rows (1000 by default) with
+  **no error surfaced at all**. Once the shop's real catalog passed 1000
+  rows, this looked exactly like deletions being silently undone (the
+  visible count stayed pinned at 1000 no matter how many items were
+  removed, since the real total was still above the cap) and like
+  unrelated items "reappearing" (with no `ORDER BY`, a different arbitrary
+  1000-row slice could come back on any given load, surfacing rows that
+  weren't in the previous window). Fixed with a shared `fetchAllRows(table,
+  orderColumn, {ascending, filter})` helper in `db.js` that pages through
+  with `.range()` on a stable order column until a page comes back short
+  of a full page — used by `dbLoadAll` (catalog + sync_queue), `dbLoadQuotes`,
+  `dbLoadSortingQueue`, and `dbLoadPublicBinder` (ordered by `name` there,
+  since `catalog_public_view` exposes no primary-key-ish column). The
+  Playwright mock harness (`mockSupabaseClient.js`) needed a real
+  `.range()` implementation added to its query builder for this to work
+  under e2e at all — without it, every e2e test touching catalog/quotes/
+  sorting_queue load would have broken outright, not just missed
+  coverage. Covered by new `db.test.js` cases simulating a table just over
+  1000 rows (a full first page + a second, short page) and asserting
+  every row survives, not just the first 1000.
+- **`CatalogTable`'s separate 400-row render cap gained a "Load more…"
+  escape hatch** — a different limit from the 1000-row fetch cap above
+  (that one is fixed at the DB-fetch layer; this one is a deliberate
+  client-side render cap, since rendering thousands of `<tr>`/card
+  elements at once is real DOM cost, not a bug). Once a real catalog/
+  filtered view crosses 400 matches, staff previously had no way to see
+  the rest short of narrowing their search — now a `visibleCount` state
+  (default 400, desktop table and mobile cards share it) can jump straight
+  to showing every match in one click, e.g. before a "Select all visible"
+  that needs to reach a whole filtered collection (that checkbox already
+  selected every match regardless of the render cap — `onToggleSelectAll`
+  is built from the full `rows` array, not the capped slice — so this
+  fixes the *visibility* gap, not a real selection bug). Deliberately not
+  reset on filter/search changes: `rows.slice(0, visibleCount)` against a
+  newly-narrowed `rows` just naturally returns fewer rows on its own, so
+  an expanded view only ever needs to grow, never gets silently collapsed
+  by an unrelated realtime update elsewhere in the catalog.
+- **`ImportPanel`'s "Skip automatic image search" checkbox is provisional,
+  not a settled feature** — added for a large synthetic/test-data import
+  (hundreds of rows with no real card behind them, where the auto-search
+  would just burn time finding nothing) and for bulk/legacy-data drops
+  staff already plan to image manually later. Defaults unchecked, so a
+  normal import's behavior is unchanged; when checked, `needsImage`
+  resolves to an empty list, so both the search loop and the "Found
+  images for…" status clause become no-ops for the whole batch, rather
+  than adding a second code path to keep in sync. No dedicated automated
+  test — `ImportPanel`'s file-parsing paths have never had one (see
+  Testing below), and this is a one-line ternary gating an already-
+  untested search path; verified manually instead (a real drag-drop
+  import with the box checked, confirming the status text never mentions
+  image search and the rows still save correctly). Keep or drop based on
+  whether staff actually reach for it in practice.
 - TCG Player's **draft catalog accepts a bulk .xlsx/.csv upload for new
   products**, not just existing listings (confirmed by hands-on
   investigation, not docs) — corrects the earlier assumption that Export

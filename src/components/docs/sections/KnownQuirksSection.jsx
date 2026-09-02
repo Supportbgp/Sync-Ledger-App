@@ -20,8 +20,9 @@ export default function KnownQuirksSection() {
           <a href="#catalog">Catalog</a>.
         </li>
         <li>
-          <strong>Catalog only shows the first 400 matching rows.</strong>{' '}
-          Narrow your search if you're not seeing everything you expect.
+          <strong>Catalog only renders the first 400 matching rows at
+          first.</strong> Click <strong>Load more…</strong> at the bottom
+          to render every match, or narrow your search instead.
         </li>
         <li>
           <strong>Market Value is an estimate, not real per-condition
