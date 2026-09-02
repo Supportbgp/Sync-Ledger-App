@@ -50,8 +50,9 @@ export default function QuoteSection() {
       <DocsCallout kind="note">
         Each card row also has its own <strong>Find image</strong>/
         <strong>Find price</strong> buttons and manual TCGPlayer/eBay
-        sold-listings links, same as Catalog's Edit modal — the live search
-        is available per card, not just when scanning/importing a batch.
+        sold-listings/PriceCharting reference links, same as Catalog's Edit
+        modal — the live search is available per card, not just when
+        scanning/importing a batch.
       </DocsCallout>
 
       <h3>Condition is never pre-filled</h3>

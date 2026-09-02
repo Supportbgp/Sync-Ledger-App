@@ -67,8 +67,12 @@ export default function EditingItemSection() {
         already has the right image and just needs its price reference set
         or refreshed. Once an NM reference exists (from either path), this
         section also shows the computed <strong>Market Value</strong> for
-        the condition you typed in, with a "Use as Our Price" shortcut, plus
-        a link to check the live TCGPlayer listing.
+        the condition you typed in, with a "Use as Our Price" shortcut.
+        Underneath the inputs, a <strong>Reference prices</strong> row always
+        offers TCGPlayer (a live listing link once one is known, otherwise a
+        manual search), eBay sold listings, and PriceCharting — three
+        independent price checks, available any time regardless of whether a
+        Market Value has been found yet.
       </p>
       <DocsCallout kind="warn">
         On anything priced $25+ at the NM reference, a warning appears

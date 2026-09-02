@@ -8,7 +8,7 @@ vi.mock('./supabase.js', () => ({
 const {
   searchScryfall, searchPokemon, searchYugioh, searchLorcana,
   searchOnePiece, searchRiftbound, searchGundam, searchSwu, searchCardImage,
-  tcgplayerSearchUrl, ebaySoldSearchUrl,
+  tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl,
   __resetPokemonQueryCacheForTests,
 } = await import('./cardSearch.js');
 
@@ -436,6 +436,17 @@ describe('ebaySoldSearchUrl', () => {
 
   it('omits the set when blank rather than leaving a trailing space in the query', () => {
     expect(ebaySoldSearchUrl('Charizard', '')).toBe('https://www.ebay.com/sch/i.html?_nkw=Charizard&LH_Sold=1&LH_Complete=1');
+  });
+});
+
+describe('priceChartingSearchUrl', () => {
+  it('builds a game-agnostic PriceCharting search URL from name + set', () => {
+    expect(priceChartingSearchUrl('Mega Gengar ex', 'Ascended Heroes'))
+      .toBe('https://www.pricecharting.com/search-products?type=prices&q=Mega%20Gengar%20ex%20Ascended%20Heroes');
+  });
+
+  it('omits the set when blank rather than leaving a trailing space in the query', () => {
+    expect(priceChartingSearchUrl('Charizard', '')).toBe('https://www.pricecharting.com/search-products?type=prices&q=Charizard');
   });
 });
 
