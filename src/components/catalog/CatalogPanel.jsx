@@ -4,10 +4,9 @@ import CatalogToolbar from './CatalogToolbar.jsx';
 import BatchBar from './BatchBar.jsx';
 import CatalogTable from './CatalogTable.jsx';
 import EditModal from './EditModal.jsx';
-import SellModal from './SellModal.jsx';
 import { useUI } from '../../context/UIContext.jsx';
 
-export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSellCard, onBatchDelete, onBatchSell, onTogglePlatformStatus, multipliers }) {
+export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onBatchDelete, onBatchSell, onTogglePlatformStatus, multipliers }) {
   const { showConfirm } = useUI();
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState("");
@@ -26,7 +25,6 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
   const [sortState, setSortState] = useState({ col: 'name', dir: 1 });
   const [selectedSkus, setSelectedSkus] = useState(new Set());
   const [editingSku, setEditingSku] = useState(undefined); // undefined = closed, null = adding, sku = editing
-  const [sellingSku, setSellingSku] = useState(null);
 
   const games = useMemo(() => Array.from(new Set(catalog.map(c => c.game).filter(Boolean))).sort(), [catalog]);
   const locations = useMemo(() => Array.from(new Set(catalog.map(c => c.location).filter(Boolean))).sort(), [catalog]);
@@ -118,7 +116,6 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
   }
 
   const editingCard = editingSku ? catalog.find(c => c.sku === editingSku) : null;
-  const sellingCard = sellingSku ? catalog.find(c => c.sku === sellingSku) : null;
 
   return (
     <div>
@@ -153,7 +150,6 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
           onToggleSelected={toggleSelected}
           onToggleSelectAll={toggleSelectAll}
           onEdit={(sku) => setEditingSku(sku)}
-          onSell={(sku) => setSellingSku(sku)}
           onTogglePlatformStatus={onTogglePlatformStatus}
         />
       </div>
@@ -166,13 +162,6 @@ export default function CatalogPanel({ catalog, onSaveCard, onDeleteCard, onSell
           onClose={() => setEditingSku(undefined)}
           onSave={async (record, prevSku) => { await onSaveCard(record, prevSku); setEditingSku(undefined); }}
           onDelete={async (sku) => { await onDeleteCard(sku); setEditingSku(undefined); }}
-        />
-      )}
-      {sellingCard && (
-        <SellModal
-          card={sellingCard}
-          onClose={() => setSellingSku(null)}
-          onConfirm={async (qty) => { await onSellCard(sellingCard, qty); setSellingSku(null); }}
         />
       )}
     </div>

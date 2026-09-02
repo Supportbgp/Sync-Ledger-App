@@ -30,7 +30,6 @@ function baseProps(overrides = {}) {
     onToggleSelected: vi.fn(),
     onToggleSelectAll: vi.fn(),
     onEdit: vi.fn(),
-    onSell: vi.fn(),
     onTogglePlatformStatus: vi.fn(),
     ...overrides,
   };
@@ -66,28 +65,39 @@ describe('CatalogTable — desktop table (deriveRow)', () => {
     expect(screen.getByText('Base Set · NM · Holo · PSA 8')).toBeInTheDocument();
   });
 
-  it('marks a sold item with the sold badge and row class, and disables its Sell button', () => {
+  it('marks a sold item with the sold badge and row class', () => {
     const card = makeCard({ sold: true });
     render(<CatalogTable {...baseProps({ rows: [card] })} />);
     expect(screen.getByText('Sold')).toBeInTheDocument();
-    expect(screen.getByText('Sell').closest('tr')).toHaveClass('sold-row');
-    expect(screen.getByText('Sell')).toBeDisabled();
+    expect(screen.getByText('Sold').closest('tr')).toHaveClass('sold-row');
   });
 
-  it('disables Sell for an in-stock item once qty drops to zero', () => {
-    const card = makeCard({ qty: 0 });
-    render(<CatalogTable {...baseProps({ rows: [card] })} />);
-    expect(screen.getByText('Sell')).toBeDisabled();
-  });
-
-  it('calls onEdit/onSell with the card sku when those buttons are clicked', () => {
+  it('calls onEdit with the card sku when Edit is clicked', () => {
     const onEdit = vi.fn();
-    const onSell = vi.fn();
-    render(<CatalogTable {...baseProps({ onEdit, onSell })} />);
+    render(<CatalogTable {...baseProps({ onEdit })} />);
     fireEvent.click(screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Sell'));
     expect(onEdit).toHaveBeenCalledWith('sku-1');
-    expect(onSell).toHaveBeenCalledWith('sku-1');
+  });
+
+  it('clicking anywhere on a row toggles its selection, not just the checkbox', () => {
+    const onToggleSelected = vi.fn();
+    render(<CatalogTable {...baseProps({ onToggleSelected })} />);
+    fireEvent.click(screen.getByText('Charizard'));
+    expect(onToggleSelected).toHaveBeenCalledWith('sku-1', true);
+  });
+
+  it('clicking an already-selected row deselects it', () => {
+    const onToggleSelected = vi.fn();
+    render(<CatalogTable {...baseProps({ onToggleSelected, selectedSkus: new Set(['sku-1']) })} />);
+    fireEvent.click(screen.getByText('Charizard'));
+    expect(onToggleSelected).toHaveBeenCalledWith('sku-1', false);
+  });
+
+  it('clicking Edit does not also toggle the row selection', () => {
+    const onToggleSelected = vi.fn();
+    render(<CatalogTable {...baseProps({ onToggleSelected })} />);
+    fireEvent.click(screen.getByText('Edit'));
+    expect(onToggleSelected).not.toHaveBeenCalled();
   });
 
   it('calls onSort with the column key when a sortable header is clicked', () => {
