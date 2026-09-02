@@ -921,6 +921,31 @@ Everything else found:
   working on GitHub Actions' runners (that's what the deploy workflow's
   `npm ci` step does on every run), but it'll fail in any environment
   without that egress (e.g. a network-restricted sandbox).
+- **Fixed**: the catalog (and every other full-table read — `sync_queue`,
+  `quotes`, `sorting_queue`, the public binder view) was silently
+  truncated once it crossed **1000 real rows** — a real production
+  incident, not a theoretical risk. Every `dbLoadX` in `db.js` used a bare
+  `.select('*')` with no `.range()`/`.order()`; Supabase/PostgREST caps a
+  bare select at the project's configured Max Rows (1000 by default) with
+  **no error surfaced at all**. Once the shop's real catalog passed 1000
+  rows, this looked exactly like deletions being silently undone (the
+  visible count stayed pinned at 1000 no matter how many items were
+  removed, since the real total was still above the cap) and like
+  unrelated items "reappearing" (with no `ORDER BY`, a different arbitrary
+  1000-row slice could come back on any given load, surfacing rows that
+  weren't in the previous window). Fixed with a shared `fetchAllRows(table,
+  orderColumn, {ascending, filter})` helper in `db.js` that pages through
+  with `.range()` on a stable order column until a page comes back short
+  of a full page — used by `dbLoadAll` (catalog + sync_queue), `dbLoadQuotes`,
+  `dbLoadSortingQueue`, and `dbLoadPublicBinder` (ordered by `name` there,
+  since `catalog_public_view` exposes no primary-key-ish column). The
+  Playwright mock harness (`mockSupabaseClient.js`) needed a real
+  `.range()` implementation added to its query builder for this to work
+  under e2e at all — without it, every e2e test touching catalog/quotes/
+  sorting_queue load would have broken outright, not just missed
+  coverage. Covered by new `db.test.js` cases simulating a table just over
+  1000 rows (a full first page + a second, short page) and asserting
+  every row survives, not just the first 1000.
 - TCG Player's **draft catalog accepts a bulk .xlsx/.csv upload for new
   products**, not just existing listings (confirmed by hands-on
   investigation, not docs) — corrects the earlier assumption that Export

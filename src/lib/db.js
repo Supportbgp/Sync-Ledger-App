@@ -2,6 +2,38 @@ import { supabaseClient } from './supabase.js';
 import { normalizeCard, DEFAULT_CONDITION_MULTIPLIERS } from './cardUtils.js';
 import { DEFAULT_QUOTE_TIER_PCTS } from './quoteUtils.js';
 
+// Supabase/PostgREST caps a bare `.select()` at the project's configured
+// Max Rows (1000 by default) — past that point a table's real total is
+// silently truncated to that cap, with no error surfaced anywhere. Worse:
+// without an explicit ORDER BY, which specific rows land inside that
+// truncated window isn't guaranteed stable between requests, so a
+// different arbitrary subset can come back next load even with nothing
+// changed — looking exactly like a just-deleted row "reappearing," when
+// it's really a different, previously-unfetched row now inside the
+// window (this actually happened once the real catalog crossed 1000 rows
+// — deletions looked like they were being undone because the visible
+// count was pinned at the 1000-row cap, not because anything was
+// un-deleted). Every full-table read in this file goes through this
+// helper instead of trusting one bare `.select()` to have returned
+// everything: it pages through with a stable ORDER BY (on a real,
+// ideally-unique column) until a page comes back short of a full page.
+const FETCH_PAGE_SIZE = 1000;
+
+async function fetchAllRows(table, orderColumn, { ascending = true, filter } = {}) {
+  const rows = [];
+  let from = 0;
+  for (;;) {
+    let query = supabaseClient.from(table).select('*').order(orderColumn, { ascending });
+    if (filter) query = filter(query);
+    const { data, error } = await query.range(from, from + FETCH_PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if (!data || data.length < FETCH_PAGE_SIZE) break;
+    from += FETCH_PAGE_SIZE;
+  }
+  return { data: rows, error: null };
+}
+
 export function rowToCard(r) {
   return normalizeCard({
     sku: r.sku, name: r.name, set: r.set_name, game: r.game, condition: r.condition,
@@ -57,12 +89,12 @@ function ticketToRow(t) {
 }
 
 export async function dbLoadAll(toast) {
-  const { data: catRows, error: catErr } = await supabaseClient.from('catalog').select('*');
+  const { data: catRows, error: catErr } = await fetchAllRows('catalog', 'sku');
   let catalog = [];
   if (catErr) toast('Failed to load catalog: ' + catErr.message, true);
   else catalog = (catRows || []).map(rowToCard);
 
-  const { data: qRows, error: qErr } = await supabaseClient.from('sync_queue').select('*');
+  const { data: qRows, error: qErr } = await fetchAllRows('sync_queue', 'id');
   let queue = [];
   if (qErr) toast('Failed to load sync queue: ' + qErr.message, true);
   else queue = (qRows || []).map(rowToTicket);
@@ -220,7 +252,7 @@ function quoteToRow(q) {
 }
 
 export async function dbLoadQuotes(toast) {
-  const { data, error } = await supabaseClient.from('quotes').select('*').order('created_at', { ascending: false });
+  const { data, error } = await fetchAllRows('quotes', 'created_at', { ascending: false });
   if (error) {
     toast('Failed to load quotes: ' + error.message, true);
     return [];
@@ -323,7 +355,7 @@ function sortingItemToRow(s) {
 }
 
 export async function dbLoadSortingQueue(toast) {
-  const { data, error } = await supabaseClient.from('sorting_queue').select('*').order('created_at', { ascending: true });
+  const { data, error } = await fetchAllRows('sorting_queue', 'created_at');
   if (error) {
     toast('Failed to load sorting queue: ' + error.message, true);
     return [];
@@ -354,10 +386,14 @@ export async function dbDeleteSortingItem(id, toast) {
 // access. No session/login involved; see supabase/migrations for the view
 // definition and its anon grant.
 export async function dbLoadPublicBinder(location) {
-  const { data, error } = await supabaseClient
-    .from('catalog_public_view')
-    .select('*')
-    .eq('location', location);
+  // catalog_public_view has no primary key column exposed (see
+  // phase10_sorting_bulk.sql's column list) — `name` isn't unique, but is
+  // good enough for stable-in-practice pagination here, and a single
+  // physical binder crossing 1000 distinct rows is a defensive case, not
+  // the actual reported bug (see fetchAllRows above for the real story).
+  const { data, error } = await fetchAllRows('catalog_public_view', 'name', {
+    filter: (q) => q.eq('location', location),
+  });
   if (error) throw error;
   return (data || []).map(r => ({
     name: r.name, set: r.set_name, game: r.game, condition: r.condition, printing: r.printing,

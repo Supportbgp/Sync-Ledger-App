@@ -17,8 +17,20 @@ function makeQueryBuilder(table) {
     eq: vi.fn(() => builder),
     in: vi.fn(() => builder),
     neq: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    range: vi.fn(() => builder),
     maybeSingle: vi.fn(() => builder),
-    then: (resolve, reject) => Promise.resolve(tableResults[table] ?? { data: null, error: null }).then(resolve, reject),
+    single: vi.fn(() => builder),
+    // A table's configured result can be a single fixed {data,error} object
+    // (returned on every call — the original, simpler shape every existing
+    // test here uses) or an ARRAY of them, consumed one per call in order —
+    // needed to simulate fetchAllRows' multi-page loop in db.js, where each
+    // page requires a genuinely different response than the last.
+    then: (resolve, reject) => {
+      const result = tableResults[table];
+      const payload = Array.isArray(result) ? (result.shift() ?? { data: null, error: null }) : (result ?? { data: null, error: null });
+      return Promise.resolve(payload).then(resolve, reject);
+    },
   };
   return builder;
 }
@@ -29,7 +41,7 @@ vi.mock('./supabase.js', () => ({
 
 const {
   rowToCard, rowToTicket, dbUpsertCard, dbInsertTicket,
-  dbLoadSettings, dbLoadPublicBinder,
+  dbLoadSettings, dbLoadPublicBinder, dbLoadAll,
 } = await import('./db.js');
 
 beforeEach(() => {
@@ -179,5 +191,61 @@ describe('dbLoadPublicBinder', () => {
   it('throws on a load error rather than silently returning nothing', async () => {
     tableResults.catalog_public_view = { data: null, error: { message: 'nope' } };
     await expect(dbLoadPublicBinder('Binder A')).rejects.toBeTruthy();
+  });
+});
+
+function makeCatalogRow(sku) {
+  return {
+    sku, name: `Card ${sku}`, set_name: '', game: 'Pokemon', condition: '', printing: '',
+    rarity: '', qty: 1, price: null, notes: '', image_url: '', image_data: '',
+    item_type: 'single', grader: '', grade: '', cert_number: '', sold: false, source_url: '', location: '',
+    last_updated: null, pos_synced: false, tcgplayer_synced: false, collectr_synced: false,
+    pos_channel: true, tcgplayer_channel: true, collectr_channel: true, base_price: null,
+    photo_url: '', photo_data: '', active_image: 'photo',
+  };
+}
+
+describe('dbLoadAll (fetchAllRows pagination)', () => {
+  // Real regression coverage for a real production bug: Supabase/PostgREST
+  // caps a bare .select() at the project's configured Max Rows (1000 by
+  // default) with no error — a catalog crossing that size looked like
+  // deletions were being silently undone (the visible count stayed pinned
+  // at 1000) and like unrelated items were "reappearing" (no ORDER BY
+  // meant a different arbitrary 1000-row slice could come back on any
+  // given load). fetchAllRows in db.js pages through with .range() until
+  // a page comes back short of a full page — this simulates a table with
+  // just over 1000 real rows (a full 1000-row first page, plus one more on
+  // a second page) and asserts every row makes it into the final result,
+  // not just the first 1000.
+  it('pages past a 1000-row response instead of silently truncating there', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => makeCatalogRow(`sku-${i}`));
+    const page2 = [makeCatalogRow('sku-1000')];
+    tableResults.catalog = [
+      { data: page1, error: null },
+      { data: page2, error: null },
+    ];
+    tableResults.sync_queue = { data: [], error: null };
+
+    const { catalog } = await dbLoadAll(vi.fn());
+    expect(catalog).toHaveLength(1001);
+    expect(catalog.map(c => c.sku)).toContain('sku-1000');
+  });
+
+  it('stops after one page when the table has fewer rows than the page size', async () => {
+    tableResults.catalog = { data: [makeCatalogRow('sku-1')], error: null };
+    tableResults.sync_queue = { data: [], error: null };
+
+    const { catalog } = await dbLoadAll(vi.fn());
+    expect(catalog).toHaveLength(1);
+  });
+
+  it('stops paging and surfaces the toast on an error mid-fetch', async () => {
+    tableResults.catalog = { data: null, error: { message: 'connection reset' } };
+    tableResults.sync_queue = { data: [], error: null };
+    const toast = vi.fn();
+
+    const { catalog } = await dbLoadAll(toast);
+    expect(catalog).toEqual([]);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('connection reset'), true);
   });
 });

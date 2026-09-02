@@ -52,7 +52,7 @@ function matchesFilters(row, filters) {
 
 let harnessQuoteNumberCounter = 0;
 
-function execute(table, op, filters, single, order) {
+function execute(table, op, filters, single, order, range) {
   const db = getDb();
   const key = PRIMARY_KEY[table];
   const rows = db[table] || (db[table] = []);
@@ -66,6 +66,11 @@ function execute(table, op, filters, single, order) {
         return (av < bv ? -1 : 1) * (order.ascending ? 1 : -1);
       });
     }
+    // Mirrors real Supabase's .range(from, to) — inclusive of both bounds,
+    // applied after filtering/sorting. db.js's fetchAllRows (see its
+    // comment there) depends on this to page through a table larger than
+    // one fetch's page size, same as it must against real Supabase.
+    if (range) matched = matched.slice(range.from, range.to + 1);
     return { data: single ? matched[0] ?? null : matched, error: null };
   }
   if (op.type === 'upsert' || op.type === 'insert') {
@@ -111,6 +116,7 @@ function makeBuilder(table) {
   let op = { type: 'select' };
   let single = false;
   let order = null;
+  let range = null;
   const builder = {
     select() {
       // Real supabase-js: .select() after a mutation means "return the
@@ -127,10 +133,11 @@ function makeBuilder(table) {
     neq(field, value) { filters.push(['neq', field, value]); return builder; },
     in(field, values) { filters.push(['in', field, values]); return builder; },
     order(field, opts) { order = { field, ascending: !(opts && opts.ascending === false) }; return builder; },
+    range(from, to) { range = { from, to }; return builder; },
     maybeSingle() { single = true; return builder; },
     single() { single = true; return builder; },
     then(resolve, reject) {
-      return Promise.resolve().then(() => execute(table, op, filters, single, order)).then(resolve, reject);
+      return Promise.resolve().then(() => execute(table, op, filters, single, order, range)).then(resolve, reject);
     },
   };
   return builder;
