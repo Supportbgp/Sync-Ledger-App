@@ -1574,9 +1574,14 @@
       color: var(--ink);
     }
 
+    /* A plain padded text box, not a multi-item layout — deliberately NOT
+       flex. A callout's children are just interspersed text/<strong>/<a>
+       nodes from its section's own JSX, so `display: flex` (default
+       flex-wrap: nowrap) turned each one into its own flex item forced
+       onto a single un-wrapping row — invisible for a short callout, but a
+       real horizontal-overflow bug once one got long enough (found via a
+       genuinely-failing e2e test on a real page, not spotted by eye). */
     .docs-callout {
-      display: flex;
-      gap: 10px;
       padding: 10px 14px;
       border-radius: 8px;
       font-size: 13px;

@@ -115,3 +115,27 @@ test('cancelling a never-saved new quote leaves no trace — nothing to resume, 
   await page.getByRole('button', { name: '+ New Quote' }).click();
   await expect(page.getByText('Resume a collection')).toHaveCount(0);
 });
+
+test('quote line item gets Source link and Add image fields, matching the main view', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Source link test');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  await page.getByRole('button', { name: '+ Add card manually' }).click();
+  const row = page.locator('.scan-row').first();
+  await row.getByPlaceholder('Card name').fill('Charizard');
+
+  // Before a Source link is set, the reference-prices row falls back to a
+  // manual TCGPlayer search, same as a catalog item with no sourceUrl.
+  await expect(row.getByText('TCGPlayer ↗', { exact: true })).toBeVisible();
+
+  await row.getByPlaceholder('e.g. TCGplayer product page link').fill('https://tcg/real-listing');
+  await expect(row.getByText('Check live TCGPlayer listing ↗')).toBeVisible();
+  await expect(row.getByRole('link', { name: 'open ↗' })).toHaveAttribute('href', 'https://tcg/real-listing');
+
+  // Add image — pasting a stock image URL renders straight into the
+  // row's own thumbnail, same "paste a stock image URL" escape hatch
+  // EditModal offers alongside its real-photo upload.
+  await row.getByPlaceholder('…or paste a stock image URL').fill('https://example.com/card.jpg');
+  await expect(row.locator('.scan-row-thumb img')).toHaveAttribute('src', 'https://example.com/card.jpg');
+});

@@ -327,6 +327,7 @@ export function rowToSortingItem(r) {
     photoUrl: r.photo_data ? 'local' : (r.photo_url || ''),
     photoData: r.photo_data || '',
     activeImage: r.active_image === 'stock' ? 'stock' : 'photo',
+    sourceUrl: r.source_url || '',
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
   };
 }
@@ -351,6 +352,7 @@ function sortingItemToRow(s) {
     photo_url: (s.photoUrl && s.photoUrl.startsWith('http')) ? s.photoUrl : '',
     photo_data: s.photoUrl === 'local' ? (s.photoData || '') : '',
     active_image: s.activeImage === 'stock' ? 'stock' : 'photo',
+    source_url: s.sourceUrl || '',
   };
 }
 

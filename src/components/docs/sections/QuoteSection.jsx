@@ -52,7 +52,14 @@ export default function QuoteSection() {
         <strong>Find price</strong> buttons and manual TCGPlayer/eBay
         sold-listings/PriceCharting reference links, same as Catalog's Edit
         modal — the live search is available per card, not just when
-        scanning/importing a batch.
+        scanning/importing a batch. Every row also has an{' '}
+        <strong>Add image</strong> button (uploads a real photo of this
+        exact copy) plus a "paste a stock image URL" fallback, and a{' '}
+        <strong>Source link</strong> field for the product/listing page it
+        came from — the same manual-entry options Catalog's Edit modal
+        offers, in case a card has no automated match to pick from. Once a
+        card carries a Source link, TCGPlayer's reference link above
+        switches to that real listing instead of a manual search.
       </DocsCallout>
 
       <h3>Condition is never pre-filled</h3>

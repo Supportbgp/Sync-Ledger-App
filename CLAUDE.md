@@ -2870,6 +2870,118 @@ commonly used of the two) as a small, easy-to-miss target next to Sell.
   click selects it and that clicking Edit inside that row does not also
   toggle its selection.
 
+## Quote line items gain Add image and Source link, matching EditModal
+
+Real ask: a quote line item could already show a picked/scanned image and
+run a live search, but had no manual fallback for either an image or a
+listing link the way a catalog row's own EditModal does — a genuinely new
+trade-in card with no automated match had no way to attach a photo or a
+source URL by hand.
+
+- **`QuoteLineItemRow.jsx` gained the same manual image controls EditModal's
+  `.img-side` offers**: an **Add image** button (uploads a real photo of
+  this exact copy — `resizeImageFile`, the same client-side resize
+  EditModal/ScannerPanel already use, writing to the *photo* slot) plus a
+  "…or paste a stock image URL" input (writes to the *stock* slot, no
+  upload). A Photo/Stock toggle appears next to the thumbnail once both
+  slots are actually populated, same as `ScanRow`'s own toggle — this row
+  already had the full dual-image data model (`imageUrl`/`imageData`/
+  `photoUrl`/`photoData`/`activeImage`, since a picked catalog reference or
+  a scan/import could already carry one), just no manual way to set either
+  slot directly. No pending/staging step, unlike EditModal — this row
+  already patches every other field straight into the item on change (the
+  whole quote only commits on `QuoteDetail`'s own Save), so there's nothing
+  extra to defer here either. Remove stock/Remove photo buttons only appear
+  once there's actually something in that slot, matching EditModal.
+- **A quote item gained a real `sourceUrl` field** (`normalizeQuoteItem`),
+  surfaced as a new **Source link** input + inline "open ↗" — same role as
+  EditModal's "Source / product URL", just a plain `<a>` here instead of a
+  `window.open()`-driven span, matching this row's existing link styling.
+  Once set, the row's own TCGPlayer reference link (in the existing
+  TCGPlayer/eBay/PriceCharting row) switches from a manual search to
+  **"Check live TCGPlayer listing ↗"** pointing straight at it — the exact
+  branching EditModal's own reference row already does off `sourceUrl`.
+  `selectCandidate`/`handleCatalogPick` also back-fill it automatically
+  (a search candidate's `listingUrl`, or a picked catalog card's own
+  `sourceUrl`) whenever staff haven't already typed one themselves — same
+  "never overwrite a manual entry" rule EditModal's own `selectCandidate`
+  follows.
+- **`sourceUrl` threaded through the item's whole life cycle, not just the
+  Quote tab's own UI** — a trade-in card's source link should still be
+  there once it becomes a real Catalog row, same as its image already is:
+  - `quoteUtils.js`: `normalizeQuoteItem` (defaults `''`), `itemsFromCatalogRows`
+    (carries a picked/scanned card's own `sourceUrl` in), and both
+    `buildCatalogItemsFromQuoteItems`/`buildSortingItemsFromQuoteItems`
+    (carry it back out) all gained the one field, mirroring exactly how
+    every other dual-image field already flows through those same four
+    functions.
+  - **`sorting_queue` needed a real new column, unlike every other field
+    on a quote item** — `quotes.items` is a jsonb array, so a new key just
+    starts appearing there for free, but `sorting_queue`
+    (`phase10_sorting_bulk.sql`) is a real relational table with one column
+    per item field, and an accepted quote's items pass through it on their
+    way to becoming a Catalog row. Without a column, `sourceUrl` would
+    silently vanish at exactly that hop. New migration
+    (`phase11_quote_source_url.sql`) adds `sorting_queue.source_url text
+    not null default ''`; `db.js`'s `rowToSortingItem`/`sortingItemToRow`
+    map it same as every other column there. **Bulk rows are deliberately
+    NOT given a sourceUrl** — same reasoning `buildBulkCatalogItem` already
+    applies to set/rarity/condition/price: a Bulk row has no per-print
+    identity, so a specific listing link makes no sense on it either;
+    nothing needed to change there since it never reads the field to begin
+    with.
+- Covered by new tests in `quoteUtils.test.js` (sourceUrl defaulting and
+  carrying through all four conversion functions), `db.test.js` (a new
+  describe block asserting `dbInsertSortingItems` actually sends
+  `source_url` and that `rowToSortingItem` round-trips it back), and a new
+  `e2e/quotes.spec.js` test driving the real Source link input and the
+  paste-a-stock-image-URL fallback end to end, including the TCGPlayer
+  reference link's live-vs-manual switch. The real photo upload path itself
+  isn't e2e-tested — no test in this suite exercises a real file input
+  anywhere yet (same gap already accepted for EditModal's own upload), so
+  this doesn't newly regress test coverage, only carries the existing gap
+  forward.
+- **Found and fixed a real, pre-existing `.docs-callout` bug while writing
+  the staff-docs update above** — the new, longer "Add image"/"Source link"
+  callout in `QuoteSection.jsx` made the *existing* `e2e/staff-docs.spec.js`
+  stepper test start failing on the Mobile project, at the Quote → Sorting
+  "Next" click specifically, with Playwright reporting a `<p>` from
+  elsewhere in the Quote section "intercepting pointer events" at the
+  click point. Root cause, confirmed by direct `getBoundingClientRect()`/
+  `scrollWidth` inspection rather than guessed from the symptom: `.docs-
+  callout { display: flex; ... }` (no `flex-wrap`) had no icon or second
+  item to justify being flex at all — `DocsCallout.jsx` just renders
+  `<div className="docs-callout ...">{children}</div>`, and `children` is
+  a section's own mix of raw text nodes and inline `<strong>`/`<a>`
+  elements. Flexbox turns every one of those into its own flex item; with
+  no wrap, they're forced onto a single non-wrapping row, each shrinking
+  to its own min-content (roughly its longest unbreakable word) rather
+  than the whole paragraph reflowing together — invisible for a short
+  callout whose fragments' combined min-content still fit one row, but a
+  real horizontal overflow once a callout got long enough (mine did,
+  first). That overflow triggered a mobile-viewport auto-zoom-to-fit
+  (`window.innerWidth`/`innerHeight` measurably grew to accommodate the
+  overflowing content, confirmed directly rather than assumed), which
+  desynced the page's actual on-screen layout from Playwright's scroll/
+  click-point math for anything positioned far enough down the page —
+  exactly the `docs-stepper` "Next" button on a now-tall Quote section.
+  Fixed at the actual root — `.docs-callout` dropped `display: flex` (and
+  the now-meaningless `gap: 10px`) entirely, since it only ever needed to
+  be a plain padded text box. This was a latent bug in every multi-child
+  `DocsCallout` already shipped throughout this file (several exist), not
+  something new to Quote's own content — it simply hadn't hit a long
+  enough callout to surface until now. Worth remembering: an e2e test
+  failure on a page you didn't *functionally* change can still be a real
+  bug the change happened to be long enough to expose, not a flake to
+  work around — this one would have silently overflowed on a real phone
+  too, not just in the test.
+
+**Requires running `phase11_quote_source_url.sql`** in the Supabase SQL
+Editor before an accepted quote's Source link survives the trip through
+Sorting into Catalog — the Quote tab's own Source link field works
+immediately either way (`quotes.items` needs no migration), but a value
+typed there would silently be dropped once accepted without this column.
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
