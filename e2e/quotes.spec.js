@@ -133,9 +133,12 @@ test('quote line item gets Source link and Add image fields, matching the main v
   await expect(row.getByText('Check live TCGPlayer listing ↗')).toBeVisible();
   await expect(row.getByRole('link', { name: 'open ↗' })).toHaveAttribute('href', 'https://tcg/real-listing');
 
-  // Add image — pasting a stock image URL renders straight into the
-  // row's own thumbnail, same "paste a stock image URL" escape hatch
-  // EditModal offers alongside its real-photo upload.
-  await row.getByPlaceholder('…or paste a stock image URL').fill('https://example.com/card.jpg');
+  // Paste image URL — collapsed by default to keep the row condensed;
+  // clicking it reveals the input, which renders straight into the row's
+  // own thumbnail once filled, same "paste a stock image URL" escape
+  // hatch EditModal offers alongside its real-photo upload.
+  await expect(row.getByPlaceholder('Paste a stock image URL')).toHaveCount(0);
+  await row.getByRole('button', { name: 'Paste image URL' }).click();
+  await row.getByPlaceholder('Paste a stock image URL').fill('https://example.com/card.jpg');
   await expect(row.locator('.scan-row-thumb img')).toHaveAttribute('src', 'https://example.com/card.jpg');
 });

@@ -41,6 +41,11 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
   // manualUrl — local-only text state, not part of the item itself until
   // it's actually a non-empty value staff typed.
   const [manualUrl, setManualUrl] = useState('');
+  // The paste-URL input (plus the Remove stock/Remove photo buttons) stays
+  // collapsed behind its own toggle button — real feedback found the row
+  // too busy with an always-visible input most items never touch. Purely
+  // a disclosure state, not part of the item.
+  const [showPasteUrl, setShowPasteUrl] = useState(false);
 
   function patch(p) {
     onChange({ ...item, ...p });
@@ -192,6 +197,23 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
         >
           {activeSearch === 'image' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find image'}
         </button>
+        {/* Add image / Paste image URL — same manual actions EditModal's
+            own img-side offers (a real-photo upload, and a stock-URL
+            paste), grouped with Find image/Find price in this one column
+            per real feedback, instead of spread into the wider fields
+            area. Paste image URL only toggles the input open (see the
+            collapsed panel below in .scan-row-fields) — keeps this row
+            condensed for the common case where nobody needs it. */}
+        <button
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
+          onClick={() => document.getElementById(`qliAddImage-${item.id}`).click()}
+        >Add image</button>
+        <input type="file" id={`qliAddImage-${item.id}`} accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
+        <button
+          type="button" className={`btn small${showPasteUrl ? '' : ' ghost'}`}
+          style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
+          onClick={() => setShowPasteUrl(v => !v)}
+        >{showPasteUrl ? 'Hide URL field' : 'Paste image URL'}</button>
         <button
           className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
           disabled={searching} onClick={() => runSearch('price')}
@@ -289,44 +311,40 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
           </div>
         </div>
         {/* Source link — same role as a catalog row's own "Source / product
-            URL" field in EditModal, including the same "(open ↗)" pattern,
-            just as a plain <a> here rather than a window.open()-driven span
-            (matches this row's own existing link styling). */}
+            URL" field in EditModal. Given a visible label of its own
+            (unlike every other field here, whose label stays hidden on
+            desktop) since a bare, unlabeled full-width URL input read as
+            oversized/unclear what it was for — real feedback. */}
         <div className="scan-row-line">
-          <div className="scan-field sf-wide">
-            <label className="scan-field-label">Source link</label>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <input
-                type="url" placeholder="e.g. TCGplayer product page link" value={item.sourceUrl}
-                onChange={(e) => patch({ sourceUrl: e.target.value })}
-                style={{ flex: 1 }}
-              />
-              {item.sourceUrl && (
-                <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--blue)', whiteSpace: 'nowrap' }}>
-                  open ↗
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-        {/* "Add image" — a manual real-photo upload (writes to the photo
-            slot) plus a paste-a-stock-URL fallback (writes to the stock
-            slot), same two actions EditModal's own img-side offers, just
-            laid out for this row's dense grid instead of a sidebar. Remove
-            buttons only show once there's actually something to remove,
-            same as EditModal. */}
-        <div className="scan-row-line" style={{ flexWrap: 'wrap', gap: '8px' }}>
-          <button type="button" className="btn ghost small" onClick={() => document.getElementById(`qliAddImage-${item.id}`).click()}>
-            Add image
-          </button>
-          <input type="file" id={`qliAddImage-${item.id}`} accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
+          <label style={{
+            fontSize: '11px', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase',
+            letterSpacing: '0.03em', color: 'var(--ink-soft)', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>Source link</label>
           <input
-            type="url" placeholder="…or paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange}
-            style={{ flex: '1 1 160px', minWidth: 0 }}
+            type="url" placeholder="e.g. TCGplayer product page link" value={item.sourceUrl}
+            onChange={(e) => patch({ sourceUrl: e.target.value })}
+            style={{ flex: 1, minWidth: 0 }}
           />
-          {stockSrc && <button type="button" className="btn ghost small" onClick={() => patch({ imageUrl: '', imageData: '' })}>Remove stock</button>}
-          {photoSrc && <button type="button" className="btn ghost small" onClick={() => patch({ photoUrl: '', photoData: '' })}>Remove photo</button>}
+          {item.sourceUrl && (
+            <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--blue)', whiteSpace: 'nowrap' }}>
+              open ↗
+            </a>
+          )}
         </div>
+        {/* Collapsed behind "Paste image URL" above — the URL input itself
+            plus Remove stock/Remove photo (shown once there's actually
+            something to remove, same as EditModal), condensed out of the
+            way for the common item that never needs them. */}
+        {showPasteUrl && (
+          <div className="scan-row-line" style={{ flexWrap: 'wrap', gap: '8px' }}>
+            <input
+              type="url" placeholder="Paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange}
+              style={{ flex: '1 1 200px', minWidth: 0 }}
+            />
+            {stockSrc && <button type="button" className="btn ghost small" onClick={() => patch({ imageUrl: '', imageData: '' })}>Remove stock</button>}
+            {photoSrc && <button type="button" className="btn ghost small" onClick={() => patch({ photoUrl: '', photoData: '' })}>Remove photo</button>}
+          </div>
+        )}
         {/* Three independent, always-available price references, grouped
             under the fields — moved out of the cramped thumbnail column,
             same links/reasoning as EditModal's/ScanRow's own "Reference

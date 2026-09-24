@@ -2982,6 +2982,51 @@ Sorting into Catalog — the Quote tab's own Source link field works
 immediately either way (`quotes.items` needs no migration), but a value
 typed there would silently be dropped once accepted without this column.
 
+## Quote line item layout follow-up: Add image grouped with Find image, Paste URL collapsed, Source link labeled
+
+Real feedback right after the feature above shipped, before anyone had used
+it in anger:
+
+- **"Add image" moved into `.scan-row-thumb-col`**, directly under "Find
+  image" — the thumbnail-column button stack now reads Find image → Add
+  image → Paste image URL → Find price, in that order. This deliberately
+  reverses the "don't cram more into the narrow thumb column" lesson this
+  file documented for the three reference links (TCGPlayer/eBay/
+  PriceCharting, see "PriceCharting as a third price reference" above) —
+  that lesson was about a *different kind* of control (external navigation
+  links wanting real width for their text), not every control in general;
+  a short action button is exactly what that column already holds, and
+  real usage explicitly asked for these two to sit together.
+- **"Paste image URL" is now a toggle button, not an always-visible
+  input** — clicking it flips a local `showPasteUrl` state that reveals a
+  `.scan-row-fields` panel (the URL input plus Remove stock/Remove photo,
+  shown only when there's something to remove) below the Rarity/Printing/
+  Condition/Price row; clicking again (button relabels itself "Hide URL
+  field") collapses it. Keeps the common case — a card with no image
+  problem to fix by hand — visually condensed, matching the same
+  "collapsed unless needed" instinct already behind `SelectWithCustom`'s
+  own "+ Enter a different ___…" escape hatches. The button itself follows
+  the same filled/ghost toggle-state convention as this row's own Photo/
+  Stock toggle (`btn small` filled when open, `btn ghost small` when
+  collapsed) rather than inventing a new "active" class.
+- **Source link gained a real, always-visible label to its left** —
+  every other field in this row deliberately hides its label on desktop
+  (`.scan-field-label { display: none }`, see "Scanner review row layout
+  pass" above — a placeholder already identifies a blank dense-grid field)
+  but real feedback found a bare, unlabeled full-width URL input read as
+  oversized with no clue what it was for. Rather than fight that
+  convention, this one field bypasses `.scan-field`/`.scan-field-label`
+  entirely for a plain inline `<label>` styled to match `.field-group
+  label`'s own look (monospace, uppercase, `--ink-soft`) — the one field
+  in this row with a permanently visible identifier, by design, not an
+  inconsistency to "fix" back to hidden later.
+- `e2e/quotes.spec.js`'s Source-link/Add-image test updated to match:
+  asserts the paste-URL input doesn't exist until "Paste image URL" is
+  clicked, then fills it via its new plain "Paste a stock image URL"
+  placeholder (the leading "…or " was dropped now that it's revealed by
+  its own explicit toggle rather than always sitting next to the upload
+  button).
+
 ## Testing
 
 Sprint 3 turned into a real automated test suite (superseding the earlier,
