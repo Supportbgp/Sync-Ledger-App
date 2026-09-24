@@ -42,6 +42,7 @@ vi.mock('./supabase.js', () => ({
 const {
   rowToCard, rowToTicket, dbUpsertCard, dbInsertTicket,
   dbLoadSettings, dbLoadPublicBinder, dbLoadAll,
+  rowToSortingItem, dbInsertSortingItems,
 } = await import('./db.js');
 
 beforeEach(() => {
@@ -147,6 +148,27 @@ describe('dbInsertTicket (ticketToRow via the real call)', () => {
     expect(sentRow.set_name).toBe('Base Set');
     expect(sentRow.qty_sold).toBe(1);
     expect(sentRow.tcgplayer_channel).toBe(false);
+  });
+});
+
+describe('sourceUrl on sorting_queue rows (sortingItemToRow/rowToSortingItem via the real call)', () => {
+  it('sends source_url on insert (phase11_quote_source_url.sql) so a quote item\'s Source link survives the trip through Sorting', async () => {
+    tableResults.sorting_queue = { data: [], error: null };
+    const item = { name: 'Charizard', qty: 1, sourceUrl: 'https://tcg/real-listing' };
+    await dbInsertSortingItems([item], vi.fn());
+    const builder = fromMock.mock.results[0].value;
+    const sentRows = builder.insert.mock.calls[0][0];
+    expect(sentRows[0].source_url).toBe('https://tcg/real-listing');
+  });
+
+  it('maps a blank source_url column back to an empty string, not null/undefined', () => {
+    const row = { id: 's1', name: 'Charizard', source_url: '' };
+    expect(rowToSortingItem(row).sourceUrl).toBe('');
+  });
+
+  it('round-trips a real source_url column back into sourceUrl', () => {
+    const row = { id: 's1', name: 'Charizard', source_url: 'https://tcg/real-listing' };
+    expect(rowToSortingItem(row).sourceUrl).toBe('https://tcg/real-listing');
   });
 });
 

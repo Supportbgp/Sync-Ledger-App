@@ -2,8 +2,21 @@ import { useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { GAMES, RARITY_OPTIONS_BY_GAME, PRINTING_OPTIONS_BY_GAME, CONDITION_OPTIONS, marketValueForCondition, activeImageSrc } from '../../lib/cardUtils.js';
 import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
+import { resizeImageFile } from '../../lib/image.js';
 import CatalogItemPicker from './CatalogItemPicker.jsx';
 import SelectWithCustom from '../SelectWithCustom.jsx';
+
+// Same url/data convention as cardUtils.js's own (unexported) resolveSrc —
+// url === 'local' means the real image lives in the data field, otherwise
+// url is used directly if it's a real http(s) link. Duplicated locally
+// rather than exported from cardUtils.js for this one caller, same
+// "a few genuinely similar lines is fine" call already made for
+// EditModal's own pendingSrc/ScannerPanel's stockSrc.
+function resolveImgSrc(url, data) {
+  if (url === 'local' && data) return data;
+  if (url && url.startsWith('http')) return url;
+  return null;
+}
 
 // One line item in a quote's build view. Same field set as EditModal
 // (Game/Set/Number/Rarity/Printing/Condition) so an accepted item arrives
@@ -24,6 +37,15 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
   const [candidateMode, setCandidateMode] = useState('image'); // 'image' | 'price'
   const [activeSearch, setActiveSearch] = useState(null); // null | 'image' | 'price'
   const [status, setStatus] = useState({ text: '', kind: '' });
+  // Manual "paste a stock image URL" input, same role as EditModal's own
+  // manualUrl — local-only text state, not part of the item itself until
+  // it's actually a non-empty value staff typed.
+  const [manualUrl, setManualUrl] = useState('');
+  // The paste-URL input (plus the Remove stock/Remove photo buttons) stays
+  // collapsed behind its own toggle button — real feedback found the row
+  // too busy with an always-visible input most items never touch. Purely
+  // a disclosure state, not part of the item.
+  const [showPasteUrl, setShowPasteUrl] = useState(false);
 
   function patch(p) {
     onChange({ ...item, ...p });
@@ -42,6 +64,7 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
       photoUrl: card.photoUrl || item.photoUrl,
       photoData: card.photoData || item.photoData,
       activeImage: card.activeImage || item.activeImage,
+      sourceUrl: card.sourceUrl || item.sourceUrl,
     };
     // Only auto-fill price if staff hasn't already typed one — a picked
     // reference card is a starting point, never something that should
@@ -86,8 +109,14 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
   }
 
   function selectCandidate(c) {
+    // A direct link to the real listing, same as EditModal's own
+    // selectCandidate — auto-filled only if staff haven't already put
+    // something in Source link themselves, never overwriting a manual
+    // entry. Applies in both modes, same reasoning as EditModal: a
+    // price-search pick still means staff have identified the exact print.
+    const sourceUrlPatch = (c.listingUrl && !item.sourceUrl.trim()) ? { sourceUrl: c.listingUrl } : {};
     if (candidateMode === 'price') {
-      const p = { basePrice: c.price ?? item.basePrice };
+      const p = { basePrice: c.price ?? item.basePrice, ...sourceUrlPatch };
       if (item.price == null && p.basePrice != null) {
         const mv = marketValueForCondition(p.basePrice, item.condition, multipliers);
         if (mv != null) p.price = mv;
@@ -97,12 +126,43 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
       patch({
         imageUrl: c.url, imageData: '', activeImage: 'stock',
         set: c.set || item.set, number: c.number || item.number, rarity: c.rarity || item.rarity,
+        ...sourceUrlPatch,
       });
     }
     setCandidates([]);
     setStatus({ text: '', kind: '' });
   }
 
+  // "Add image" — a manual real-photo upload, same role as EditModal's own
+  // "Upload real photo" (writes to the *photo* slot, resized client-side —
+  // resizeImageFile is the exact same helper EditModal/ScannerPanel use).
+  // No pending/staging step here, unlike EditModal — this row already
+  // patches every other field straight into the item on change, and the
+  // whole quote only actually commits when QuoteDetail's own Save is
+  // clicked, so there's nothing extra to defer.
+  async function handleUploadFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageFile(file, 500, 0.82);
+      patch({ photoData: dataUrl, photoUrl: 'local', activeImage: 'photo' });
+    } catch (err) {
+      setStatus({ text: err.message, kind: 'err' });
+    }
+  }
+
+  // Pasting a stock image URL writes to the *stock* slot instead — same
+  // split EditModal's own manualUrl/stockPending draws between a real photo
+  // (uploaded) and a stock reference image (a URL, never uploaded here).
+  function handleManualUrlChange(e) {
+    const url = e.target.value.trim();
+    setManualUrl(e.target.value);
+    if (!url) return;
+    patch({ imageUrl: url, imageData: '', activeImage: 'stock' });
+  }
+
+  const stockSrc = resolveImgSrc(item.imageUrl, item.imageData);
+  const photoSrc = resolveImgSrc(item.photoUrl, item.photoData);
   const displaySrc = activeImageSrc(item);
   const searching = activeSearch !== null;
 
@@ -117,12 +177,43 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
         >
           {displaySrc ? <img src={displaySrc} /> : <span style={{ fontSize: '9px', color: 'var(--ink-faint)', textAlign: 'center' }}>{item.game || 'No image'}</span>}
         </div>
+        {stockSrc && photoSrc && (
+          <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
+            <button
+              type="button" className={`btn small${item.activeImage === 'photo' ? '' : ' ghost'}`}
+              style={{ fontSize: '10px', padding: '2px 5px' }}
+              onClick={() => patch({ activeImage: 'photo' })}
+            >Photo</button>
+            <button
+              type="button" className={`btn small${item.activeImage === 'stock' ? '' : ' ghost'}`}
+              style={{ fontSize: '10px', padding: '2px 5px' }}
+              onClick={() => patch({ activeImage: 'stock' })}
+            >Stock</button>
+          </div>
+        )}
         <button
           className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '4px' }}
           disabled={searching} onClick={() => runSearch('image')}
         >
           {activeSearch === 'image' ? (<><span className="spinner" style={{ width: '10px', height: '10px' }} /> Searching…</>) : 'Find image'}
         </button>
+        {/* Add image / Paste image URL — same manual actions EditModal's
+            own img-side offers (a real-photo upload, and a stock-URL
+            paste), grouped with Find image/Find price in this one column
+            per real feedback, instead of spread into the wider fields
+            area. Paste image URL only toggles the input open (see the
+            collapsed panel below in .scan-row-fields) — keeps this row
+            condensed for the common case where nobody needs it. */}
+        <button
+          className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
+          onClick={() => document.getElementById(`qliAddImage-${item.id}`).click()}
+        >Add image</button>
+        <input type="file" id={`qliAddImage-${item.id}`} accept="image/*" style={{ display: 'none' }} onChange={handleUploadFile} />
+        <button
+          type="button" className={`btn small${showPasteUrl ? '' : ' ghost'}`}
+          style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
+          onClick={() => setShowPasteUrl(v => !v)}
+        >{showPasteUrl ? 'Hide URL field' : 'Paste image URL'}</button>
         <button
           className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px', marginTop: '3px' }}
           disabled={searching} onClick={() => runSearch('price')}
@@ -219,17 +310,59 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
           </div>
         </div>
+        {/* Source link — same role as a catalog row's own "Source / product
+            URL" field in EditModal. Given a visible label of its own
+            (unlike every other field here, whose label stays hidden on
+            desktop) since a bare, unlabeled full-width URL input read as
+            oversized/unclear what it was for — real feedback. */}
+        <div className="scan-row-line">
+          <label style={{
+            fontSize: '11px', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase',
+            letterSpacing: '0.03em', color: 'var(--ink-soft)', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>Source link</label>
+          <input
+            type="url" placeholder="e.g. TCGplayer product page link" value={item.sourceUrl}
+            onChange={(e) => patch({ sourceUrl: e.target.value })}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          {item.sourceUrl && (
+            <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--blue)', whiteSpace: 'nowrap' }}>
+              open ↗
+            </a>
+          )}
+        </div>
+        {/* Collapsed behind "Paste image URL" above — the URL input itself
+            plus Remove stock/Remove photo (shown once there's actually
+            something to remove, same as EditModal), condensed out of the
+            way for the common item that never needs them. */}
+        {showPasteUrl && (
+          <div className="scan-row-line" style={{ flexWrap: 'wrap', gap: '8px' }}>
+            <input
+              type="url" placeholder="Paste a stock image URL" value={manualUrl} onChange={handleManualUrlChange}
+              style={{ flex: '1 1 200px', minWidth: 0 }}
+            />
+            {stockSrc && <button type="button" className="btn ghost small" onClick={() => patch({ imageUrl: '', imageData: '' })}>Remove stock</button>}
+            {photoSrc && <button type="button" className="btn ghost small" onClick={() => patch({ photoUrl: '', photoData: '' })}>Remove photo</button>}
+          </div>
+        )}
         {/* Three independent, always-available price references, grouped
             under the fields — moved out of the cramped thumbnail column,
             same links/reasoning as EditModal's/ScanRow's own "Reference
-            prices" block. No live-listing link is tracked for quote items
-            (unlike a saved catalog row's sourceUrl), so TCGPlayer is always
-            the manual-search link here. */}
+            prices" block. TCGPlayer switches between a real listing link
+            (once item.sourceUrl is known, via Source link above) and a
+            manual search — same logic as EditModal's own reference row,
+            now that a quote item actually carries a sourceUrl. */}
         <div className="scan-row-line" style={{ fontSize: '11.5px', color: 'var(--ink-soft)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <a
-            href={tcgplayerSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--blue)', fontWeight: 600 }}
-          >TCGPlayer ↗</a>
+          {item.sourceUrl.trim() ? (
+            <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+              Check live TCGPlayer listing ↗
+            </a>
+          ) : (
+            <a
+              href={tcgplayerSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
+              style={{ color: 'var(--blue)', fontWeight: 600 }}
+            >TCGPlayer ↗</a>
+          )}
           <a
             href={ebaySoldSearchUrl(item.name, item.set)} target="_blank" rel="noopener noreferrer"
             style={{ color: 'var(--blue)', fontWeight: 600 }}

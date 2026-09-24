@@ -35,6 +35,13 @@ export function normalizeQuoteItem(item) {
     photoUrl: src.photoUrl || '',
     photoData: src.photoData || '',
     activeImage: src.activeImage === 'stock' ? 'stock' : 'photo',
+    // Same role as a catalog row's own sourceUrl (EditModal's "Source /
+    // product URL") — a direct link to the real listing/product page this
+    // item came from, entered by hand or carried over from a picked
+    // catalog/search reference. See phase11_quote_source_url.sql for why
+    // this needed a real migration (unlike every other field on this
+    // object, which just lives in `quotes.items`' jsonb).
+    sourceUrl: src.sourceUrl || '',
   };
 }
 
@@ -100,6 +107,7 @@ export function itemsFromCatalogRows(cards) {
     photoUrl: c.photoUrl,
     photoData: c.photoData,
     activeImage: c.activeImage,
+    sourceUrl: c.sourceUrl,
   }));
 }
 
@@ -137,6 +145,7 @@ export function buildCatalogItemsFromQuoteItems(items, destination) {
     photoUrl: item.photoUrl,
     photoData: item.photoData,
     activeImage: item.activeImage,
+    sourceUrl: item.sourceUrl,
     location: dest.location || '',
     posChannel: dest.posChannel,
     tcgplayerChannel: dest.tcgplayerChannel,
@@ -171,5 +180,6 @@ export function buildSortingItemsFromQuoteItems(items, quoteId, quoteCollectionN
     photoUrl: item.photoUrl,
     photoData: item.photoData,
     activeImage: item.activeImage,
+    sourceUrl: item.sourceUrl,
   }));
 }

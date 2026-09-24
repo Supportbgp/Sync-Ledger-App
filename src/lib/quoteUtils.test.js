@@ -38,6 +38,11 @@ describe('normalizeQuoteItem', () => {
     expect(item.activeImage).toBe('photo');
     expect(normalizeQuoteItem({ name: 'Y', activeImage: 'stock' }).activeImage).toBe('stock');
   });
+
+  it('defaults sourceUrl to an empty string, but preserves an explicit one', () => {
+    expect(normalizeQuoteItem({ name: 'X' }).sourceUrl).toBe('');
+    expect(normalizeQuoteItem({ name: 'X', sourceUrl: 'https://tcg/real-listing' }).sourceUrl).toBe('https://tcg/real-listing');
+  });
 });
 
 describe('computeQuoteTotals', () => {
@@ -122,6 +127,11 @@ describe('itemsFromCatalogRows', () => {
     expect(items[0].photoData).toBe('data:crop');
     expect(items[0].activeImage).toBe('stock');
   });
+
+  it('carries sourceUrl over from a scanned/picked card', () => {
+    const items = itemsFromCatalogRows([{ name: 'X', game: 'Pokemon', sourceUrl: 'https://tcg/real-listing' }]);
+    expect(items[0].sourceUrl).toBe('https://tcg/real-listing');
+  });
 });
 
 describe('buildCatalogItemsFromQuoteItems', () => {
@@ -158,6 +168,12 @@ describe('buildCatalogItemsFromQuoteItems', () => {
     const cards = buildCatalogItemsFromQuoteItems(items);
     expect(cards[0].imageUrl).toBe('https://x/stock.jpg');
     expect(cards[0].activeImage).toBe('stock');
+  });
+
+  it('carries the quote item\'s sourceUrl over onto the new catalog row', () => {
+    const items = [normalizeQuoteItem({ name: 'A', sourceUrl: 'https://tcg/real-listing' })];
+    const cards = buildCatalogItemsFromQuoteItems(items);
+    expect(cards[0].sourceUrl).toBe('https://tcg/real-listing');
   });
 
   it('applies a per-item destination (location + channels) rather than a whole-quote one', () => {
@@ -207,6 +223,12 @@ describe('buildSortingItemsFromQuoteItems', () => {
     const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
     expect(rows[0].imageUrl).toBe('https://x/stock.jpg');
     expect(rows[0].activeImage).toBe('stock');
+  });
+
+  it('carries sourceUrl over so it survives the trip to the eventual Catalog row', () => {
+    const items = [normalizeQuoteItem({ name: 'A', sourceUrl: 'https://tcg/real-listing' })];
+    const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
+    expect(rows[0].sourceUrl).toBe('https://tcg/real-listing');
   });
 
   it('handles an empty item list', () => {
