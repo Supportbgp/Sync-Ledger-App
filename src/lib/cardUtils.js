@@ -559,6 +559,24 @@ export function marketValueForCondition(basePrice, condition, multipliers) {
   return Math.round(basePrice * pct) / 100;
 }
 
+// "Round price" buttons (Catalog Edit modal, Scanner review rows, Quote line
+// items) — round to the nearest whole dollar, up or down, rather than a
+// single nearest-dollar rounding, per the actual ask: two explicit
+// directions so staff pick which way a price like $13.43 moves instead of
+// having that decided for them. Cents are rounded to a real integer first
+// (floating-point money math can otherwise land a whole-dollar price like
+// 13 on 12.999999999998) before ceil/floor, so an already-whole price is a
+// no-op in either direction.
+export function roundPriceUp(price) {
+  if (price == null || price === "" || !isFinite(price)) return price;
+  return Math.ceil(Math.round(price * 100) / 100);
+}
+
+export function roundPriceDown(price) {
+  if (price == null || price === "" || !isFinite(price)) return price;
+  return Math.floor(Math.round(price * 100) / 100);
+}
+
 // A url/data pair follows the same convention throughout the app: url ===
 // 'local' means the real image lives in the data column (a client-resized
 // data: URI); otherwise url is used directly if it's a real http(s) link.

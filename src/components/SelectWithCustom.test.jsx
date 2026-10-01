@@ -46,4 +46,21 @@ describe('SelectWithCustom', () => {
     rerender(<SelectWithCustom options={[]} value="" onChange={vi.fn()} ariaLabel="Thing" />);
     expect(screen.getByLabelText('Thing').tagName).toBe('INPUT');
   });
+
+  it('switches back to the select once options appear for the first time (e.g. Game just got picked on a brand-new row)', () => {
+    const { rerender } = render(<SelectWithCustom options={[]} value="" onChange={vi.fn()} ariaLabel="Thing" />);
+    expect(screen.getByLabelText('Thing').tagName).toBe('INPUT');
+
+    rerender(<SelectWithCustom options={['A', 'B']} value="" onChange={vi.fn()} ariaLabel="Thing" />);
+    expect(screen.getByLabelText('Thing').tagName).toBe('SELECT');
+  });
+
+  it('does not override a genuine custom value already typed when options later appear', () => {
+    const { rerender } = render(<SelectWithCustom options={[]} value="My custom thing" onChange={vi.fn()} ariaLabel="Thing" />);
+    expect(screen.getByLabelText('Thing').tagName).toBe('INPUT');
+
+    rerender(<SelectWithCustom options={['A', 'B']} value="My custom thing" onChange={vi.fn()} ariaLabel="Thing" />);
+    expect(screen.getByLabelText('Thing').tagName).toBe('INPUT');
+    expect(screen.getByLabelText('Thing').value).toBe('My custom thing');
+  });
 });

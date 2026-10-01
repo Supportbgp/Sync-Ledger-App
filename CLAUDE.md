@@ -3097,6 +3097,85 @@ without a physical phone every time.
   job (installs Chromium, `npm run test:e2e`), with the Playwright HTML
   report uploaded as an artifact on failure.
 
+## Quote line items: "Find price" now backfills Set/Number/Rarity, and Rarity/Printing dropdowns default correctly on a new row
+
+Real feedback: picking a result from "Find price" on a quote line item only
+filled in price and the Source link, not Set/Rarity/Number — staff assumed
+the app would need to "scan" TCGPlayer's page to get that data. It didn't
+need to: the candidates both "Find image" and "Find price" show already
+come from the same structured lookup (pokemontcg.io/Scryfall/YGOPRODeck/
+etc.) that supplies the thumbnail and `listingUrl` in the first place —
+nothing is ever read off TCGPlayer's actual page. Two separate, narrower
+bugs, not a missing feature:
+
+- **`QuoteLineItemRow.jsx`'s `selectCandidate` only backfilled Set/Number/
+  Rarity on an image-mode pick**, unlike `EditModal.jsx`'s own
+  `selectCandidate`, which backfills all three unconditionally regardless
+  of which button (Find image vs. Find market price) triggered the search.
+  A price-mode pick already had everything it needed (the candidate itself
+  carries `set`/`number`/`rarity` whenever the provider returns them) — it
+  just wasn't being applied. Fixed by hoisting that backfill above the
+  price/image branch, matching EditModal exactly. Covered by a new
+  `QuoteLineItemRow.test.jsx` (this component had no test file before),
+  mirroring `EditModal.test.jsx`'s own candidate-selection coverage.
+- **`SelectWithCustom.jsx` (shared by EditModal/ScannerPanel/
+  QuoteLineItemRow) only decided dropdown-vs-free-text once, at mount** —
+  a brand-new quote row starts with no Game picked yet, so Rarity/Printing
+  have zero options at that instant and open in free-text mode; there was
+  only ever logic for options *disappearing* (force free text), none for
+  options *appearing* for the first time once Game gets set. Fixed by
+  tracking the previous options length (`useRef`) and switching back to
+  the dropdown when options go from empty to non-empty and the current
+  value is still blank or already matches one of the new options — a
+  genuine custom value typed through the escape hatch is left alone
+  either way. This is a shared-component fix, not Quote-only: EditModal's
+  own Rarity/Printing fields on a brand-new item had the identical defect
+  and now default correctly too. Covered by two new cases in
+  `SelectWithCustom.test.jsx`.
+
+## Round price buttons
+
+Staff ask: "a round price button would also be nice. Just to the nearest
+dollar," refined in the same conversation to two explicit directions
+("I can make it like 2 buttons to round up or down") rather than a single
+nearest-dollar button — useful after an awkward computed Market Value
+(e.g. $13.43) that staff would rather sell at a clean $13 or $14.
+
+- **`roundPriceUp`/`roundPriceDown` (`cardUtils.js`)** — ceil/floor to the
+  next whole dollar. Cents are rounded to a real integer first
+  (`Math.round(price * 100) / 100`) before applying `Math.ceil`/`Math.floor`,
+  so floating-point noise (e.g. `12.999999999998` from earlier arithmetic)
+  doesn't push an already-whole price to the wrong neighbor — both
+  functions are a no-op on a price that's already a whole dollar. `null`/
+  `''`/non-finite values pass through unchanged rather than throwing, so a
+  caller never needs to guard the input itself.
+- **Wired into all three places Price is manually edited** — `EditModal.jsx`
+  (Our price), `ScannerPanel.jsx`'s `ScanRow` (Price), and
+  `QuoteLineItemRow.jsx` (Price), disabled whenever there's no price yet to
+  round. Same "no separate scanner-only vs. catalog-only field behavior"
+  parity this app applies to every other field-level feature (see the
+  per-game parity section above) — confirmed with the user as wanting all
+  three, not just one.
+- **Two different layouts, by explicit request**: EditModal keeps labeled
+  "Round down"/"Round up" buttons stacked below the input (there's room in
+  its own dedicated field-group). ScannerPanel's `ScanRow` and
+  `QuoteLineItemRow` — both dense, single-line row layouts — instead use
+  `↓`/`↑` arrow buttons sitting directly to the right of the Price input
+  in the same flex row, real staff feedback after the first cut found the
+  labeled-button layout too tall for those two specific rows. Both arrow
+  buttons keep a real accessible name (`aria-label`/`title` "Round down"/
+  "Round up") despite the glyph-only visible label, so existing
+  `getByRole('button', { name: 'Round down' })`-style test queries needed
+  no changes when the layout changed.
+- Covered by `cardUtils.test.js` (the two functions directly, including the
+  floating-point and blank/non-finite cases) and new cases in
+  `EditModal.test.jsx`/`QuoteLineItemRow.test.jsx` (button click rounds the
+  field, both buttons disabled with no price). `ScannerPanel.jsx` has no
+  component test file at all (see "Scanner review row layout pass" above —
+  verified via a throwaway harness instead), so this follows that same
+  existing gap rather than introducing new coverage infrastructure for one
+  button.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

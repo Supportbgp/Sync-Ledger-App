@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const ADD_NEW = '__add_new__';
 
@@ -21,14 +21,27 @@ export default function SelectWithCustom({
   // the common case for most games here, which have no curated options at
   // all (see RARITY_OPTIONS_BY_GAME's Pokemon-only rollout).
   const [adding, setAdding] = useState(options.length === 0 || (value !== '' && !options.includes(value)));
+  const prevOptionsLen = useRef(options.length);
 
   // `options` can change out from under an already-mounted picker — e.g.
   // Rarity's options depend on the Game field, which staff can change after
-  // this component has already rendered in select mode. If that leaves
-  // nothing to pick from, force the escape hatch open rather than stranding
-  // staff on a select with no real options in it.
+  // this component has already rendered. Two transitions matter: options
+  // disappearing (nothing left to pick from — force the free-text escape
+  // hatch open rather than stranding staff on an empty select) and options
+  // *appearing* for the first time (e.g. Game just got picked on a
+  // brand-new row that started with no game at all, so Rarity/Printing had
+  // to open in free-text mode at mount) — the dropdown should become the
+  // default again once there's something real to choose from, not stay
+  // stuck on free text just because it had no options yet when it first
+  // rendered. Only switches back automatically when the current value is
+  // still blank or already matches one of the new options — a value
+  // someone genuinely typed as a custom entry is left alone.
   useEffect(() => {
-    if (options.length === 0 && !adding) setAdding(true);
+    const hadOptions = prevOptionsLen.current > 0;
+    const hasOptions = options.length > 0;
+    if (!hasOptions && hadOptions) setAdding(true);
+    else if (hasOptions && !hadOptions && (value === '' || options.includes(value))) setAdding(false);
+    prevOptionsLen.current = options.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.length]);
 

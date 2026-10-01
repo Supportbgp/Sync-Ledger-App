@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, GAMES } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, roundPriceUp, roundPriceDown, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, GAMES } from '../../lib/cardUtils.js';
 import { searchCardImage as searchByGame, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -521,6 +521,23 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
               <div className="field-group">
                 <label>Our price ($)</label>
                 <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => set('price', e.target.value)} />
+                {/* Real staff ask: a quick way to round an awkward computed
+                    price (e.g. a Market Value of $13.43) to a clean whole
+                    dollar, in whichever direction — not a single
+                    nearest-dollar button, since staff want to pick which way
+                    it moves. Disabled with nothing to round. */}
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  <button
+                    type="button" className="btn ghost small"
+                    disabled={form.price === '' || form.price == null || isNaN(Number(form.price))}
+                    onClick={() => set('price', roundPriceDown(Number(form.price)))}
+                  >Round down</button>
+                  <button
+                    type="button" className="btn ghost small"
+                    disabled={form.price === '' || form.price == null || isNaN(Number(form.price))}
+                    onClick={() => set('price', roundPriceUp(Number(form.price)))}
+                  >Round up</button>
+                </div>
               </div>
             </div>
             <div className="field-group">

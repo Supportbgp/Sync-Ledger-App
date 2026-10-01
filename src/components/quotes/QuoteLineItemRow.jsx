@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { GAMES, RARITY_OPTIONS_BY_GAME, PRINTING_OPTIONS_BY_GAME, CONDITION_OPTIONS, marketValueForCondition, activeImageSrc } from '../../lib/cardUtils.js';
+import { GAMES, RARITY_OPTIONS_BY_GAME, PRINTING_OPTIONS_BY_GAME, CONDITION_OPTIONS, marketValueForCondition, roundPriceUp, roundPriceDown, activeImageSrc } from '../../lib/cardUtils.js';
 import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import CatalogItemPicker from './CatalogItemPicker.jsx';
@@ -115,8 +115,21 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
     // entry. Applies in both modes, same reasoning as EditModal: a
     // price-search pick still means staff have identified the exact print.
     const sourceUrlPatch = (c.listingUrl && !item.sourceUrl.trim()) ? { sourceUrl: c.listingUrl } : {};
+    // Once staff visually confirm a candidate, that print's own Set/Number/
+    // Rarity is more trustworthy than whatever's already in the fields —
+    // back-fill whichever of these the candidate actually carries,
+    // regardless of which button (Find image or Find price) triggered the
+    // search. Previously this only ran on an image-mode pick, silently
+    // skipping it for a price-mode pick even though the same search result
+    // already carries the same structured data — matches EditModal's own
+    // selectCandidate, which backfills unconditionally.
+    const backfillPatch = {
+      ...(c.set ? { set: c.set } : {}),
+      ...(c.number ? { number: c.number } : {}),
+      ...(c.rarity ? { rarity: c.rarity } : {}),
+    };
     if (candidateMode === 'price') {
-      const p = { basePrice: c.price ?? item.basePrice, ...sourceUrlPatch };
+      const p = { basePrice: c.price ?? item.basePrice, ...backfillPatch, ...sourceUrlPatch };
       if (item.price == null && p.basePrice != null) {
         const mv = marketValueForCondition(p.basePrice, item.condition, multipliers);
         if (mv != null) p.price = mv;
@@ -125,7 +138,7 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
     } else {
       patch({
         imageUrl: c.url, imageData: '', activeImage: 'stock',
-        set: c.set || item.set, number: c.number || item.number, rarity: c.rarity || item.rarity,
+        ...backfillPatch,
         ...sourceUrlPatch,
       });
     }
@@ -301,10 +314,27 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
           </div>
           <div className="scan-field sf">
             <label className="scan-field-label">Price</label>
-            <input
-              type="number" placeholder="Price" step="0.01" value={item.price ?? ''}
-              onChange={(e) => patch({ price: e.target.value === '' ? null : Number(e.target.value) })}
-            />
+            {/* Real staff ask: round an awkward computed price to a clean
+                whole dollar, in whichever direction staff pick — arrow
+                buttons right of the input here (EditModal's own Our Price
+                field keeps the earlier labeled-button layout). */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'stretch' }}>
+              <input
+                type="number" placeholder="Price" step="0.01" value={item.price ?? ''}
+                onChange={(e) => patch({ price: e.target.value === '' ? null : Number(e.target.value) })}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <button
+                type="button" className="btn ghost small" style={{ padding: '2px 8px' }}
+                title="Round down" aria-label="Round down"
+                disabled={item.price == null} onClick={() => patch({ price: roundPriceDown(item.price) })}
+              >↓</button>
+              <button
+                type="button" className="btn ghost small" style={{ padding: '2px 8px' }}
+                title="Round up" aria-label="Round up"
+                disabled={item.price == null} onClick={() => patch({ price: roundPriceUp(item.price) })}
+              >↑</button>
+            </div>
           </div>
           <div className="scan-row-meta">
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
