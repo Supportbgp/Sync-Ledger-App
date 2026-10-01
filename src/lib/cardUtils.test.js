@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   parseMoney, detectGrading, normalizeCard, GAME_TAG_CLASS,
   channelDefaultsForLocation, isTicketComplete, needsPlatformStatusReset,
-  timeAgo, canonicalizeCondition, marketValueForCondition,
+  timeAgo, canonicalizeCondition, marketValueForCondition, roundPriceUp, roundPriceDown,
   resolveActiveImage, activeImageSrc, SORT_COLUMNS, DEFAULT_CONDITION_MULTIPLIERS,
   RARITY_OPTIONS_BY_GAME, CONDITION_TIERS, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME,
   mergeScanDuplicates, findBulkRow, buildBulkCatalogItem,
@@ -378,6 +378,27 @@ describe('marketValueForCondition', () => {
   });
   it('rounds to the cent', () => {
     expect(marketValueForCondition(33.33, 'LP', DEFAULT_CONDITION_MULTIPLIERS)).toBeCloseTo(28.33, 2);
+  });
+});
+
+describe('roundPriceUp / roundPriceDown', () => {
+  it('round to the next/previous whole dollar', () => {
+    expect(roundPriceUp(13.43)).toBe(14);
+    expect(roundPriceDown(13.43)).toBe(13);
+  });
+  it('leave an already-whole price unchanged in either direction', () => {
+    expect(roundPriceUp(13)).toBe(13);
+    expect(roundPriceDown(13)).toBe(13);
+  });
+  it('are immune to floating-point noise on an already-whole price', () => {
+    expect(roundPriceUp(12.999999999998)).toBe(13);
+    expect(roundPriceDown(13.000000000002)).toBe(13);
+  });
+  it('pass through null/blank/non-finite unchanged rather than crash', () => {
+    expect(roundPriceUp(null)).toBeNull();
+    expect(roundPriceDown(null)).toBeNull();
+    expect(roundPriceUp('')).toBe('');
+    expect(roundPriceUp(NaN)).toBeNaN();
   });
 });
 

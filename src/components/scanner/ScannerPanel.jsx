@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
 import { readBinderPagePhoto, scanBinderPage } from '../../lib/scanner.js';
 import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
-import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates, GAMES } from '../../lib/cardUtils.js';
+import { normalizeCard, channelDefaultsForLocation, marketValueForCondition, canonicalizeCondition, roundPriceUp, roundPriceDown, RARITY_OPTIONS_BY_GAME, CONDITION_OPTIONS, PRINTING_OPTIONS_BY_GAME, mergeScanDuplicates, GAMES } from '../../lib/cardUtils.js';
 import { cropImageRegion } from '../../lib/image.js';
 import { runWithConcurrency } from '../../lib/importParse.js';
 import LocationPicker from '../LocationPicker.jsx';
@@ -609,6 +609,21 @@ function ScanRow({ row, entranceDelay = 0, multipliers, onChange, onRemove, onFi
           <div className="scan-field sf">
             <label className="scan-field-label">Price</label>
             <input type="number" placeholder="Price" step="0.01" value={row.price} onChange={(e) => onChange({ price: e.target.value })} />
+            {/* Real staff ask: round an awkward computed price to a clean
+                whole dollar, in whichever direction staff pick — same
+                buttons as EditModal's own Our Price field. */}
+            <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+              <button
+                type="button" className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+                disabled={row.price === '' || row.price == null || isNaN(Number(row.price))}
+                onClick={() => onChange({ price: roundPriceDown(Number(row.price)) })}
+              >Round down</button>
+              <button
+                type="button" className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+                disabled={row.price === '' || row.price == null || isNaN(Number(row.price))}
+                onClick={() => onChange({ price: roundPriceUp(Number(row.price)) })}
+              >Round up</button>
+            </div>
           </div>
           <div className="scan-row-meta">
             <span className={`badge confidence-${row.confidence}`} title="How confident the scan was about this card">

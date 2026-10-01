@@ -128,6 +128,26 @@ describe('EditModal — image candidate selection', () => {
     );
   });
 
+  it('rounds Our Price down to the next whole dollar', () => {
+    render(<EditModal card={baseCard({ price: 13.43 })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const priceInput = screen.getByDisplayValue('13.43');
+    fireEvent.click(screen.getByRole('button', { name: 'Round down' }));
+    expect(priceInput.value).toBe('13');
+  });
+
+  it('rounds Our Price up to the next whole dollar', () => {
+    render(<EditModal card={baseCard({ price: 13.43 })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    const priceInput = screen.getByDisplayValue('13.43');
+    fireEvent.click(screen.getByRole('button', { name: 'Round up' }));
+    expect(priceInput.value).toBe('14');
+  });
+
+  it('disables both round buttons when there is no price to round', () => {
+    render(<EditModal card={baseCard({ price: '' })} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Round down' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Round up' })).toBeDisabled();
+  });
+
   it('offers the same manual link when a price search finds a match with no price data', async () => {
     searchCardImageMock.mockResolvedValueOnce([{ url: 'https://x/candidate.jpg', label: 'Charizard', price: null }]);
     render(<EditModal card={baseCard()} catalog={[]} locations={[]} multipliers={{}} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} />);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { GAMES, RARITY_OPTIONS_BY_GAME, PRINTING_OPTIONS_BY_GAME, CONDITION_OPTIONS, marketValueForCondition, activeImageSrc } from '../../lib/cardUtils.js';
+import { GAMES, RARITY_OPTIONS_BY_GAME, PRINTING_OPTIONS_BY_GAME, CONDITION_OPTIONS, marketValueForCondition, roundPriceUp, roundPriceDown, activeImageSrc } from '../../lib/cardUtils.js';
 import { searchCardImage, tcgplayerSearchUrl, ebaySoldSearchUrl, priceChartingSearchUrl } from '../../lib/cardSearch.js';
 import { resizeImageFile } from '../../lib/image.js';
 import CatalogItemPicker from './CatalogItemPicker.jsx';
@@ -318,6 +318,19 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
               type="number" placeholder="Price" step="0.01" value={item.price ?? ''}
               onChange={(e) => patch({ price: e.target.value === '' ? null : Number(e.target.value) })}
             />
+            {/* Real staff ask: round an awkward computed price to a clean
+                whole dollar, in whichever direction staff pick — same
+                buttons as EditModal's own Our Price field. */}
+            <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+              <button
+                type="button" className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+                disabled={item.price == null} onClick={() => patch({ price: roundPriceDown(item.price) })}
+              >Round down</button>
+              <button
+                type="button" className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+                disabled={item.price == null} onClick={() => patch({ price: roundPriceUp(item.price) })}
+              >Round up</button>
+            </div>
           </div>
           <div className="scan-row-meta">
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>

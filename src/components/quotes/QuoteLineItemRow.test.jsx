@@ -26,6 +26,27 @@ function renderRow(overrides = {}) {
   return { item, onChange };
 }
 
+describe('QuoteLineItemRow — Round price buttons', () => {
+  it('rounds the Price field down or up to the next whole dollar', () => {
+    const onChange = vi.fn();
+    const item = normalizeQuoteItem({ name: 'Charizard', price: 13.43 });
+    render(<QuoteLineItemRow item={item} onChange={onChange} onRemove={vi.fn()} catalog={[]} multipliers={{}} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Round down' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ price: 13 }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Round up' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ price: 14 }));
+  });
+
+  it('disables both round buttons when there is no price to round', () => {
+    const item = normalizeQuoteItem({ name: 'Charizard' });
+    render(<QuoteLineItemRow item={item} onChange={vi.fn()} onRemove={vi.fn()} catalog={[]} multipliers={{}} />);
+    expect(screen.getByRole('button', { name: 'Round down' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Round up' })).toBeDisabled();
+  });
+});
+
 describe('QuoteLineItemRow — candidate selection backfill', () => {
   it('picking a "Find price" candidate backfills Set/Number/Rarity too, matching EditModal — not just price and the source link', async () => {
     searchCardImageMock.mockResolvedValueOnce([

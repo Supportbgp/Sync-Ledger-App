@@ -3133,6 +3133,39 @@ bugs, not a missing feature:
   and now default correctly too. Covered by two new cases in
   `SelectWithCustom.test.jsx`.
 
+## Round price buttons
+
+Staff ask: "a round price button would also be nice. Just to the nearest
+dollar," refined in the same conversation to two explicit directions
+("I can make it like 2 buttons to round up or down") rather than a single
+nearest-dollar button — useful after an awkward computed Market Value
+(e.g. $13.43) that staff would rather sell at a clean $13 or $14.
+
+- **`roundPriceUp`/`roundPriceDown` (`cardUtils.js`)** — ceil/floor to the
+  next whole dollar. Cents are rounded to a real integer first
+  (`Math.round(price * 100) / 100`) before applying `Math.ceil`/`Math.floor`,
+  so floating-point noise (e.g. `12.999999999998` from earlier arithmetic)
+  doesn't push an already-whole price to the wrong neighbor — both
+  functions are a no-op on a price that's already a whole dollar. `null`/
+  `''`/non-finite values pass through unchanged rather than throwing, so a
+  caller never needs to guard the input itself.
+- **Wired into all three places Price is manually edited** — `EditModal.jsx`
+  (Our price), `ScannerPanel.jsx`'s `ScanRow` (Price), and
+  `QuoteLineItemRow.jsx` (Price) — two small "Round down"/"Round up"
+  buttons under each Price input, disabled whenever there's no price yet to
+  round. Same "no separate scanner-only vs. catalog-only field behavior"
+  parity this app applies to every other field-level feature (see the
+  per-game parity section above) — confirmed with the user as wanting all
+  three, not just one.
+- Covered by `cardUtils.test.js` (the two functions directly, including the
+  floating-point and blank/non-finite cases) and new cases in
+  `EditModal.test.jsx`/`QuoteLineItemRow.test.jsx` (button click rounds the
+  field, both buttons disabled with no price). `ScannerPanel.jsx` has no
+  component test file at all (see "Scanner review row layout pass" above —
+  verified via a throwaway harness instead), so this follows that same
+  existing gap rather than introducing new coverage infrastructure for one
+  button.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
