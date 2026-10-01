@@ -100,6 +100,17 @@ test('misc. add-on items are excluded from the tier total but can be added to th
   const payoutInput = page.locator('.field-group', { hasText: 'Payout amount' }).locator('input');
   await expect(payoutInput).toHaveValue('5');
 
+  // The button flips to "Remove from payout" instead of staying a
+  // repeatable "Add" that would stack the same $5 in again and again.
+  await expect(page.getByRole('button', { name: 'Add to payout' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Remove from payout' }).click();
+  await expect(payoutInput).toHaveValue('0');
+  await expect(page.getByRole('button', { name: 'Remove from payout' })).toHaveCount(0);
+
+  // Re-apply it before accepting, so the rest of this test proceeds as before.
+  await page.getByRole('button', { name: 'Add to payout' }).click();
+  await expect(payoutInput).toHaveValue('5');
+
   await page.locator('.field-group', { hasText: 'Offer status' }).locator('select').selectOption('accepted_cash');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.locator('.modal-head .name')).toHaveCount(0);
@@ -110,6 +121,42 @@ test('misc. add-on items are excluded from the tier total but can be added to th
   const sortingPanel = page.locator('.panel.active');
   await expect(sortingPanel.getByText('Charizard')).toBeVisible();
   await expect(sortingPanel.getByText('Binder', { exact: true })).toHaveCount(0);
+});
+
+test('Bulk items live in their own section, count toward the tier total, and still reach Sorting on accept', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Bulk test');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  // "+ Add card as Bulk" lives in its own "Bulk items" section, separate
+  // from the Cards list — a light row with just Game/Qty/Price. This quote
+  // has no other items, so the one resulting .scan-row is this Bulk row.
+  await expect(page.getByText('Bulk items (0)')).toBeVisible();
+  await page.getByRole('button', { name: '+ Add card as Bulk' }).click();
+  await expect(page.getByText('Bulk items (1)')).toBeVisible();
+  const bulkRow = page.locator('.scan-row');
+  await expect(bulkRow).toHaveCount(1);
+  await bulkRow.locator('select').selectOption('Pokemon');
+  await bulkRow.locator('input[placeholder="Qty"]').fill('50');
+  await bulkRow.locator('input[placeholder="Price"]').fill('0.10');
+
+  // Unlike a misc. add-on, a Bulk item's value DOES feed Total quoted
+  // value / the tier percentages — 50 × $0.10 = $5.
+  await expect(page.getByText('Total quoted value').locator('..')).toContainText('$5.00');
+
+  await page.locator('.field-group', { hasText: 'Offer status' }).locator('select').selectOption('accepted_cash');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.modal-head .name')).toHaveCount(0);
+
+  // Unlike a misc. add-on, a Bulk item still flows to Sorting like any
+  // other card — it's placed into Bulk there, same as always.
+  await page.locator('.tab', { hasText: 'Sorting' }).click();
+  const sortingPanel = page.locator('.panel.active');
+  // "Pokemon" legitimately appears twice on this row (the blank-image
+  // placeholder text and the game/set/rarity subtitle line, since set/
+  // rarity/condition are all blank for a Bulk-destined item) — .first() is
+  // enough to confirm the row made it to Sorting at all.
+  await expect(sortingPanel.getByText('Pokemon').first()).toBeVisible();
 });
 
 test('quote detail sections collapse and expand independently', async ({ page }) => {

@@ -3238,6 +3238,64 @@ final payout, not $3 (a 60% tier applied to it).
   payout", accept, and confirm only the card (not the add-on) reaches
   Sorting.
 
+## Quote tab: "Remove from payout" toggle, and "+ Add card as Bulk" in its own section
+
+Two follow-ups to the misc. item add-ons feature above, right after it
+shipped:
+
+- **"Add to payout" was a one-way, infinitely-repeatable action** — nothing
+  stopped staff clicking it twice and stacking the same add-ons total into
+  Payout amount more than once. `QuoteDetail.jsx` now tracks
+  `addOnsApplied` (the exact amount currently folded in, 0 = not applied):
+  the button reads "Add to payout" while `addOnsApplied` is 0, flips to
+  **"Remove from payout"** once clicked (which subtracts that same exact
+  amount back out and resets to 0), so the two actions are a real toggle
+  instead of an endlessly-repeatable one-way button. Deliberately tracks
+  the *applied amount*, not a live-recomputed `addOnsTotal` — editing an
+  add-on's price after applying it doesn't retroactively change what
+  "Remove" undoes, matching this app's "a one-click action, not a
+  live-recomputed formula" discipline (same reasoning as the tier buttons'
+  own "Use").
+- **A new "+ Add card as Bulk" option**, in its own **"Bulk items"**
+  section below Cards — for a real card staff already know is going
+  straight into a Bulk pile, with no reason to fill in Set/Rarity/
+  Printing/Condition for it individually. A new `isBulk` flag on a quote
+  item (same free, no-migration-needed pattern as `isAddOn` — just another
+  key in `quotes.items`' jsonb) rendered via a new, light
+  **`BulkLineItemRow.jsx`**: just Game, Qty, and Price (per-card, same
+  qty×price convention every other line item already uses — deliberately
+  NOT a flat-total-for-the-lot like the misc. add-on's price, since this
+  item type has a real, meaningful per-unit quantity the way a
+  non-card accessory doesn't).
+  - **Meaningfully different from `isAddOn` in both directions that
+    matter**: a Bulk item *does* count toward `computeQuoteTotals`'
+    tier-relevant `qty`/`total` (it's real card value, unlike a playmat or
+    a binder) — no change needed to that function, since only `isAddOn`
+    items are excluded there and a Bulk item simply isn't one. It also
+    *does* flow through `buildSortingItemsFromQuoteItems` to Sorting on
+    accept, same as any other item — no change needed there either.
+    `isBulk` carries **zero functional meaning past the Quote tab's own
+    UI** — it exists purely to pick which lightweight form/section an item
+    is edited in at quote time; once in Sorting, a card that started as a
+    Bulk-flagged quote item is placed through the exact same "Add to Bulk"
+    option in `SortItemModal` that already exists for any item regardless
+    of origin — consistent with the standing "Bulk placement happens at
+    Sorting time, one item at a time" architecture decision (see the
+    "Sorting stage + Bulk item type" section above, and PR #40's closure
+    for why that's deliberate).
+  - `QuoteDetail.jsx`'s Cards list now renders `nonBulkItems` (everything
+    except `isBulk` — real cards and misc. add-ons still mix together
+    there, unchanged) while a new "Bulk items (N)" section renders
+    `bulkItems` separately, with its own `+ Add card as Bulk` button and
+    its own `openSections` toggle key.
+- Covered by new tests in `quoteUtils.test.js` (`isBulk` defaulting,
+  `computeQuoteTotals` counting Bulk items like a normal card while still
+  excluding add-ons, `buildSortingItemsFromQuoteItems` keeping Bulk items
+  while still dropping add-ons), a new `BulkLineItemRow.test.jsx`, and two
+  new `e2e/quotes.spec.js` tests (the Add/Remove from payout toggle
+  round-trip, and a Bulk item counting toward the tier total while still
+  reaching Sorting on accept).
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

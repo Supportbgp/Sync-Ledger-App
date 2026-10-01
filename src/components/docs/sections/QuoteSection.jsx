@@ -54,6 +54,18 @@ export default function QuoteSection() {
           Condition fields, and no catalog search.
         </li>
       </ul>
+      <p>
+        A fifth option, <strong>+ Add card as Bulk</strong>, lives in its own{' '}
+        <strong>Bulk items</strong> section below Cards — for real cards you
+        already know are going straight into a Bulk pile, with no reason to
+        fill in Set/Rarity/Printing/Condition for them one at a time. Just
+        Game, Qty, and Price. Unlike a misc. item add-on, a Bulk item{' '}
+        <em>does</em> count toward the total quoted value and tier offers
+        below, and it still moves to Sorting like any other card once
+        accepted (see the note below) — this just skips the per-print
+        fields at quote time; you still choose Add to Bulk for it at
+        Sorting time.
+      </p>
       <DocsCallout kind="note">
         Each card row also has its own <strong>Find image</strong>/
         <strong>Find price</strong> buttons and manual TCGPlayer/eBay
@@ -99,7 +111,10 @@ export default function QuoteSection() {
         tiers are computed from, so a flat $5 you want to pay for two
         binders stays a full $5, never shaved down to a tier percentage.
         Click <strong>Add to payout</strong> to add that raw amount straight
-        into Payout amount, on top of whatever you've already entered.
+        into Payout amount, on top of whatever you've already entered — the
+        button then becomes <strong>Remove from payout</strong>, which
+        subtracts exactly that same amount back out, so clicking it twice
+        can't stack the add-on total into the payout by accident.
       </p>
       <DocsCallout kind="warn">
         Saving a quote as Accepted (either Cash or Store Credit) moves every
@@ -127,10 +142,11 @@ export default function QuoteSection() {
 
       <h3>Collapsible sections</h3>
       <p>
-        A quote's four sections — Quote details, Release form info, Cards,
-        Total &amp; offer — each collapse independently by clicking their
-        header, so you can jump straight to, say, Total &amp; offer on a
-        long card-heavy quote without scrolling past everything else.
+        A quote's five sections — Quote details, Release form info, Cards,
+        Bulk items, Total &amp; offer — each collapse independently by
+        clicking their header, so you can jump straight to, say, Total &amp;
+        offer on a long card-heavy quote without scrolling past everything
+        else.
       </p>
 
       <h3>Finding a quote later</h3>

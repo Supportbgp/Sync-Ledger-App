@@ -50,6 +50,18 @@ export function normalizeQuoteItem(item) {
     // Catalog row. `name`/`notes` (used here as "description")/`price`
     // are the only fields this item type actually uses.
     isAddOn: !!src.isAddOn,
+    // A real card destined for Bulk (no per-print identity needed) —
+    // rendered via BulkLineItemRow (just Game/Qty/Price) in its own
+    // "Bulk items" section instead of the Cards list, but otherwise a
+    // completely normal item: it DOES count toward computeQuoteTotals'
+    // tier-relevant total/qty (unlike isAddOn) and DOES flow through
+    // buildSortingItemsFromQuoteItems to Sorting like any other card —
+    // staff still place it into Bulk there, one at a time, same as the
+    // Sorting tab's existing "Add to Bulk" option already does for any
+    // item regardless of origin. This flag only controls which lightweight
+    // form/section it's edited in at quote time; it carries no other
+    // meaning once the quote is saved.
+    isBulk: !!src.isBulk,
   };
 }
 

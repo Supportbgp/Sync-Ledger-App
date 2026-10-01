@@ -48,6 +48,11 @@ describe('normalizeQuoteItem', () => {
     expect(normalizeQuoteItem({ name: 'X' }).isAddOn).toBe(false);
     expect(normalizeQuoteItem({ name: 'Binder', isAddOn: true }).isAddOn).toBe(true);
   });
+
+  it('defaults isBulk to false, but preserves an explicit true', () => {
+    expect(normalizeQuoteItem({ name: 'X' }).isBulk).toBe(false);
+    expect(normalizeQuoteItem({ game: 'Pokemon', isBulk: true }).isBulk).toBe(true);
+  });
 });
 
 describe('computeQuoteTotals', () => {
@@ -95,6 +100,17 @@ describe('computeQuoteTotals', () => {
   it('excludes a blank-price add-on from addOnsTotal, same as a blank-price card is excluded from total', () => {
     const items = [normalizeQuoteItem({ name: 'Binder', price: null, isAddOn: true })];
     expect(computeQuoteTotals(items).addOnsTotal).toBe(0);
+  });
+
+  it('counts isBulk items toward qty/total like a normal card — unlike isAddOn, they are not excluded', () => {
+    const items = [
+      normalizeQuoteItem({ game: 'Pokemon', price: 0.10, qty: 50, isBulk: true }),
+      normalizeQuoteItem({ name: 'Charizard', price: 40, qty: 1 }),
+    ];
+    const { qty, total, addOnsTotal } = computeQuoteTotals(items);
+    expect(qty).toBe(51);
+    expect(total).toBe(45);
+    expect(addOnsTotal).toBe(0);
   });
 });
 
@@ -265,6 +281,17 @@ describe('buildSortingItemsFromQuoteItems', () => {
     const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe('Charizard');
+  });
+
+  it('keeps isBulk items — unlike add-ons, they flow to Sorting like any real card', () => {
+    const items = [
+      normalizeQuoteItem({ game: 'Pokemon', price: 0.10, qty: 50, isBulk: true }),
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+    ];
+    const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].game).toBe('Pokemon');
+    expect(rows[0].qty).toBe(50);
   });
 
   it('defaults quoteCollectionName to an empty string when not given', () => {
