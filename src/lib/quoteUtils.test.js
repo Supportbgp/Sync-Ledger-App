@@ -43,6 +43,11 @@ describe('normalizeQuoteItem', () => {
     expect(normalizeQuoteItem({ name: 'X' }).sourceUrl).toBe('');
     expect(normalizeQuoteItem({ name: 'X', sourceUrl: 'https://tcg/real-listing' }).sourceUrl).toBe('https://tcg/real-listing');
   });
+
+  it('defaults isAddOn to false, but preserves an explicit true', () => {
+    expect(normalizeQuoteItem({ name: 'X' }).isAddOn).toBe(false);
+    expect(normalizeQuoteItem({ name: 'Binder', isAddOn: true }).isAddOn).toBe(true);
+  });
 });
 
 describe('computeQuoteTotals', () => {
@@ -72,7 +77,24 @@ describe('computeQuoteTotals', () => {
   });
 
   it('returns zero for an empty item list', () => {
-    expect(computeQuoteTotals([])).toEqual({ qty: 0, total: 0 });
+    expect(computeQuoteTotals([])).toEqual({ qty: 0, total: 0, addOnsTotal: 0 });
+  });
+
+  it('excludes add-on items from qty/total entirely, summing them into addOnsTotal instead', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Charizard', price: 40, qty: 1 }),
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+      normalizeQuoteItem({ name: '3x Bulk V/ex', price: 1, isAddOn: true }),
+    ];
+    const { qty, total, addOnsTotal } = computeQuoteTotals(items);
+    expect(qty).toBe(1);
+    expect(total).toBe(40);
+    expect(addOnsTotal).toBe(6);
+  });
+
+  it('excludes a blank-price add-on from addOnsTotal, same as a blank-price card is excluded from total', () => {
+    const items = [normalizeQuoteItem({ name: 'Binder', price: null, isAddOn: true })];
+    expect(computeQuoteTotals(items).addOnsTotal).toBe(0);
   });
 });
 
@@ -233,6 +255,16 @@ describe('buildSortingItemsFromQuoteItems', () => {
 
   it('handles an empty item list', () => {
     expect(buildSortingItemsFromQuoteItems([], 'q1', 'Test')).toEqual([]);
+  });
+
+  it('drops add-on items entirely — they are pricing-only and never become real inventory', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Charizard', price: 40 }),
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+    ];
+    const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Charizard');
   });
 
   it('defaults quoteCollectionName to an empty string when not given', () => {
