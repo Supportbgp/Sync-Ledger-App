@@ -314,22 +314,26 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
           </div>
           <div className="scan-field sf">
             <label className="scan-field-label">Price</label>
-            <input
-              type="number" placeholder="Price" step="0.01" value={item.price ?? ''}
-              onChange={(e) => patch({ price: e.target.value === '' ? null : Number(e.target.value) })}
-            />
             {/* Real staff ask: round an awkward computed price to a clean
-                whole dollar, in whichever direction staff pick — same
-                buttons as EditModal's own Our Price field. */}
-            <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                whole dollar, in whichever direction staff pick — arrow
+                buttons right of the input here (EditModal's own Our Price
+                field keeps the earlier labeled-button layout). */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'stretch' }}>
+              <input
+                type="number" placeholder="Price" step="0.01" value={item.price ?? ''}
+                onChange={(e) => patch({ price: e.target.value === '' ? null : Number(e.target.value) })}
+                style={{ flex: 1, minWidth: 0 }}
+              />
               <button
-                type="button" className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+                type="button" className="btn ghost small" style={{ padding: '2px 8px' }}
+                title="Round down" aria-label="Round down"
                 disabled={item.price == null} onClick={() => patch({ price: roundPriceDown(item.price) })}
-              >Round down</button>
+              >↓</button>
               <button
-                type="button" className="btn ghost small" style={{ fontSize: '10.5px', padding: '2px 6px' }}
+                type="button" className="btn ghost small" style={{ padding: '2px 8px' }}
+                title="Round up" aria-label="Round up"
                 disabled={item.price == null} onClick={() => patch({ price: roundPriceUp(item.price) })}
-              >Round up</button>
+              >↑</button>
             </div>
           </div>
           <div className="scan-row-meta">

@@ -3151,12 +3151,22 @@ nearest-dollar button — useful after an awkward computed Market Value
   caller never needs to guard the input itself.
 - **Wired into all three places Price is manually edited** — `EditModal.jsx`
   (Our price), `ScannerPanel.jsx`'s `ScanRow` (Price), and
-  `QuoteLineItemRow.jsx` (Price) — two small "Round down"/"Round up"
-  buttons under each Price input, disabled whenever there's no price yet to
+  `QuoteLineItemRow.jsx` (Price), disabled whenever there's no price yet to
   round. Same "no separate scanner-only vs. catalog-only field behavior"
   parity this app applies to every other field-level feature (see the
   per-game parity section above) — confirmed with the user as wanting all
   three, not just one.
+- **Two different layouts, by explicit request**: EditModal keeps labeled
+  "Round down"/"Round up" buttons stacked below the input (there's room in
+  its own dedicated field-group). ScannerPanel's `ScanRow` and
+  `QuoteLineItemRow` — both dense, single-line row layouts — instead use
+  `↓`/`↑` arrow buttons sitting directly to the right of the Price input
+  in the same flex row, real staff feedback after the first cut found the
+  labeled-button layout too tall for those two specific rows. Both arrow
+  buttons keep a real accessible name (`aria-label`/`title` "Round down"/
+  "Round up") despite the glyph-only visible label, so existing
+  `getByRole('button', { name: 'Round down' })`-style test queries needed
+  no changes when the layout changed.
 - Covered by `cardUtils.test.js` (the two functions directly, including the
   floating-point and blank/non-finite cases) and new cases in
   `EditModal.test.jsx`/`QuoteLineItemRow.test.jsx` (button click rounds the
