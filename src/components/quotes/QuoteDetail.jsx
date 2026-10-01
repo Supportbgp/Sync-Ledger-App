@@ -33,6 +33,10 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
   // one-way, repeatable-forever action that could stack the same add-on
   // total into the payout multiple times.
   const [addOnsApplied, setAddOnsApplied] = useState(0);
+  // Same toggle mechanic as addOnsApplied above, tracked independently so
+  // Add-ons and Bulk can each be applied to/removed from Payout amount on
+  // their own — staff may want to offer one but not the other individually.
+  const [bulkApplied, setBulkApplied] = useState(0);
 
   function toggleSection(key) {
     setOpenSections(s => ({ ...s, [key]: !s[key] }));
@@ -95,7 +99,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
     onClose();
   }
 
-  const { qty, total, addOnsTotal } = computeQuoteTotals(draft.items);
+  const { qty, total, addOnsTotal, bulkTotal } = computeQuoteTotals(draft.items);
   const realItemCount = draft.items.filter(i => !i.isAddOn).length;
   const tiers = computeOfferTiers(total, tierSettings);
   // Bulk items get pulled into their own section below (per explicit
@@ -204,7 +208,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           {openSections.bulk && (
           <div className="form-section">
             <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginBottom: '10px' }}>
-              For cards going straight into Bulk — no per-print fields to fill in, but these still count toward the tier offers below like any card.
+              For cards going straight into Bulk — a single flat price for the whole lot, excluded from the tier % offers below (same as a misc. item, see the Bulk amount in Total & offer below), with Qty as a record only. Still moves to Sorting on accept, to be placed into Bulk there.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
               {bulkItems.map(item => (
@@ -266,6 +270,29 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
                       onClick={() => {
                         set('payoutAmount', round2((draft.payoutAmount || 0) - addOnsApplied));
                         setAddOnsApplied(0);
+                      }}
+                    >Remove from payout</button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Bulk total</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${bulkTotal.toFixed(2)}</span>
+                  {bulkApplied === 0 ? (
+                    <button
+                      type="button" className="btn ghost small" disabled={bulkTotal === 0}
+                      onClick={() => {
+                        set('payoutAmount', round2((draft.payoutAmount || 0) + bulkTotal));
+                        setBulkApplied(bulkTotal);
+                      }}
+                    >Add to payout</button>
+                  ) : (
+                    <button
+                      type="button" className="btn ghost small"
+                      onClick={() => {
+                        set('payoutAmount', round2((draft.payoutAmount || 0) - bulkApplied));
+                        setBulkApplied(0);
                       }}
                     >Remove from payout</button>
                   )}

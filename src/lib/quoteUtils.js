@@ -47,20 +47,24 @@ export function normalizeQuoteItem(item) {
     // from computeQuoteTotals' tier-relevant total/qty (see below), and
     // dropped entirely by buildSortingItemsFromQuoteItems — it's a
     // pricing-only convenience, deliberately never becomes a real Sorting/
-    // Catalog row. `name`/`notes` (used here as "description")/`price`
-    // are the only fields this item type actually uses.
+    // Catalog row. `name`/`notes` (used here as "description")/`price`/
+    // `qty` (informational only — never multiplied into price, see
+    // computeQuoteTotals) are the only fields this item type actually uses.
     isAddOn: !!src.isAddOn,
     // A real card destined for Bulk (no per-print identity needed) —
-    // rendered via BulkLineItemRow (just Game/Qty/Price) in its own
-    // "Bulk items" section instead of the Cards list, but otherwise a
-    // completely normal item: it DOES count toward computeQuoteTotals'
-    // tier-relevant total/qty (unlike isAddOn) and DOES flow through
-    // buildSortingItemsFromQuoteItems to Sorting like any other card —
-    // staff still place it into Bulk there, one at a time, same as the
-    // Sorting tab's existing "Add to Bulk" option already does for any
-    // item regardless of origin. This flag only controls which lightweight
-    // form/section it's edited in at quote time; it carries no other
-    // meaning once the quote is saved.
+    // rendered via BulkLineItemRow in its own "Bulk items" section instead
+    // of the Cards list. Priced exactly like a misc. add-on (a single flat
+    // amount for the whole lot, e.g. "$5 for 20 bulk commons" — `qty` is
+    // informational only, never multiplied into price) and excluded from
+    // computeQuoteTotals' tier-relevant total/qty the same way — staff
+    // explicitly don't want a bulk lot's flat price shaved by a tier %.
+    // Unlike isAddOn, it DOES still flow through
+    // buildSortingItemsFromQuoteItems to Sorting on accept, since it's a
+    // real card destined for real inventory — staff place it into Bulk
+    // there, same as the Sorting tab's existing "Add to Bulk" option
+    // already does for any item regardless of origin (which is also why
+    // `game` is still a real field here, unlike a misc. add-on — Bulk
+    // placement is keyed on (location, game)).
     isBulk: !!src.isBulk,
   };
 }
@@ -79,26 +83,35 @@ export function round2(n) {
 // never blank. A blank price excludes that row from the total entirely,
 // same as the sheet leaving that row's own line-total cell blank.
 //
-// Flat add-on items (item.isAddOn — a binder, a playmat, a flat bulk-lot
-// offer) are deliberately excluded from `qty`/`total` — staff explicitly
-// don't want these scaled by the 50/60/70% tier math below, just added to
-// the final payout at face value. Their sum is still reported separately
-// as `addOnsTotal`, same blank-price-excludes-the-row rule.
+// Flat items — isAddOn (a binder, a playmat) and isBulk (a whole bulk lot,
+// e.g. "$5 for 20 commons") — are both deliberately excluded from `qty`/
+// `total` — staff explicitly don't want either scaled by the 50/60/70%
+// tier math below, just added to the final payout at face value if they
+// choose to. Each is summed separately (`addOnsTotal`/`bulkTotal`) as a
+// flat `price`, deliberately NOT multiplied by `qty` even though both item
+// types now carry a Qty field — qty there is informational record-keeping
+// ("this lot was 20 cards"), never a price multiplier, matching the
+// explicit ask that a flat price stays exactly the raw number typed in.
 export function computeQuoteTotals(items) {
   let qty = 0;
   let total = 0;
   let addOnsTotal = 0;
+  let bulkTotal = 0;
   for (const item of (items || [])) {
     const price = parseMoney(item.price);
-    const q = Number(item.qty) || 1;
     if (item.isAddOn) {
-      if (price != null) addOnsTotal += price * q;
+      if (price != null) addOnsTotal += price;
       continue;
     }
+    if (item.isBulk) {
+      if (price != null) bulkTotal += price;
+      continue;
+    }
+    const q = Number(item.qty) || 1;
     qty += q;
     if (price != null) total += price * q;
   }
-  return { qty, total: round2(total), addOnsTotal: round2(addOnsTotal) };
+  return { qty, total: round2(total), addOnsTotal: round2(addOnsTotal), bulkTotal: round2(bulkTotal) };
 }
 
 // The three offer amounts shown alongside the total, computed from whatever

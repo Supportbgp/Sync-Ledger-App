@@ -2,7 +2,7 @@
 // wants to offer a flat $5 for, or "$1 for 3 bulk V/ex" — deliberately
 // minimal next to QuoteLineItemRow's full card form: no Game/Set/Rarity/
 // Condition, no catalog typeahead, no live image/price search. Just
-// enough to record what it is and what it's worth.
+// enough to record what it is, how many, and what it's worth.
 //
 // Its price is excluded from the 50/60/70% tier math entirely (see
 // computeQuoteTotals's isAddOn branch in quoteUtils.js) and never becomes
@@ -11,9 +11,11 @@
 // inventory. It only reaches the final offer if staff explicitly click
 // "Add to payout" in the Total & offer section below.
 //
-// Reuses notes as "Description" — a field every quote item already has
-// but that QuoteLineItemRow never surfaces in its own UI, so there's no
-// conflict reusing it here.
+// Qty is informational record-keeping only ("this was 3 cards") — it is
+// NEVER multiplied into price, so typing a flat $5 always means a full $5,
+// not $5 × Qty. Reuses notes as "Description" — a field every quote item
+// already has but that QuoteLineItemRow never surfaces in its own UI, so
+// there's no conflict reusing it here.
 export default function AddOnLineItemRow({ item, onChange, onRemove }) {
   function patch(p) {
     onChange({ ...item, ...p });
@@ -23,6 +25,13 @@ export default function AddOnLineItemRow({ item, onChange, onRemove }) {
     <div className="scan-row">
       <div className="scan-row-fields">
         <div className="scan-row-line">
+          <div className="scan-field sf-qty">
+            <label className="scan-field-label">Qty</label>
+            <input
+              type="number" min="1" placeholder="Qty" value={item.qty}
+              onChange={(e) => patch({ qty: Number(e.target.value) || 1 })}
+            />
+          </div>
           <div className="scan-field sf-wide">
             <label className="scan-field-label">Item name</label>
             <input
@@ -49,7 +58,7 @@ export default function AddOnLineItemRow({ item, onChange, onRemove }) {
           </div>
         </div>
         <div style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>
-          Flat add-on — excluded from the tier % offers below; only affects Payout amount if you click "Add to payout."
+          Flat add-on — Qty is a record only (never multiplies the price). Excluded from the tier % offers below; only affects Payout amount if you click "Add to payout."
         </div>
       </div>
     </div>

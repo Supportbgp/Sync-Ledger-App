@@ -82,7 +82,7 @@ describe('computeQuoteTotals', () => {
   });
 
   it('returns zero for an empty item list', () => {
-    expect(computeQuoteTotals([])).toEqual({ qty: 0, total: 0, addOnsTotal: 0 });
+    expect(computeQuoteTotals([])).toEqual({ qty: 0, total: 0, addOnsTotal: 0, bulkTotal: 0 });
   });
 
   it('excludes add-on items from qty/total entirely, summing them into addOnsTotal instead', () => {
@@ -102,15 +102,41 @@ describe('computeQuoteTotals', () => {
     expect(computeQuoteTotals(items).addOnsTotal).toBe(0);
   });
 
-  it('counts isBulk items toward qty/total like a normal card — unlike isAddOn, they are not excluded', () => {
+  it('never multiplies an add-on\'s qty into addOnsTotal — qty is a record only', () => {
+    const items = [normalizeQuoteItem({ name: '3x Bulk V/ex', price: 5, qty: 3, isAddOn: true })];
+    expect(computeQuoteTotals(items).addOnsTotal).toBe(5);
+  });
+
+  it('excludes isBulk items from qty/total entirely, summing their flat price into bulkTotal instead', () => {
     const items = [
-      normalizeQuoteItem({ game: 'Pokemon', price: 0.10, qty: 50, isBulk: true }),
+      normalizeQuoteItem({ game: 'Pokemon', name: 'Pokemon surge bulk', price: 5, qty: 20, isBulk: true }),
       normalizeQuoteItem({ name: 'Charizard', price: 40, qty: 1 }),
     ];
-    const { qty, total, addOnsTotal } = computeQuoteTotals(items);
-    expect(qty).toBe(51);
-    expect(total).toBe(45);
+    const { qty, total, addOnsTotal, bulkTotal } = computeQuoteTotals(items);
+    expect(qty).toBe(1);
+    expect(total).toBe(40);
     expect(addOnsTotal).toBe(0);
+    expect(bulkTotal).toBe(5);
+  });
+
+  it('never multiplies a bulk lot\'s qty into bulkTotal — a $5 lot of 20 cards stays $5, not $100', () => {
+    const items = [normalizeQuoteItem({ game: 'Pokemon', price: 5, qty: 20, isBulk: true })];
+    expect(computeQuoteTotals(items).bulkTotal).toBe(5);
+  });
+
+  it('excludes a blank-price bulk lot from bulkTotal, same as a blank-price add-on is excluded from addOnsTotal', () => {
+    const items = [normalizeQuoteItem({ game: 'Pokemon', price: null, qty: 20, isBulk: true })];
+    expect(computeQuoteTotals(items).bulkTotal).toBe(0);
+  });
+
+  it('sums addOnsTotal and bulkTotal independently when both are present', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+      normalizeQuoteItem({ game: 'Pokemon', price: 8, qty: 20, isBulk: true }),
+    ];
+    const { addOnsTotal, bulkTotal } = computeQuoteTotals(items);
+    expect(addOnsTotal).toBe(5);
+    expect(bulkTotal).toBe(8);
   });
 });
 

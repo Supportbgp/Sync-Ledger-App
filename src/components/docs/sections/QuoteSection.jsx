@@ -50,21 +50,28 @@ export default function QuoteSection() {
           <strong>+ Add misc. item</strong> — for something that isn't a
           card at all: a playmat, a couple of binders you want to offer a
           flat amount for, or a flat "$1 for 3 bulk V/ex" bundle. Just a
-          Name, an optional Description, and a Price — no Game/Set/Rarity/
-          Condition fields, and no catalog search.
+          Qty, Name, an optional Description, and a Price — no Game/Set/
+          Rarity/Condition fields, and no catalog search. Qty here is a
+          record only ("this was 3 cards") — it's never multiplied into the
+          price, so a flat $5 always stays a full $5.
         </li>
       </ul>
       <p>
         A fifth option, <strong>+ Add card as Bulk</strong>, lives in its own{' '}
         <strong>Bulk items</strong> section below Cards — for real cards you
         already know are going straight into a Bulk pile, with no reason to
-        fill in Set/Rarity/Printing/Condition for them one at a time. Just
-        Game, Qty, and Price. Unlike a misc. item add-on, a Bulk item{' '}
-        <em>does</em> count toward the total quoted value and tier offers
-        below, and it still moves to Sorting like any other card once
-        accepted (see the note below) — this just skips the per-print
-        fields at quote time; you still choose Add to Bulk for it at
-        Sorting time.
+        fill in Set/Rarity/Printing/Condition for them one at a time. Fields
+        are Qty, Game, a free-text Lot name (e.g. "Pokemon surge bulk"), a
+        Description (e.g. "all Pikachus in different conditions"), and a
+        Price — a single flat amount for the whole lot, same as a misc.
+        item's price: Qty is a record of how many cards are in the lot, never
+        a multiplier (20 cards priced at $5 stays $5, not $100). Just like a
+        misc. item, a Bulk lot's price is <em>excluded</em> from the total
+        quoted value and tier offers below, and only reaches Payout amount if
+        you explicitly add it there (see the next section) — unlike a misc.
+        item, though, a Bulk-flagged card still moves to Sorting once
+        accepted (see the note below), since it's a real card headed to real
+        inventory; you choose Add to Bulk for it at Sorting time.
       </p>
       <DocsCallout kind="note">
         Each card row also has its own <strong>Find image</strong>/
@@ -114,7 +121,11 @@ export default function QuoteSection() {
         into Payout amount, on top of whatever you've already entered — the
         button then becomes <strong>Remove from payout</strong>, which
         subtracts exactly that same amount back out, so clicking it twice
-        can't stack the add-on total into the payout by accident.
+        can't stack the add-on total into the payout by accident. Any{' '}
+        <strong>+ Add card as Bulk</strong> rows get their own, independent{' '}
+        <strong>Bulk total</strong> stat right alongside it, with the same
+        Add to payout/Remove from payout toggle — the two totals are tracked
+        and applied separately, so you can offer one without the other.
       </p>
       <DocsCallout kind="warn">
         Saving a quote as Accepted (either Cash or Store Credit) moves every

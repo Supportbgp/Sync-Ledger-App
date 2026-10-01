@@ -3296,6 +3296,91 @@ shipped:
   round-trip, and a Bulk item counting toward the tier total while still
   reaching Sorting on accept).
 
+## Quote tab: Bulk reclassified as flat-priced and tier-excluded (reverses the above), Qty added to misc. items
+
+Real feedback, immediately after the above shipped: **"Bulk should be
+treated as a misc item, meaning we shouldn't apply % to it."** — the
+previous sprint's call that a Bulk item *should* count toward the 50/60/70%
+tier math (reasoning it was "real card value") was wrong in practice: staff
+want to add a whole stack of bulk cards (e.g. 20 commons) under one flat
+price ("$5 for the lot") and have that exact number be what's offered,
+the same way a misc. add-on's price already works — not a per-card price
+scaled up by quantity and then shaved down by a tier percentage.
+
+- **`computeQuoteTotals` (`quoteUtils.js`) now excludes `isBulk` items from
+  tier-relevant `qty`/`total` the same way it already excluded `isAddOn`
+  items**, summing them into a new, separate `bulkTotal` return field
+  instead (not merged into `addOnsTotal` — see below for why). This is a
+  straight reversal of the previous sprint's explicit "no change needed,
+  a Bulk item counts like a normal card" call, once real usage showed that
+  reasoning didn't hold — the `qty`/`total` branch's `continue` (already
+  used for `isAddOn`) is now shared by both flags.
+- **Qty is a new field on BOTH `AddOnLineItemRow` and `BulkLineItemRow`,
+  and on both it's deliberately a record only — never a price multiplier.**
+  A misc. add-on previously had no Qty field at all (always implicitly 1);
+  staff wanted to note "this was 3 cards" without the app silently turning
+  a flat $5 into $15. Bulk's own Qty (previously the real per-unit quantity
+  multiplied into its line total under the old, now-reversed per-card
+  model) keeps the same *field* but changes meaning entirely — it no
+  longer multiplies anything; `computeQuoteTotals` sums `price` alone for
+  both `isAddOn` and `isBulk` branches regardless of `qty`'s value. This
+  was deliberately checked against the standing "I wouldn't want the
+  machine to add $3 to the offer, just a full $5" principle from the
+  original misc.-item feature, so the new Qty field couldn't quietly
+  reintroduce the exact problem that principle was meant to prevent.
+- **`BulkLineItemRow.jsx` rewritten to mirror `AddOnLineItemRow.jsx`'s
+  field shape**: Qty → Game → **Lot name** (a free-text input, replacing
+  Bulk's old implicit "no name" — the per-example ask was a row reading
+  "20 cards, in 'Pokemon surge bulk', ... and price $$$") → **Description**
+  (reuses `notes`, same as a misc. item's own Description field) → Price
+  (now a flat lot total, not a per-card price). `Game` is the one field
+  kept from the old per-card shape rather than dropped to fully match
+  `AddOnLineItemRow` — `findBulkRow`/`buildBulkCatalogItem` (see "Sorting
+  stage + Bulk item type" above) key a Bulk catalog row on **(location,
+  game)**, so Game has to survive the trip through Sorting for the eventual
+  placement to even be possible; Name/Description, by contrast, describe
+  the lot at quote time only and carry no functional meaning past it (same
+  as `isBulk` itself, per the previous section).
+- **Bulk keeps its own, independent Add-to-payout/Remove-from-payout
+  toggle — a new `bulkApplied` state in `QuoteDetail.jsx`, parallel to but
+  separate from `addOnsApplied`**, not a shared pot with the misc. add-ons'
+  own total. Matches the explicit ask ("added only on demand and removable
+  if we want to offer it individually") — staff may want to apply one
+  total to Payout amount without the other, so a shared toggle would have
+  been the wrong shape even though the two mechanics are otherwise
+  identical. The "Bulk total" stat sits right next to "Add-ons total" in
+  the Total & offer section, same layout, same toggle button labels.
+- **`QuotePrintSheet`'s per-item "Line total" column** (`QuotePrintViews.jsx`)
+  now branches on `isAddOn`/`isBulk` — both render their flat `price`
+  verbatim instead of `price × qty`, since Qty is no longer a multiplier
+  for either type on the printed record either. A new "Bulk total" summary
+  row was added next to the existing "Add-ons total" one, same pattern.
+- **`sorting_queue`/`buildSortingItemsFromQuoteItems` needed no changes** —
+  a Bulk-flagged item still flows to Sorting on accept exactly as before;
+  only its *pricing* treatment reversed, not its inventory-routing
+  behavior. The stated reason for "treat as misc item" was specifically
+  about not applying tier percentages, not about whether the card itself
+  becomes real inventory — removing the Sorting trip entirely would have
+  made the whole "Add card as Bulk" feature pointless as a path to a real
+  Bulk catalog row.
+- Existing tests from the previous sprint were corrected rather than left
+  stale: `quoteUtils.test.js`'s "counts isBulk items toward qty/total like
+  a normal card" case was replaced with one asserting the opposite
+  (excluded from `qty`/`total`, summed flatly into `bulkTotal`), plus new
+  cases for Qty-never-multiplies on both `isAddOn`/`isBulk` and for
+  `bulkTotal`'s own blank-price exclusion; `e2e/quotes.spec.js`'s Bulk test
+  (renamed to "...are excluded from the tier total...") was rewritten to
+  assert Total quoted value stays unaffected by a Bulk lot and that Bulk's
+  own Add-to-payout/Remove-from-payout toggle round-trips independently of
+  the misc.-add-ons one. `QuoteSection.jsx` (staff docs) and this file's
+  own previous section were both corrected in place rather than left to
+  describe behavior that no longer exists, per this project's standing
+  "amend/supersede, don't silently rewrite" convention for a reversed
+  decision — see this section itself as that correction for the "Bulk
+  items... Sorting stage + Bulk item type" and "Remove from payout
+  toggle..." sections above, whose own Bulk-related claims about counting
+  toward the tier math are now out of date and superseded by this one.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
