@@ -3097,6 +3097,42 @@ without a physical phone every time.
   job (installs Chromium, `npm run test:e2e`), with the Playwright HTML
   report uploaded as an artifact on failure.
 
+## Quote line items: "Find price" now backfills Set/Number/Rarity, and Rarity/Printing dropdowns default correctly on a new row
+
+Real feedback: picking a result from "Find price" on a quote line item only
+filled in price and the Source link, not Set/Rarity/Number — staff assumed
+the app would need to "scan" TCGPlayer's page to get that data. It didn't
+need to: the candidates both "Find image" and "Find price" show already
+come from the same structured lookup (pokemontcg.io/Scryfall/YGOPRODeck/
+etc.) that supplies the thumbnail and `listingUrl` in the first place —
+nothing is ever read off TCGPlayer's actual page. Two separate, narrower
+bugs, not a missing feature:
+
+- **`QuoteLineItemRow.jsx`'s `selectCandidate` only backfilled Set/Number/
+  Rarity on an image-mode pick**, unlike `EditModal.jsx`'s own
+  `selectCandidate`, which backfills all three unconditionally regardless
+  of which button (Find image vs. Find market price) triggered the search.
+  A price-mode pick already had everything it needed (the candidate itself
+  carries `set`/`number`/`rarity` whenever the provider returns them) — it
+  just wasn't being applied. Fixed by hoisting that backfill above the
+  price/image branch, matching EditModal exactly. Covered by a new
+  `QuoteLineItemRow.test.jsx` (this component had no test file before),
+  mirroring `EditModal.test.jsx`'s own candidate-selection coverage.
+- **`SelectWithCustom.jsx` (shared by EditModal/ScannerPanel/
+  QuoteLineItemRow) only decided dropdown-vs-free-text once, at mount** —
+  a brand-new quote row starts with no Game picked yet, so Rarity/Printing
+  have zero options at that instant and open in free-text mode; there was
+  only ever logic for options *disappearing* (force free text), none for
+  options *appearing* for the first time once Game gets set. Fixed by
+  tracking the previous options length (`useRef`) and switching back to
+  the dropdown when options go from empty to non-empty and the current
+  value is still blank or already matches one of the new options — a
+  genuine custom value typed through the escape hatch is left alone
+  either way. This is a shared-component fix, not Quote-only: EditModal's
+  own Rarity/Printing fields on a brand-new item had the identical defect
+  and now default correctly too. Covered by two new cases in
+  `SelectWithCustom.test.jsx`.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

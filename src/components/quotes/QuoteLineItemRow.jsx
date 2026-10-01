@@ -115,8 +115,21 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
     // entry. Applies in both modes, same reasoning as EditModal: a
     // price-search pick still means staff have identified the exact print.
     const sourceUrlPatch = (c.listingUrl && !item.sourceUrl.trim()) ? { sourceUrl: c.listingUrl } : {};
+    // Once staff visually confirm a candidate, that print's own Set/Number/
+    // Rarity is more trustworthy than whatever's already in the fields —
+    // back-fill whichever of these the candidate actually carries,
+    // regardless of which button (Find image or Find price) triggered the
+    // search. Previously this only ran on an image-mode pick, silently
+    // skipping it for a price-mode pick even though the same search result
+    // already carries the same structured data — matches EditModal's own
+    // selectCandidate, which backfills unconditionally.
+    const backfillPatch = {
+      ...(c.set ? { set: c.set } : {}),
+      ...(c.number ? { number: c.number } : {}),
+      ...(c.rarity ? { rarity: c.rarity } : {}),
+    };
     if (candidateMode === 'price') {
-      const p = { basePrice: c.price ?? item.basePrice, ...sourceUrlPatch };
+      const p = { basePrice: c.price ?? item.basePrice, ...backfillPatch, ...sourceUrlPatch };
       if (item.price == null && p.basePrice != null) {
         const mv = marketValueForCondition(p.basePrice, item.condition, multipliers);
         if (mv != null) p.price = mv;
@@ -125,7 +138,7 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
     } else {
       patch({
         imageUrl: c.url, imageData: '', activeImage: 'stock',
-        set: c.set || item.set, number: c.number || item.number, rarity: c.rarity || item.rarity,
+        ...backfillPatch,
         ...sourceUrlPatch,
       });
     }
