@@ -46,6 +46,13 @@ export default function QuoteSection() {
           import used in <a href="#import-export">Import / Export</a>, minus
           the "Replace entire catalog" option (meaningless for a quote).
         </li>
+        <li>
+          <strong>+ Add misc. item</strong> — for something that isn't a
+          card at all: a playmat, a couple of binders you want to offer a
+          flat amount for, or a flat "$1 for 3 bulk V/ex" bundle. Just a
+          Name, an optional Description, and a Price — no Game/Set/Rarity/
+          Condition fields, and no catalog search.
+        </li>
       </ul>
       <DocsCallout kind="note">
         Each card row also has its own <strong>Find image</strong>/
@@ -85,12 +92,23 @@ export default function QuoteSection() {
         is made, and check <strong>Paid out</strong> once the payout is
         actually handed over.
       </p>
+      <p>
+        Any <strong>+ Add misc. item</strong> rows show their own{' '}
+        <strong>Add-ons total</strong> right next to the three tier amounts —
+        deliberately <em>excluded</em> from the total quoted value those
+        tiers are computed from, so a flat $5 you want to pay for two
+        binders stays a full $5, never shaved down to a tier percentage.
+        Click <strong>Add to payout</strong> to add that raw amount straight
+        into Payout amount, on top of whatever you've already entered.
+      </p>
       <DocsCallout kind="warn">
         Saving a quote as Accepted (either Cash or Store Credit) moves every
         card on it into the <a href="#sorting">Sorting</a> queue — it does{' '}
         <strong>not</strong> go straight into Catalog. Cards from the same
         quote can end up in different binders or as Bulk, so that decision
-        happens afterward, one card at a time.
+        happens afterward, one card at a time. Misc. item add-ons are the
+        one exception — they're pricing-only and never move to Sorting or
+        become a Catalog row at all.
       </DocsCallout>
 
       <h3>Release form info</h3>

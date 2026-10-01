@@ -72,6 +72,46 @@ test('create from scratch, add cards via the catalog typeahead and freeform, acc
   await expect(page.locator('.modal-head .name', { hasText: 'Quote #1' })).toBeVisible();
 });
 
+test('misc. add-on items are excluded from the tier total but can be added to the payout, and never reach Sorting', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Add-on test');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  await page.getByRole('button', { name: '+ Add card manually' }).click();
+  const rows = page.locator('.scan-row');
+  await page.getByPlaceholder('Card name').fill('Charizard');
+  await rows.first().locator('input[placeholder="Price"]').fill('40');
+
+  // A flat $5 add-on (e.g. two binders the shop wants to buy) — distinct
+  // from a card row: no Game/Set/Rarity, just Name/Description/Price.
+  await page.getByRole('button', { name: '+ Add misc. item' }).click();
+  const addOnRow = page.locator('.scan-row').last();
+  await addOnRow.getByPlaceholder('e.g. Binder, playmat, bulk V/ex lot').fill('Binder');
+  await addOnRow.getByPlaceholder('Price').fill('5');
+
+  // Total quoted value (what the 50/60/70% tiers are computed from) only
+  // reflects the $40 card — the add-on's $5 shows separately.
+  await expect(page.getByText('Total quoted value').locator('..')).toContainText('$40.00');
+  await expect(page.getByText('Add-ons total').locator('..')).toContainText('$5.00');
+
+  // "Add to payout" adds the add-on's raw $5 straight into Payout amount —
+  // not scaled by any tier percentage.
+  await page.getByRole('button', { name: 'Add to payout' }).click();
+  const payoutInput = page.locator('.field-group', { hasText: 'Payout amount' }).locator('input');
+  await expect(payoutInput).toHaveValue('5');
+
+  await page.locator('.field-group', { hasText: 'Offer status' }).locator('select').selectOption('accepted_cash');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.modal-head .name')).toHaveCount(0);
+
+  // The card moves to Sorting to be placed; the add-on never does — it was
+  // pricing-only, confirmed never to become real inventory.
+  await page.locator('.tab', { hasText: 'Sorting' }).click();
+  const sortingPanel = page.locator('.panel.active');
+  await expect(sortingPanel.getByText('Charizard')).toBeVisible();
+  await expect(sortingPanel.getByText('Binder', { exact: true })).toHaveCount(0);
+});
+
 test('quote detail sections collapse and expand independently', async ({ page }) => {
   await page.getByRole('button', { name: '+ New Quote' }).click();
   await page.getByPlaceholder('e.g. Jake binder proposal').fill('Collapsible sections test');

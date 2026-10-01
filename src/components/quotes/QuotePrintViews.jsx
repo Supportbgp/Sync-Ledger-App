@@ -13,7 +13,7 @@ const cell = { border: '1px solid #000', padding: '4px 6px', fontSize: '11px', t
 const th = { ...cell, background: '#eee', fontWeight: 700 };
 
 export function QuotePrintSheet({ quote, tierSettings }) {
-  const { qty, total } = computeQuoteTotals(quote.items);
+  const { qty, total, addOnsTotal } = computeQuoteTotals(quote.items);
   const tiers = computeOfferTiers(total, tierSettings);
   return (
     <div className="print-sheet" style={{ fontFamily: 'Arial, sans-serif', color: '#000', background: '#fff' }}>
@@ -60,6 +60,7 @@ export function QuotePrintSheet({ quote, tierSettings }) {
           <tr><td style={th}>{tierSettings.tier1}% offer</td><td style={cell}>${tiers.tier1.toFixed(2)}</td></tr>
           <tr><td style={th}>{tierSettings.tier2}% offer</td><td style={cell}>${tiers.tier2.toFixed(2)}</td></tr>
           <tr><td style={th}>{tierSettings.tier3}% offer</td><td style={cell}>${tiers.tier3.toFixed(2)}</td></tr>
+          <tr><td style={th}>Add-ons total</td><td style={cell}>${addOnsTotal.toFixed(2)}</td></tr>
         </tbody>
       </table>
 

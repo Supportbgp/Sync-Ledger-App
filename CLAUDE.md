@@ -3176,6 +3176,68 @@ nearest-dollar button — useful after an awkward computed Market Value
   existing gap rather than introducing new coverage infrastructure for one
   button.
 
+## Quote tab: "+ Add misc. item" flat add-ons, excluded from the tier math
+
+Real ask: a way to add something to a quote that isn't a card at all — a
+playmat, a couple of binders the shop wants to offer a flat $5 for, or a
+flat "$1 for 3 bulk V/ex" bundle — without it getting scaled down by the
+50/60/70% tier percentages the way a real card's price does. The user's
+own example: offering $5 for two binders should stay a full $5 in the
+final payout, not $3 (a 60% tier applied to it).
+
+- **A new `isAddOn` flag on a quote item** (`normalizeQuoteItem`, defaults
+  `false`) — deliberately not a new item *type*/table, just a flag on the
+  same `items` array every other quote item already lives in, so it needs
+  no new migration (`quotes.items` is schema-less jsonb). Rendered via a
+  new, much lighter **`AddOnLineItemRow.jsx`** instead of
+  `QuoteLineItemRow.jsx` — just **Name**, **Description**, and **Price**
+  (Description reuses the `notes` field every quote item already has but
+  that `QuoteLineItemRow` never itself surfaces, so there's no conflict
+  reusing it here) — no Game/Set/Rarity/Printing/Condition, no catalog
+  typeahead, no live image/price search. A new **"+ Add misc. item"**
+  button sits next to the three existing add-card buttons
+  (`QuoteDetail.jsx`'s Cards section) and appends one of these rows mixed
+  right into the same Cards list, visually distinct (no thumbnail, no
+  search buttons) but otherwise just another row.
+- **`computeQuoteTotals` (`quoteUtils.js`) now splits its sum in two** —
+  `qty`/`total` (unchanged math, tier-relevant) skip any `isAddOn` item
+  entirely; a new `addOnsTotal` return field sums just the add-on items'
+  raw prices, same blank-price-excludes-the-row rule as `total` already
+  had. `QuoteDetail.jsx`'s Total & offer section shows `addOnsTotal` as its
+  own stat right next to the three tier amounts, with an **"Add to
+  payout"** button (disabled when there's nothing to add) that does
+  `payoutAmount = round2((payoutAmount || 0) + addOnsTotal)` — a one-click
+  action, not a live-recomputed formula, matching this app's "never
+  silently overwrite a manual entry" discipline the tier buttons' own
+  "Use" already follows. `round2` is now exported from `quoteUtils.js`
+  specifically for this (adding two already-cent-rounded floats back
+  together can still reintroduce floating-point noise).
+- **Confirmed with the user: add-ons are pricing-only and never become
+  real inventory** — asked explicitly rather than assumed, since the
+  user's own examples (binders, bulk cards) are physical goods a shop
+  would often want tracked. `buildSortingItemsFromQuoteItems` now filters
+  out every `isAddOn` item before building `sorting_queue` rows, so
+  accepting a quote with add-ons only ever moves its *real* card items to
+  Sorting — the add-on's dollar amount already did its one job (padding
+  Payout amount, if staff clicked "Add to payout") and leaves no further
+  trace. `QuoteDetail.jsx`'s own "Saving will move N item(s) to Sorting"
+  status line was fixed to count real items only (it previously counted
+  `draft.items.length`, which would have overstated the number once
+  add-ons existed), with an extra sentence when the two counts differ.
+- `QuotePrintSheet` gained one new summary row, "Add-ons total" — reuses
+  `computeQuoteTotals` same as its existing rows, so the printed record
+  stays consistent with what's on screen (an add-on's price still appears
+  in the per-item table too, just excluded from "Total quoted value" like
+  on screen).
+- Covered by new tests in `quoteUtils.test.js` (isAddOn defaulting,
+  `computeQuoteTotals`'s split sums including the blank-price case,
+  `buildSortingItemsFromQuoteItems` dropping add-ons entirely), a new
+  `AddOnLineItemRow.test.jsx`, an added case in `QuotePrintViews.test.jsx`,
+  and a new `e2e/quotes.spec.js` test driving the full flow: add a card and
+  an add-on, confirm the tier total excludes the add-on, click "Add to
+  payout", accept, and confirm only the card (not the add-on) reaches
+  Sorting.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

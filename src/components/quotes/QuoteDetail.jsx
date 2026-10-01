@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, itemsFromCatalogRows } from '../../lib/quoteUtils.js';
+import { normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, itemsFromCatalogRows, round2 } from '../../lib/quoteUtils.js';
 import QuoteLineItemRow from './QuoteLineItemRow.jsx';
+import AddOnLineItemRow from './AddOnLineItemRow.jsx';
 import ScannerPanel from '../scanner/ScannerPanel.jsx';
 import ImportPanel from '../importexport/ImportPanel.jsx';
 import { QuotePrintSheet, ReleaseFormPrintSheet } from './QuotePrintViews.jsx';
@@ -53,6 +54,10 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
     setDraft(d => ({ ...d, items: [...d.items, normalizeQuoteItem({})] }));
   }
 
+  function addBlankAddOn() {
+    setDraft(d => ({ ...d, items: [...d.items, normalizeQuoteItem({ isAddOn: true })] }));
+  }
+
   function updateItem(id, nextItem) {
     setDraft(d => ({ ...d, items: d.items.map(it => (it.id === id ? nextItem : it)) }));
   }
@@ -79,7 +84,8 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
     onClose();
   }
 
-  const { qty, total } = computeQuoteTotals(draft.items);
+  const { qty, total, addOnsTotal } = computeQuoteTotals(draft.items);
+  const realItemCount = draft.items.filter(i => !i.isAddOn).length;
   const tiers = computeOfferTiers(total, tierSettings);
 
   return (
@@ -150,20 +156,30 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           <div className="form-section">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
               {draft.items.map(item => (
-                <QuoteLineItemRow
-                  key={item.id}
-                  item={item}
-                  catalog={catalog}
-                  multipliers={multipliers}
-                  onChange={(next) => updateItem(item.id, next)}
-                  onRemove={() => removeItem(item.id)}
-                />
+                item.isAddOn ? (
+                  <AddOnLineItemRow
+                    key={item.id}
+                    item={item}
+                    onChange={(next) => updateItem(item.id, next)}
+                    onRemove={() => removeItem(item.id)}
+                  />
+                ) : (
+                  <QuoteLineItemRow
+                    key={item.id}
+                    item={item}
+                    catalog={catalog}
+                    multipliers={multipliers}
+                    onChange={(next) => updateItem(item.id, next)}
+                    onRemove={() => removeItem(item.id)}
+                  />
+                )
               ))}
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button className="btn secondary small" onClick={addBlankItem}>+ Add card manually</button>
               <button className="btn secondary small" onClick={() => setAddMode('scan')}>+ Add cards by scanning</button>
               <button className="btn secondary small" onClick={() => setAddMode('import')}>+ Add cards by import</button>
+              <button className="btn secondary small" onClick={addBlankAddOn}>+ Add misc. item</button>
             </div>
           </div>
           )}
@@ -196,6 +212,16 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
                   </div>
                 </div>
               ))}
+              <div>
+                <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Add-ons total</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${addOnsTotal.toFixed(2)}</span>
+                  <button
+                    type="button" className="btn ghost small" disabled={addOnsTotal === 0}
+                    onClick={() => set('payoutAmount', round2((draft.payoutAmount || 0) + addOnsTotal))}
+                  >Add to payout</button>
+                </div>
+              </div>
             </div>
             <div className="field-row2">
               <div className="field-group">
@@ -218,7 +244,8 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
             </div>
             {(draft.offerStatus === 'accepted_cash' || draft.offerStatus === 'accepted_store_credit') && !draft.movedToSorting && (
               <div className="status-line ok" style={{ marginTop: '8px' }}>
-                Saving with this status will move {draft.items.length} item(s) to Sorting, to be placed individually.
+                Saving with this status will move {realItemCount} item(s) to Sorting, to be placed individually.
+                {draft.items.length !== realItemCount && ' Misc. add-on items are pricing-only and won\'t be moved.'}
               </div>
             )}
           </div>
