@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '../../context/UIContext.jsx';
-import { normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, itemsFromCatalogRows } from '../../lib/quoteUtils.js';
+import { normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, itemsFromCatalogRows, round2 } from '../../lib/quoteUtils.js';
 import QuoteLineItemRow from './QuoteLineItemRow.jsx';
+import AddOnLineItemRow from './AddOnLineItemRow.jsx';
+import BulkLineItemRow from './BulkLineItemRow.jsx';
 import ScannerPanel from '../scanner/ScannerPanel.jsx';
 import ImportPanel from '../importexport/ImportPanel.jsx';
 import { QuotePrintSheet, ReleaseFormPrintSheet } from './QuotePrintViews.jsx';
@@ -24,7 +26,17 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
   const [addMode, setAddMode] = useState(null); // null | 'scan' | 'import'
   const [saving, setSaving] = useState(false);
   const [printMode, setPrintMode] = useState(null); // null | 'quote' | 'release'
-  const [openSections, setOpenSections] = useState({ details: true, release: true, cards: true, total: true });
+  const [openSections, setOpenSections] = useState({ details: true, release: true, cards: true, bulk: true, total: true });
+  // Tracks the exact amount currently folded into Payout amount via "Add to
+  // payout" below (0 = not applied) — lets the button flip to "Remove from
+  // payout" and undo exactly what it added, instead of the click being a
+  // one-way, repeatable-forever action that could stack the same add-on
+  // total into the payout multiple times.
+  const [addOnsApplied, setAddOnsApplied] = useState(0);
+  // Same toggle mechanic as addOnsApplied above, tracked independently so
+  // Add-ons and Bulk can each be applied to/removed from Payout amount on
+  // their own — staff may want to offer one but not the other individually.
+  const [bulkApplied, setBulkApplied] = useState(0);
 
   function toggleSection(key) {
     setOpenSections(s => ({ ...s, [key]: !s[key] }));
@@ -53,6 +65,14 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
     setDraft(d => ({ ...d, items: [...d.items, normalizeQuoteItem({})] }));
   }
 
+  function addBlankAddOn() {
+    setDraft(d => ({ ...d, items: [...d.items, normalizeQuoteItem({ isAddOn: true })] }));
+  }
+
+  function addBlankBulk() {
+    setDraft(d => ({ ...d, items: [...d.items, normalizeQuoteItem({ isBulk: true })] }));
+  }
+
   function updateItem(id, nextItem) {
     setDraft(d => ({ ...d, items: d.items.map(it => (it.id === id ? nextItem : it)) }));
   }
@@ -79,8 +99,14 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
     onClose();
   }
 
-  const { qty, total } = computeQuoteTotals(draft.items);
+  const { qty, total, addOnsTotal, bulkTotal } = computeQuoteTotals(draft.items);
+  const realItemCount = draft.items.filter(i => !i.isAddOn).length;
   const tiers = computeOfferTiers(total, tierSettings);
+  // Bulk items get pulled into their own section below (per explicit
+  // request) — everything else (real cards and misc. add-ons alike) stays
+  // mixed in the Cards list, unchanged from before.
+  const nonBulkItems = draft.items.filter(i => !i.isBulk);
+  const bulkItems = draft.items.filter(i => i.isBulk);
 
   return (
     <>
@@ -145,26 +171,56 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
           </div>
           )}
 
-          <SectionHeader title={`Cards (${draft.items.length})`} open={openSections.cards} onToggle={() => toggleSection('cards')} />
+          <SectionHeader title={`Cards (${nonBulkItems.length})`} open={openSections.cards} onToggle={() => toggleSection('cards')} />
           {openSections.cards && (
           <div className="form-section">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
-              {draft.items.map(item => (
-                <QuoteLineItemRow
-                  key={item.id}
-                  item={item}
-                  catalog={catalog}
-                  multipliers={multipliers}
-                  onChange={(next) => updateItem(item.id, next)}
-                  onRemove={() => removeItem(item.id)}
-                />
+              {nonBulkItems.map(item => (
+                item.isAddOn ? (
+                  <AddOnLineItemRow
+                    key={item.id}
+                    item={item}
+                    onChange={(next) => updateItem(item.id, next)}
+                    onRemove={() => removeItem(item.id)}
+                  />
+                ) : (
+                  <QuoteLineItemRow
+                    key={item.id}
+                    item={item}
+                    catalog={catalog}
+                    multipliers={multipliers}
+                    onChange={(next) => updateItem(item.id, next)}
+                    onRemove={() => removeItem(item.id)}
+                  />
+                )
               ))}
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button className="btn secondary small" onClick={addBlankItem}>+ Add card manually</button>
               <button className="btn secondary small" onClick={() => setAddMode('scan')}>+ Add cards by scanning</button>
               <button className="btn secondary small" onClick={() => setAddMode('import')}>+ Add cards by import</button>
+              <button className="btn secondary small" onClick={addBlankAddOn}>+ Add misc. item</button>
             </div>
+          </div>
+          )}
+
+          <SectionHeader title={`Bulk items (${bulkItems.length})`} open={openSections.bulk} onToggle={() => toggleSection('bulk')} />
+          {openSections.bulk && (
+          <div className="form-section">
+            <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginBottom: '10px' }}>
+              For cards going straight into Bulk — a single flat price for the whole lot, excluded from the tier % offers below (same as a misc. item, see the Bulk amount in Total & offer below), with Qty as a record only. Still moves to Sorting on accept, to be placed into Bulk there.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+              {bulkItems.map(item => (
+                <BulkLineItemRow
+                  key={item.id}
+                  item={item}
+                  onChange={(next) => updateItem(item.id, next)}
+                  onRemove={() => removeItem(item.id)}
+                />
+              ))}
+            </div>
+            <button className="btn secondary small" onClick={addBlankBulk}>+ Add card as Bulk</button>
           </div>
           )}
 
@@ -196,6 +252,52 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
                   </div>
                 </div>
               ))}
+              <div>
+                <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Add-ons total</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${addOnsTotal.toFixed(2)}</span>
+                  {addOnsApplied === 0 ? (
+                    <button
+                      type="button" className="btn ghost small" disabled={addOnsTotal === 0}
+                      onClick={() => {
+                        set('payoutAmount', round2((draft.payoutAmount || 0) + addOnsTotal));
+                        setAddOnsApplied(addOnsTotal);
+                      }}
+                    >Add to payout</button>
+                  ) : (
+                    <button
+                      type="button" className="btn ghost small"
+                      onClick={() => {
+                        set('payoutAmount', round2((draft.payoutAmount || 0) - addOnsApplied));
+                        setAddOnsApplied(0);
+                      }}
+                    >Remove from payout</button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Bulk total</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${bulkTotal.toFixed(2)}</span>
+                  {bulkApplied === 0 ? (
+                    <button
+                      type="button" className="btn ghost small" disabled={bulkTotal === 0}
+                      onClick={() => {
+                        set('payoutAmount', round2((draft.payoutAmount || 0) + bulkTotal));
+                        setBulkApplied(bulkTotal);
+                      }}
+                    >Add to payout</button>
+                  ) : (
+                    <button
+                      type="button" className="btn ghost small"
+                      onClick={() => {
+                        set('payoutAmount', round2((draft.payoutAmount || 0) - bulkApplied));
+                        setBulkApplied(0);
+                      }}
+                    >Remove from payout</button>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="field-row2">
               <div className="field-group">
@@ -218,7 +320,8 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
             </div>
             {(draft.offerStatus === 'accepted_cash' || draft.offerStatus === 'accepted_store_credit') && !draft.movedToSorting && (
               <div className="status-line ok" style={{ marginTop: '8px' }}>
-                Saving with this status will move {draft.items.length} item(s) to Sorting, to be placed individually.
+                Saving with this status will move {realItemCount} item(s) to Sorting, to be placed individually.
+                {draft.items.length !== realItemCount && ' Misc. add-on items are pricing-only and won\'t be moved.'}
               </div>
             )}
           </div>

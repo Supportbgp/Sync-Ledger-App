@@ -42,28 +42,76 @@ export function normalizeQuoteItem(item) {
     // this needed a real migration (unlike every other field on this
     // object, which just lives in `quotes.items`' jsonb).
     sourceUrl: src.sourceUrl || '',
+    // A flat, non-card add-on (a binder, a playmat, "$1 for 3 bulk V/ex") —
+    // rendered via AddOnLineItemRow instead of the full card form, excluded
+    // from computeQuoteTotals' tier-relevant total/qty (see below), and
+    // dropped entirely by buildSortingItemsFromQuoteItems — it's a
+    // pricing-only convenience, deliberately never becomes a real Sorting/
+    // Catalog row. `name`/`notes` (used here as "description")/`price`/
+    // `qty` (informational only — never multiplied into price, see
+    // computeQuoteTotals) are the only fields this item type actually uses.
+    isAddOn: !!src.isAddOn,
+    // A real card destined for Bulk (no per-print identity needed) —
+    // rendered via BulkLineItemRow in its own "Bulk items" section instead
+    // of the Cards list. Priced exactly like a misc. add-on (a single flat
+    // amount for the whole lot, e.g. "$5 for 20 bulk commons" — `qty` is
+    // informational only, never multiplied into price) and excluded from
+    // computeQuoteTotals' tier-relevant total/qty the same way — staff
+    // explicitly don't want a bulk lot's flat price shaved by a tier %.
+    // Unlike isAddOn, it DOES still flow through
+    // buildSortingItemsFromQuoteItems to Sorting on accept, since it's a
+    // real card destined for real inventory — staff place it into Bulk
+    // there, same as the Sorting tab's existing "Add to Bulk" option
+    // already does for any item regardless of origin (which is also why
+    // `game` is still a real field here, unlike a misc. add-on — Bulk
+    // placement is keyed on (location, game)).
+    isBulk: !!src.isBulk,
   };
 }
 
-function round2(n) {
+// Exported for QuoteDetail's own "Add to payout" button (addOnsTotal and
+// an existing Payout amount are both already cent-rounded individually,
+// but adding two floats back together can still reintroduce the exact
+// floating-point noise this function exists to clean up elsewhere).
+export function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
-// Total quoted value across every line item — same rule as the sheet's own
-// line-total formula (price × qty, or just price with qty treated as 1),
-// just applied to already-normalized items where qty is never blank.
-// A blank price excludes that row from the total entirely, same as the
-// sheet leaving that row's own line-total cell blank.
+// Total quoted value across every real card line item — same rule as the
+// sheet's own line-total formula (price × qty, or just price with qty
+// treated as 1), just applied to already-normalized items where qty is
+// never blank. A blank price excludes that row from the total entirely,
+// same as the sheet leaving that row's own line-total cell blank.
+//
+// Flat items — isAddOn (a binder, a playmat) and isBulk (a whole bulk lot,
+// e.g. "$5 for 20 commons") — are both deliberately excluded from `qty`/
+// `total` — staff explicitly don't want either scaled by the 50/60/70%
+// tier math below, just added to the final payout at face value if they
+// choose to. Each is summed separately (`addOnsTotal`/`bulkTotal`) as a
+// flat `price`, deliberately NOT multiplied by `qty` even though both item
+// types now carry a Qty field — qty there is informational record-keeping
+// ("this lot was 20 cards"), never a price multiplier, matching the
+// explicit ask that a flat price stays exactly the raw number typed in.
 export function computeQuoteTotals(items) {
   let qty = 0;
   let total = 0;
+  let addOnsTotal = 0;
+  let bulkTotal = 0;
   for (const item of (items || [])) {
     const price = parseMoney(item.price);
+    if (item.isAddOn) {
+      if (price != null) addOnsTotal += price;
+      continue;
+    }
+    if (item.isBulk) {
+      if (price != null) bulkTotal += price;
+      continue;
+    }
     const q = Number(item.qty) || 1;
     qty += q;
     if (price != null) total += price * q;
   }
-  return { qty, total: round2(total) };
+  return { qty, total: round2(total), addOnsTotal: round2(addOnsTotal), bulkTotal: round2(bulkTotal) };
 }
 
 // The three offer amounts shown alongside the total, computed from whatever
@@ -153,15 +201,19 @@ export function buildCatalogItemsFromQuoteItems(items, destination) {
   }));
 }
 
-// Accept-time move: turns every line item of a newly-accepted quote into a
-// sorting_queue row instead of a Catalog row — accepting no longer asks
-// "where are these going" itself; that question moves entirely to the
-// Sorting tab, one card at a time (see CLAUDE.md's "Sorting stage"
+// Accept-time move: turns every real card line item of a newly-accepted
+// quote into a sorting_queue row instead of a Catalog row — accepting no
+// longer asks "where are these going" itself; that question moves entirely
+// to the Sorting tab, one card at a time (see CLAUDE.md's "Sorting stage"
 // section). quoteId/quoteCollectionName are snapshotted onto every row so
 // the Sorting tab can show which quote a pending item came from without a
 // join, and so the row still reads sensibly if the quote is later deleted.
+//
+// Flat add-on items (item.isAddOn) are filtered out entirely — confirmed
+// with the user as pricing-only, never real inventory, so a binder or a
+// flat bulk-lot offer never becomes a Sorting row to place.
 export function buildSortingItemsFromQuoteItems(items, quoteId, quoteCollectionName) {
-  return (items || []).map(item => ({
+  return (items || []).filter(item => !item.isAddOn).map(item => ({
     quoteId,
     quoteCollectionName: quoteCollectionName || '',
     name: item.name,

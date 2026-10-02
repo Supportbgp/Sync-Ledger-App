@@ -46,7 +46,33 @@ export default function QuoteSection() {
           import used in <a href="#import-export">Import / Export</a>, minus
           the "Replace entire catalog" option (meaningless for a quote).
         </li>
+        <li>
+          <strong>+ Add misc. item</strong> — for something that isn't a
+          card at all: a playmat, a couple of binders you want to offer a
+          flat amount for, or a flat "$1 for 3 bulk V/ex" bundle. Just a
+          Qty, Name, an optional Description, and a Price — no Game/Set/
+          Rarity/Condition fields, and no catalog search. Qty here is a
+          record only ("this was 3 cards") — it's never multiplied into the
+          price, so a flat $5 always stays a full $5.
+        </li>
       </ul>
+      <p>
+        A fifth option, <strong>+ Add card as Bulk</strong>, lives in its own{' '}
+        <strong>Bulk items</strong> section below Cards — for real cards you
+        already know are going straight into a Bulk pile, with no reason to
+        fill in Set/Rarity/Printing/Condition for them one at a time. Fields
+        are Qty, Game, a free-text Lot name (e.g. "Pokemon surge bulk"), a
+        Description (e.g. "all Pikachus in different conditions"), and a
+        Price — a single flat amount for the whole lot, same as a misc.
+        item's price: Qty is a record of how many cards are in the lot, never
+        a multiplier (20 cards priced at $5 stays $5, not $100). Just like a
+        misc. item, a Bulk lot's price is <em>excluded</em> from the total
+        quoted value and tier offers below, and only reaches Payout amount if
+        you explicitly add it there (see the next section) — unlike a misc.
+        item, though, a Bulk-flagged card still moves to Sorting once
+        accepted (see the note below), since it's a real card headed to real
+        inventory; you choose Add to Bulk for it at Sorting time.
+      </p>
       <DocsCallout kind="note">
         Each card row also has its own <strong>Find image</strong>/
         <strong>Find price</strong> buttons and manual TCGPlayer/eBay
@@ -85,12 +111,30 @@ export default function QuoteSection() {
         is made, and check <strong>Paid out</strong> once the payout is
         actually handed over.
       </p>
+      <p>
+        Any <strong>+ Add misc. item</strong> rows show their own{' '}
+        <strong>Add-ons total</strong> right next to the three tier amounts —
+        deliberately <em>excluded</em> from the total quoted value those
+        tiers are computed from, so a flat $5 you want to pay for two
+        binders stays a full $5, never shaved down to a tier percentage.
+        Click <strong>Add to payout</strong> to add that raw amount straight
+        into Payout amount, on top of whatever you've already entered — the
+        button then becomes <strong>Remove from payout</strong>, which
+        subtracts exactly that same amount back out, so clicking it twice
+        can't stack the add-on total into the payout by accident. Any{' '}
+        <strong>+ Add card as Bulk</strong> rows get their own, independent{' '}
+        <strong>Bulk total</strong> stat right alongside it, with the same
+        Add to payout/Remove from payout toggle — the two totals are tracked
+        and applied separately, so you can offer one without the other.
+      </p>
       <DocsCallout kind="warn">
         Saving a quote as Accepted (either Cash or Store Credit) moves every
         card on it into the <a href="#sorting">Sorting</a> queue — it does{' '}
         <strong>not</strong> go straight into Catalog. Cards from the same
         quote can end up in different binders or as Bulk, so that decision
-        happens afterward, one card at a time.
+        happens afterward, one card at a time. Misc. item add-ons are the
+        one exception — they're pricing-only and never move to Sorting or
+        become a Catalog row at all.
       </DocsCallout>
 
       <h3>Release form info</h3>
@@ -109,10 +153,11 @@ export default function QuoteSection() {
 
       <h3>Collapsible sections</h3>
       <p>
-        A quote's four sections — Quote details, Release form info, Cards,
-        Total &amp; offer — each collapse independently by clicking their
-        header, so you can jump straight to, say, Total &amp; offer on a
-        long card-heavy quote without scrolling past everything else.
+        A quote's five sections — Quote details, Release form info, Cards,
+        Bulk items, Total &amp; offer — each collapse independently by
+        clicking their header, so you can jump straight to, say, Total &amp;
+        offer on a long card-heavy quote without scrolling past everything
+        else.
       </p>
 
       <h3>Finding a quote later</h3>

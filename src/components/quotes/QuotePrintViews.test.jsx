@@ -29,6 +29,37 @@ describe('QuotePrintSheet', () => {
     expect(screen.getByText('$25.00')).toBeInTheDocument(); // 50% tier
   });
 
+  it('shows an add-on item\'s price in the Add-ons total row, excluded from Total quoted value', () => {
+    render(<QuotePrintSheet quote={baseQuote({
+      items: [
+        { id: 'i1', name: 'Charizard', game: 'Pokemon', set: 'Base Set', rarity: 'Rare Holo', condition: 'Near Mint', qty: 1, price: 40 },
+        { id: 'i2', name: 'Binder', game: '', set: '', rarity: '', condition: '', qty: 1, price: 5, isAddOn: true },
+      ],
+    })} tierSettings={{ tier1: 50, tier2: 60, tier3: 70 }} />);
+    expect(screen.getByText('Binder')).toBeInTheDocument();
+    // Total quoted value excludes the add-on (just the $40 card); the
+    // add-on's own $5 shows separately in the Add-ons total row.
+    expect(screen.getByText('Total quoted value').closest('tr')).toHaveTextContent('$40.00');
+    expect(screen.getByText('Add-ons total').closest('tr')).toHaveTextContent('$5.00');
+  });
+
+  it('shows a bulk lot\'s flat price in the Bulk total row, excluded from Total quoted value, and not multiplied by qty in Line total', () => {
+    render(<QuotePrintSheet quote={baseQuote({
+      items: [
+        { id: 'i1', name: 'Charizard', game: 'Pokemon', set: 'Base Set', rarity: 'Rare Holo', condition: 'Near Mint', qty: 1, price: 40 },
+        { id: 'i2', name: 'Pokemon surge bulk', game: 'Pokemon', set: '', rarity: '', condition: '', qty: 20, price: 5, isBulk: true },
+      ],
+    })} tierSettings={{ tier1: 50, tier2: 60, tier3: 70 }} />);
+    expect(screen.getByText('Pokemon surge bulk')).toBeInTheDocument();
+    // Total quoted value excludes the bulk lot (just the $40 card); the
+    // lot's own flat $5 shows separately in the Bulk total row, not $100
+    // (5 × 20) in either place.
+    expect(screen.getByText('Total quoted value').closest('tr')).toHaveTextContent('$40.00');
+    expect(screen.getByText('Bulk total').closest('tr')).toHaveTextContent('$5.00');
+    expect(screen.getByText('Pokemon surge bulk').closest('tr')).toHaveTextContent('$5.00');
+    expect(screen.getByText('Pokemon surge bulk').closest('tr')).not.toHaveTextContent('$100.00');
+  });
+
   it('omits the quote number for a not-yet-saved draft', () => {
     render(<QuotePrintSheet quote={baseQuote({ id: null, quoteNumber: null })} tierSettings={{ tier1: 50, tier2: 60, tier3: 70 }} />);
     expect(screen.queryByText(/Quote #/)).not.toBeInTheDocument();

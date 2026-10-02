@@ -43,6 +43,16 @@ describe('normalizeQuoteItem', () => {
     expect(normalizeQuoteItem({ name: 'X' }).sourceUrl).toBe('');
     expect(normalizeQuoteItem({ name: 'X', sourceUrl: 'https://tcg/real-listing' }).sourceUrl).toBe('https://tcg/real-listing');
   });
+
+  it('defaults isAddOn to false, but preserves an explicit true', () => {
+    expect(normalizeQuoteItem({ name: 'X' }).isAddOn).toBe(false);
+    expect(normalizeQuoteItem({ name: 'Binder', isAddOn: true }).isAddOn).toBe(true);
+  });
+
+  it('defaults isBulk to false, but preserves an explicit true', () => {
+    expect(normalizeQuoteItem({ name: 'X' }).isBulk).toBe(false);
+    expect(normalizeQuoteItem({ game: 'Pokemon', isBulk: true }).isBulk).toBe(true);
+  });
 });
 
 describe('computeQuoteTotals', () => {
@@ -72,7 +82,61 @@ describe('computeQuoteTotals', () => {
   });
 
   it('returns zero for an empty item list', () => {
-    expect(computeQuoteTotals([])).toEqual({ qty: 0, total: 0 });
+    expect(computeQuoteTotals([])).toEqual({ qty: 0, total: 0, addOnsTotal: 0, bulkTotal: 0 });
+  });
+
+  it('excludes add-on items from qty/total entirely, summing them into addOnsTotal instead', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Charizard', price: 40, qty: 1 }),
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+      normalizeQuoteItem({ name: '3x Bulk V/ex', price: 1, isAddOn: true }),
+    ];
+    const { qty, total, addOnsTotal } = computeQuoteTotals(items);
+    expect(qty).toBe(1);
+    expect(total).toBe(40);
+    expect(addOnsTotal).toBe(6);
+  });
+
+  it('excludes a blank-price add-on from addOnsTotal, same as a blank-price card is excluded from total', () => {
+    const items = [normalizeQuoteItem({ name: 'Binder', price: null, isAddOn: true })];
+    expect(computeQuoteTotals(items).addOnsTotal).toBe(0);
+  });
+
+  it('never multiplies an add-on\'s qty into addOnsTotal — qty is a record only', () => {
+    const items = [normalizeQuoteItem({ name: '3x Bulk V/ex', price: 5, qty: 3, isAddOn: true })];
+    expect(computeQuoteTotals(items).addOnsTotal).toBe(5);
+  });
+
+  it('excludes isBulk items from qty/total entirely, summing their flat price into bulkTotal instead', () => {
+    const items = [
+      normalizeQuoteItem({ game: 'Pokemon', name: 'Pokemon surge bulk', price: 5, qty: 20, isBulk: true }),
+      normalizeQuoteItem({ name: 'Charizard', price: 40, qty: 1 }),
+    ];
+    const { qty, total, addOnsTotal, bulkTotal } = computeQuoteTotals(items);
+    expect(qty).toBe(1);
+    expect(total).toBe(40);
+    expect(addOnsTotal).toBe(0);
+    expect(bulkTotal).toBe(5);
+  });
+
+  it('never multiplies a bulk lot\'s qty into bulkTotal — a $5 lot of 20 cards stays $5, not $100', () => {
+    const items = [normalizeQuoteItem({ game: 'Pokemon', price: 5, qty: 20, isBulk: true })];
+    expect(computeQuoteTotals(items).bulkTotal).toBe(5);
+  });
+
+  it('excludes a blank-price bulk lot from bulkTotal, same as a blank-price add-on is excluded from addOnsTotal', () => {
+    const items = [normalizeQuoteItem({ game: 'Pokemon', price: null, qty: 20, isBulk: true })];
+    expect(computeQuoteTotals(items).bulkTotal).toBe(0);
+  });
+
+  it('sums addOnsTotal and bulkTotal independently when both are present', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+      normalizeQuoteItem({ game: 'Pokemon', price: 8, qty: 20, isBulk: true }),
+    ];
+    const { addOnsTotal, bulkTotal } = computeQuoteTotals(items);
+    expect(addOnsTotal).toBe(5);
+    expect(bulkTotal).toBe(8);
   });
 });
 
@@ -233,6 +297,27 @@ describe('buildSortingItemsFromQuoteItems', () => {
 
   it('handles an empty item list', () => {
     expect(buildSortingItemsFromQuoteItems([], 'q1', 'Test')).toEqual([]);
+  });
+
+  it('drops add-on items entirely — they are pricing-only and never become real inventory', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Charizard', price: 40 }),
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+    ];
+    const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Charizard');
+  });
+
+  it('keeps isBulk items — unlike add-ons, they flow to Sorting like any real card', () => {
+    const items = [
+      normalizeQuoteItem({ game: 'Pokemon', price: 0.10, qty: 50, isBulk: true }),
+      normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true }),
+    ];
+    const rows = buildSortingItemsFromQuoteItems(items, 'q1', 'Test');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].game).toBe('Pokemon');
+    expect(rows[0].qty).toBe(50);
   });
 
   it('defaults quoteCollectionName to an empty string when not given', () => {
