@@ -6,7 +6,7 @@ export default function QuoteSection() {
     <DocsSection id="quote" title="Quote">
       <p>
         The Quote tab is for <strong>buying cards</strong> — the reverse of
-        everything else in Ledger. Catalog, Scanner, and Import are about
+        everything else in Card Cove. Catalog, Scanner, and Import are about
         the shop's own stock going <em>out</em>; Quote is about cards
         coming <em>in</em>, from a customer who wants to sell or trade them
         to the shop.
@@ -73,6 +73,14 @@ export default function QuoteSection() {
         accepted (see the note below), since it's a real card headed to real
         inventory; you choose Add to Bulk for it at Sorting time.
       </p>
+      <p>
+        Both a misc. item and a Bulk lot have an optional <strong>Apply a
+        %?</strong> checkbox — type a value's full worth, check the box, type
+        a percentage (60, 70, 100, anything), and that row's own total
+        becomes that percentage of what you typed, instead of you
+        pre-calculating "60% of $5" by hand. Leave it unchecked and the row
+        behaves exactly as before: the full entered amount.
+      </p>
       <DocsCallout kind="note">
         Each card row also has its own <strong>Find image</strong>/
         <strong>Find price</strong> buttons and manual TCGPlayer/eBay
@@ -93,7 +101,7 @@ export default function QuoteSection() {
 
       <h3>Condition is never pre-filled</h3>
       <p>
-        Unlike every other Condition field in Ledger, a quote line item's
+        Unlike every other Condition field in Card Cove, a quote line item's
         Condition always starts blank — it's a real, on-the-spot physical
         assessment of a card you're about to pay for, not something to
         default and possibly forget to actually check.
@@ -110,6 +118,16 @@ export default function QuoteSection() {
         Credit</strong>, or <strong>Rejected Offer</strong> once a decision
         is made, and check <strong>Paid out</strong> once the payout is
         actually handed over.
+      </p>
+      <p>
+        A specific card can also pay out at a different rate than the rest
+        of the collection — check <strong>Alter %?</strong> on that card's
+        own row and type a signed <strong>+/-X%</strong> (e.g. +10 or -20).
+        This is relative to whichever tier you end up using, not a fixed
+        number — +10 on a 60% tier pays that one card at 70%, -20 pays it
+        at 40% — so the three tier amounts above already reflect it no
+        matter which one you pick, useful for a card with a different
+        condition, rarity, or ease of resale than the rest of the quote.
       </p>
       <p>
         Any <strong>+ Add misc. item</strong> rows show their own{' '}

@@ -60,7 +60,7 @@ export default function CatalogSection() {
       <DocsCallout kind="warn">
         Editing an item's price, quantity, condition, or sold status resets
         all of its chips back to unchecked automatically. That's expected —
-        Ledger assumes any of those changes means whatever's listed
+        Card Cove assumes any of those changes means whatever's listed
         elsewhere is now out of date and needs re-checking, not a bug in the
         chip itself.
       </DocsCallout>

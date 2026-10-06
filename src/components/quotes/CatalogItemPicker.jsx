@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 // A lightweight, client-side-only typeahead over the shop's own already-
 // loaded catalog — deliberately NOT a live external card search (Scryfall/
 // pokemontcg.io/etc., see CLAUDE.md's Quote tab section): matching by name
-// against data Ledger already has, backfilling a line item's game/set/
+// against data Card Cove already has, backfilling a line item's game/set/
 // number/rarity/printing/basePrice from whichever catalog entry staff
 // pick. Typing a name that matches nothing is just as valid — the row is
 // added with only what was typed and the rest filled in by hand, same

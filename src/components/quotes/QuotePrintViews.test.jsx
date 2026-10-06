@@ -60,6 +60,31 @@ describe('QuotePrintSheet', () => {
     expect(screen.getByText('Pokemon surge bulk').closest('tr')).not.toHaveTextContent('$100.00');
   });
 
+  it('shows an altered card\'s delta next to its price, and folds it into the tier amounts', () => {
+    render(<QuotePrintSheet quote={baseQuote({
+      items: [
+        { id: 'i1', name: 'Charizard', game: 'Pokemon', set: 'Base Set', rarity: 'Rare Holo', condition: 'Near Mint', qty: 1, price: 100 },
+        { id: 'i2', name: 'Heavily Played Lugia', game: 'Pokemon', set: '', rarity: '', condition: '', qty: 1, price: 100, pctAltered: true, pctDelta: -20 },
+      ],
+    })} tierSettings={{ tier1: 50, tier2: 60, tier3: 70 }} />);
+    expect(screen.getByText('Heavily Played Lugia')).toBeInTheDocument();
+    expect(screen.getByText('Heavily Played Lugia').closest('tr')).toHaveTextContent('(-20%)');
+    // tier1 = 100×50% (unaltered) + 100×30% (50-20, altered) = 50 + 30 = 80.
+    expect(screen.getByText('50% offer').closest('tr')).toHaveTextContent('$80.00');
+  });
+
+  it('shows a flat add-on\'s opted-in percentage in its Line total and the Add-ons total row', () => {
+    render(<QuotePrintSheet quote={baseQuote({
+      items: [
+        { id: 'i1', name: '5 bulk commons', game: '', set: '', rarity: '', condition: '', qty: 5, price: 10, isAddOn: true, pctEnabled: true, pctValue: 60 },
+      ],
+    })} tierSettings={{ tier1: 50, tier2: 60, tier3: 70 }} />);
+    // Price column shows the raw $10.00 entered; Line total shows the
+    // computed 60% ($6.00), not $10 × qty 5 ($50) or raw $10.
+    expect(screen.getByText('5 bulk commons').closest('tr')).toHaveTextContent('$6.00');
+    expect(screen.getByText('Add-ons total').closest('tr')).toHaveTextContent('$6.00');
+  });
+
   it('omits the quote number for a not-yet-saved draft', () => {
     render(<QuotePrintSheet quote={baseQuote({ id: null, quoteNumber: null })} tierSettings={{ tier1: 50, tier2: 60, tier3: 70 }} />);
     expect(screen.queryByText(/Quote #/)).not.toBeInTheDocument();

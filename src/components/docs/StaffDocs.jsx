@@ -77,7 +77,7 @@ export default function StaffDocs() {
       <div className="topbar">
         <div className="brand">
           <img src={logoIcon} alt="" className="brand-logo" />
-          <span className="mark">Ledger</span>
+          <span className="mark">Card Cove</span>
           <span className="sub">Staff documentation</span>
         </div>
       </div>
@@ -105,7 +105,7 @@ export default function StaffDocs() {
       </div>
 
       <div className="footnote">
-        Ledger — Board Game Paradise · this page needs no login and can be bookmarked or printed.
+        Card Cove by Board Game Paradise · this page needs no login and can be bookmarked or printed.
       </div>
     </div>
   );

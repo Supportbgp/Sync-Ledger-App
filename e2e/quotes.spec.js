@@ -176,6 +176,52 @@ test('Bulk items live in their own section, are excluded from the tier total, an
   await expect(sortingPanel.getByText('Pokemon surge bulk')).toBeVisible();
 });
 
+test('a Bulk lot can opt into a payout percentage instead of its full entered value', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Bulk % test');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  await page.getByRole('button', { name: '+ Add card as Bulk' }).click();
+  const bulkRow = page.locator('.scan-row');
+  await bulkRow.locator('input[placeholder="Qty"]').fill('20');
+  await bulkRow.locator('select').selectOption('Pokemon');
+  await bulkRow.locator('input[placeholder="Price"]').fill('5');
+
+  // Before opting in, the full entered $5 counts toward Bulk total.
+  await expect(page.getByText('Bulk total').locator('..')).toContainText('$5.00');
+
+  // Checking "Apply a %?" and picking 60% drops it to $3.00 — not $5 (no
+  // percentage) or $100 (qty wrongly used as a multiplier).
+  await bulkRow.getByLabel('Apply a %?').check();
+  await bulkRow.locator('input[placeholder="e.g. 60"]').fill('60');
+  await expect(page.getByText('Bulk total').locator('..')).toContainText('$3.00');
+});
+
+test('a card\'s Alter % shifts its own contribution relative to whichever tier is shown, for every tier', async ({ page }) => {
+  await page.getByRole('button', { name: '+ New Quote' }).click();
+  await page.getByPlaceholder('e.g. Jake binder proposal').fill('Alter % test');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  await page.getByRole('button', { name: '+ Add card manually' }).click();
+  const rows = page.locator('.scan-row');
+  const nameInputs = page.getByPlaceholder('Card name');
+  await nameInputs.first().fill('Charizard');
+  await rows.first().locator('input[placeholder="Price"]').fill('100');
+
+  await page.getByRole('button', { name: '+ Add card manually' }).click();
+  await nameInputs.last().fill('Heavily Played Lugia');
+  await rows.last().locator('input[placeholder="Price"]').fill('100');
+
+  // Pay this specific card 20 points less than whichever tier ends up used
+  // — e.g. a worse condition than the rest of the collection.
+  await rows.last().getByLabel('Alter %?').check();
+  await rows.last().locator('input[placeholder="e.g. +10 or -20"]').fill('-20');
+
+  // 60% tier: unaltered Charizard pays 100×60%=$60; altered Lugia pays
+  // 100×(60-20)%=$40. Total $100 — not $120 if the delta were ignored.
+  await expect(page.getByText('60% offer').locator('..')).toContainText('$100.00');
+});
+
 test('quote detail sections collapse and expand independently', async ({ page }) => {
   await page.getByRole('button', { name: '+ New Quote' }).click();
   await page.getByPlaceholder('e.g. Jake binder proposal').fill('Collapsible sections test');

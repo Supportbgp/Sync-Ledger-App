@@ -40,7 +40,7 @@ export default function GlossarySection() {
         <dt>Market Value vs. Our Price</dt>
         <dd>
           <strong>Our Price</strong> is what you're actually charging — you
-          always set it by hand, Ledger never changes it on its own.{' '}
+          always set it by hand, Card Cove never changes it on its own.{' '}
           <strong>Market Value</strong> is a computed estimate:
           this card's Near Mint reference price × the condition percentage
           from <a href="#pricing-settings">Pricing settings</a>. It's a

@@ -1,4 +1,4 @@
-# Ledger — Board Game Paradise Inventory App
+# Card Cove — Board Game Paradise Inventory App
 
 Internal inventory/catalog tool for a TCG/collectibles shop (singles + graded
 slabs). No traditional backend — a React SPA talking directly to Supabase.
@@ -22,6 +22,18 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 
 ## Branding
 
+- **App renamed from "Ledger" to "Card Cove"** (user-facing text only — the
+  GitHub repo/Pages URL stays `Sync-Ledger-App` for now, a separate,
+  bigger decision not yet made). "Card Cove" is the name everywhere it's
+  shown on its own (topbar, login screen, staff docs header, export
+  labels); "by Board Game Paradise" is appended only in footer-type spots
+  (`App.jsx`'s bottom footnote, `BinderView.jsx`'s public footnote,
+  `StaffDocs.jsx`'s footnote) — not in the topbar/login, per explicit
+  instruction to keep the main name just "Card Cove" everywhere else.
+  Every section below this point that still says "Ledger" in its own
+  prose is historical — written back when that was the app's name — and
+  was deliberately left as-is rather than rewritten, same as this file's
+  standing practice of not silently rewriting past decisions.
 - **Logo assets**: `src/assets/logo-icon.png` (square, transparent, used
   inline via `<img>` in `App.jsx`'s topbar, `Login.jsx`, and
   `BinderView.jsx`'s public topbar) plus `public/favicon.ico`,
@@ -3380,6 +3392,77 @@ scaled up by quantity and then shaved down by a tier percentage.
   items... Sorting stage + Bulk item type" and "Remove from payout
   toggle..." sections above, whose own Bulk-related claims about counting
   toward the tier math are now out of date and superseded by this one.
+
+## Quote tab: per-item payout percentages — Bulk/Misc "Apply a %?", card-level "Alter %?"
+
+Real staff ask (Discord): "I may calculate the worth of several $1-$5 cards
+that I'd pay out 60% of and I don't want to break out a calculator and
+remember the pricing for each one" — plus, separately, "there may even be
+cards that I would want at a different percentage due to condition,
+rarity, ease of sale, etc." Two distinct mechanisms, both about skipping
+manual percentage math:
+
+- **Bulk/Misc items get their own opt-in payout percentage**
+  (`pctEnabled`/`pctValue` on a quote item, `flatItemAmount(item)` in
+  `quoteUtils.js`) — check "Apply a %?" on an `AddOnLineItemRow`/
+  `BulkLineItemRow`, type a percentage, and the item's own flat value is
+  multiplied by it for `addOnsTotal`/`bulkTotal` purposes (and the printed
+  record). Deliberately a free-form number, not locked to the three
+  configured tiers — "60%, 70%, 100%, etc." was explicit in the ask, so a
+  dropdown of just the three tiers would have been wrong. Unchecked (the
+  default) behaves exactly as before this feature — the raw entered value,
+  untouched. `flatItemAmount` is exported specifically so the row
+  component, `computeQuoteTotals`, and `QuotePrintSheet` all compute the
+  same number rather than three slightly-different copies of this math.
+- **A specific Cards-list item can deviate from the quote's own tier rate**
+  (`pctAltered`/`pctDelta` on a quote item) — "Alter %?" on
+  `QuoteLineItemRow` reveals a signed `+/-X%` input. This is a DELTA in
+  percentage points relative to whichever tier ends up used, not an
+  absolute override (+10 on a 60% tier pays that one card at 70%, -20 pays
+  it at 40%) — matches how the old manual workaround was described
+  ("change the asking price by the percent off/on I wanted"), and is a
+  different shape from the Bulk/Misc mechanism above on purpose: Bulk/Misc
+  items have no "blanket tier" to be relative to (they're excluded from
+  the tier math entirely, per the section above), so their own percentage
+  has to be an absolute multiplier instead.
+  - **This required changing `computeOfferTiers`'s signature** from
+    `(total, tierSettings)` to `(items, tierSettings)` — the three tier
+    amounts used to be a single `total × pct` multiplication, which has no
+    way to let one card deviate from the blanket rate. It now walks every
+    non-flat item and sums `price × qty × (tierPct + delta)/100` per tier
+    (clamped to a 0-100% effective rate so a large negative delta can't go
+    negative), computed for all three tiers at once — not just whichever
+    one staff eventually click "Use" on — so every number shown is already
+    correct regardless of which tier gets picked. Confirmed with the user
+    before building this specific shape (all three tiers recomputed live,
+    rather than adding a separate "which tier is this quote's base rate"
+    setting) since it changes core offer math, not just adds a new field
+    on the side like most other additions in this doc.
+  - Both call sites (`QuoteDetail.jsx`'s live tier display,
+    `QuotePrintViews.jsx`'s printed record) were updated to pass `items`
+    instead of a pre-computed `total`; `QuotePrintSheet`'s Price column
+    also appends `(+10%)`/`(-20%)` next to an altered card's price so the
+    printed record shows why that row's own math looks different.
+- Covered by new tests in `quoteUtils.test.js` (`flatItemAmount` directly;
+  `computeQuoteTotals` applying an add-on/bulk item's own percentage;
+  `computeOfferTiers`'s new item-based signature, including the clamp and
+  the isAddOn/isBulk-skip behavior), new cases in
+  `AddOnLineItemRow.test.jsx`/`BulkLineItemRow.test.jsx`/
+  `QuoteLineItemRow.test.jsx` for the two new checkbox+input controls, a
+  new case in `QuotePrintViews.test.jsx` for the delta annotation and the
+  Bulk/Misc percentage reflected in Line total, and two new
+  `e2e/quotes.spec.js` tests (a Bulk lot's opted-in percentage changing
+  its contribution to Bulk total; a card's Alter % changing its
+  contribution to a live tier amount).
+
+## App renamed: Ledger → Card Cove
+
+Per explicit instruction: the app's own brand name changes from "Ledger"
+to **Card Cove**, with **"by Board Game Paradise"** appended only in
+footer-type spots, not wherever the name appears on its own (topbar, login
+screen, staff docs header, export format labels). See this file's own
+Branding section above for the specifics of what changed and what was
+deliberately left alone (historical prose, the repo/Pages URL).
 
 ## Workflow conventions
 

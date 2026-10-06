@@ -359,7 +359,7 @@ export default function App() {
       <div className="topbar">
         <div className="brand">
           <img src={logoIcon} alt="" className="brand-logo" />
-          <span className="mark">Ledger</span>
+          <span className="mark">Card Cove</span>
           <span className="sub brand-tagline">singles &amp; slabs · source of truth</span>
         </div>
         <div className={`pending-badge${pendingCount === 0 ? ' zero' : ''}`}>
@@ -424,7 +424,7 @@ export default function App() {
       </div>
 
       <div className="footnote">
-        Shared store data, live in Supabase · not connected to POS, TCG Player, or Collectr APIs ·{' '}
+        Card Cove by Board Game Paradise · shared store data, live in Supabase · not connected to POS, TCG Player, or Collectr APIs ·{' '}
         <a href="?help=1" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--ink-faint)' }}>Staff docs</a>
         {' · '}
         <a href="#" onClick={(e) => { e.preventDefault(); setShowSettings(true); }} style={{ color: 'var(--ink-faint)' }}>Pricing settings</a>

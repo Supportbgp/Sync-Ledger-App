@@ -101,7 +101,7 @@ export default function QuoteDetail({ quote, catalog, locations, multipliers, ti
 
   const { qty, total, addOnsTotal, bulkTotal } = computeQuoteTotals(draft.items);
   const realItemCount = draft.items.filter(i => !i.isAddOn).length;
-  const tiers = computeOfferTiers(total, tierSettings);
+  const tiers = computeOfferTiers(draft.items, tierSettings);
   // Bulk items get pulled into their own section below (per explicit
   // request) — everything else (real cards and misc. add-ons alike) stays
   // mixed in the Cards list, unchanged from before.

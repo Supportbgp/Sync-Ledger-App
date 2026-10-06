@@ -66,7 +66,53 @@ export function normalizeQuoteItem(item) {
     // `game` is still a real field here, unlike a misc. add-on — Bulk
     // placement is keyed on (location, game)).
     isBulk: !!src.isBulk,
+    // Real staff ask: instead of pre-calculating "60% of this $5 lot" by
+    // hand, check a box and type the percentage — flatItemAmount below does
+    // the math. Applies to isAddOn/isBulk items only (a real card's own
+    // percentage story is the quote-wide tier math, or its own pctAltered
+    // delta below); never set/read for a regular card. `pctValue` is a
+    // plain percentage of the entered price (60 means 60%, not a delta),
+    // deliberately NOT locked to the three configured tiers — "100%, etc."
+    // was explicitly part of the ask, so any number is valid.
+    pctEnabled: !!src.pctEnabled,
+    pctValue: src.pctValue === '' || src.pctValue == null ? null : Number(src.pctValue),
+    // A regular card's own payout percentage normally comes straight from
+    // whichever tier the quote is bought at (see computeOfferTiers below) —
+    // pctAltered/pctDelta lets ONE card deviate from that blanket rate
+    // (different condition/rarity/ease of sale) without staff hand-editing
+    // its price and leaving themselves a note to remember the "real" price.
+    // pctDelta is a signed delta in PERCENTAGE POINTS relative to whichever
+    // tier ends up used (+10 on a 60% tier pays this card at 70%, -20 pays
+    // it at 40%) — never an absolute override, matching how Noah described
+    // the old manual workaround ("change the asking price by the percent
+    // off/on I wanted"). Never set/read for an isAddOn/isBulk item — those
+    // have their own independent pctEnabled/pctValue mechanism above.
+    pctAltered: !!src.pctAltered,
+    pctDelta: src.pctDelta === '' || src.pctDelta == null ? null : Number(src.pctDelta),
   };
+}
+
+// A flat item's (isAddOn/isBulk) actual contribution to its running total —
+// the raw price, or price × pctValue/100 once staff check "Apply a %?" and
+// type a value. Returns null when price itself is blank, same as every
+// other blank-price-excludes-the-row rule in this file, so callers don't
+// need a separate check. Exported so AddOnLineItemRow/BulkLineItemRow can
+// show the computed dollar amount next to the raw value, and so
+// QuotePrintViews' printed record matches what's shown on screen.
+export function flatItemAmount(item) {
+  const price = parseMoney(item.price);
+  if (price == null) return null;
+  if (item.pctEnabled && item.pctValue != null) {
+    return price * (item.pctValue / 100);
+  }
+  return price;
+}
+
+// Keeps a tier-plus-delta percentage inside a sane 0-100% range — an
+// altered card still pays somewhere between "nothing" and "full price,"
+// same as every other percentage in this app.
+function clampPct(pct) {
+  return Math.min(100, Math.max(0, pct));
 }
 
 // Exported for QuoteDetail's own "Add to payout" button (addOnsTotal and
@@ -86,27 +132,29 @@ export function round2(n) {
 // Flat items — isAddOn (a binder, a playmat) and isBulk (a whole bulk lot,
 // e.g. "$5 for 20 commons") — are both deliberately excluded from `qty`/
 // `total` — staff explicitly don't want either scaled by the 50/60/70%
-// tier math below, just added to the final payout at face value if they
-// choose to. Each is summed separately (`addOnsTotal`/`bulkTotal`) as a
-// flat `price`, deliberately NOT multiplied by `qty` even though both item
-// types now carry a Qty field — qty there is informational record-keeping
-// ("this lot was 20 cards"), never a price multiplier, matching the
-// explicit ask that a flat price stays exactly the raw number typed in.
+// tier math below, just added to the final payout at face value (or at
+// their own opted-in percentage — see flatItemAmount above) if they choose
+// to. Each is summed separately (`addOnsTotal`/`bulkTotal`) via
+// flatItemAmount, deliberately NOT multiplied by `qty` even though both
+// item types now carry a Qty field — qty there is informational
+// record-keeping ("this lot was 20 cards"), never a price multiplier.
 export function computeQuoteTotals(items) {
   let qty = 0;
   let total = 0;
   let addOnsTotal = 0;
   let bulkTotal = 0;
   for (const item of (items || [])) {
-    const price = parseMoney(item.price);
     if (item.isAddOn) {
-      if (price != null) addOnsTotal += price;
+      const amount = flatItemAmount(item);
+      if (amount != null) addOnsTotal += amount;
       continue;
     }
     if (item.isBulk) {
-      if (price != null) bulkTotal += price;
+      const amount = flatItemAmount(item);
+      if (amount != null) bulkTotal += amount;
       continue;
     }
+    const price = parseMoney(item.price);
     const q = Number(item.qty) || 1;
     qty += q;
     if (price != null) total += price * q;
@@ -114,16 +162,37 @@ export function computeQuoteTotals(items) {
   return { qty, total: round2(total), addOnsTotal: round2(addOnsTotal), bulkTotal: round2(bulkTotal) };
 }
 
-// The three offer amounts shown alongside the total, computed from whatever
-// tier percentages the store has configured (quote_settings), falling back
-// to DEFAULT_QUOTE_TIER_PCTS before that loads.
-export function computeOfferTiers(total, tierSettings) {
+// The three offer amounts shown alongside the total, computed PER CARD
+// (not total × pct in one shot) so a card with its own Alter %
+// (pctAltered/pctDelta) contributes at (tierPct + pctDelta) instead of the
+// blanket tierPct for every tier — an unaltered card is just tierPct, the
+// same math as before this feature existed. Computed for all three tiers
+// at once (not just whichever one staff eventually pick) so every number
+// shown is already correct regardless of which "Use" button gets clicked.
+// Flat items (isAddOn/isBulk) are skipped entirely — their own payout
+// contribution is the separate, independent flatItemAmount/pctEnabled
+// mechanism above, never touched by the quote's tier percentages.
+export function computeOfferTiers(items, tierSettings) {
   const s = tierSettings || DEFAULT_QUOTE_TIER_PCTS;
-  return {
-    tier1: round2(total * (s.tier1 ?? DEFAULT_QUOTE_TIER_PCTS.tier1) / 100),
-    tier2: round2(total * (s.tier2 ?? DEFAULT_QUOTE_TIER_PCTS.tier2) / 100),
-    tier3: round2(total * (s.tier3 ?? DEFAULT_QUOTE_TIER_PCTS.tier3) / 100),
+  const basePcts = {
+    tier1: s.tier1 ?? DEFAULT_QUOTE_TIER_PCTS.tier1,
+    tier2: s.tier2 ?? DEFAULT_QUOTE_TIER_PCTS.tier2,
+    tier3: s.tier3 ?? DEFAULT_QUOTE_TIER_PCTS.tier3,
   };
+  const sums = { tier1: 0, tier2: 0, tier3: 0 };
+  for (const item of (items || [])) {
+    if (item.isAddOn || item.isBulk) continue;
+    const price = parseMoney(item.price);
+    if (price == null) continue;
+    const lineValue = price * (Number(item.qty) || 1);
+    for (const key of Object.keys(basePcts)) {
+      const pct = (item.pctAltered && item.pctDelta != null)
+        ? clampPct(basePcts[key] + item.pctDelta)
+        : basePcts[key];
+      sums[key] += lineValue * pct / 100;
+    }
+  }
+  return { tier1: round2(sums.tier1), tier2: round2(sums.tier2), tier3: round2(sums.tier3) };
 }
 
 // Adapter for the Scan/Import add-card methods: both ScannerPanel and

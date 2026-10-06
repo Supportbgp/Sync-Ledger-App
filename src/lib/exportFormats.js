@@ -7,7 +7,7 @@
 // entry on each platform faster, not one-click importable files.
 
 export const EXPORT_FORMATS = [
-  { key: 'fullCatalog', label: 'Full catalog CSV (Ledger format)', scoped: true },
+  { key: 'fullCatalog', label: 'Full catalog CSV (Card Cove format)', scoped: true },
   { key: 'tcgplayer', label: 'TCG Player — manual entry list', scoped: true },
   { key: 'collectr', label: 'Collectr — manual entry list', scoped: true },
   { key: 'pendingPos', label: 'Pending → POS CSV (unsynced sales)', scoped: false },

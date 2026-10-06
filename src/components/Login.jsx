@@ -25,7 +25,7 @@ export default function Login({ onSignedIn }) {
       <div className="modal">
         <div className="modal-head" style={{ textAlign: 'center' }}>
           <img src={logoIcon} alt="" style={{ width: '56px', height: '56px', display: 'block', margin: '0 auto 10px' }} />
-          <div className="name">Ledger sign-in</div>
+          <div className="name">Card Cove sign-in</div>
           <div className="meta">Enter the shared store password to continue.</div>
         </div>
         <div className="modal-body">
