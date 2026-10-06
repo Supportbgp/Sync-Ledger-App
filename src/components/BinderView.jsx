@@ -50,7 +50,7 @@ export default function BinderView({ location }) {
       <div className="topbar">
         <div className="brand">
           <img src={logoIcon} alt="" className="brand-logo" />
-          <span className="mark">Ledger</span>
+          <span className="mark">Card Cove</span>
           <span className="sub">{location}</span>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function BinderView({ location }) {
 
       {zoomUrl && <Lightbox url={zoomUrl} onClose={() => setZoomUrl(null)} />}
 
-      <div className="footnote">Live inventory lookup — updates automatically as stock changes.</div>
+      <div className="footnote">Card Cove by Board Game Paradise · live inventory lookup — updates automatically as stock changes.</div>
     </div>
   );
 }

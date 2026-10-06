@@ -14,9 +14,9 @@ export default function ImportExportSection() {
       </p>
       <p>
         Next is the <strong>column mapping</strong> step: for each field
-        Ledger understands (Name, Set, Game, Condition, Price, Rarity,
+        Card Cove understands (Name, Set, Game, Condition, Price, Rarity,
         etc.), pick which column in your file it corresponds to, or leave
-        it "— skip —". Ledger guesses obvious matches automatically from
+        it "— skip —". Card Cove guesses obvious matches automatically from
         your file's own header row. You also pick a Binder/case/collection
         for the whole batch (or map a per-row location column instead), and
         the same Channels checkboxes as the Edit modal.
@@ -41,7 +41,7 @@ export default function ImportExportSection() {
         scope it to one binder/case instead of everything.
       </p>
       <DocsCallout kind="warn">
-        Neither TCG Player nor Collectr support Ledger uploading listings to
+        Neither TCG Player nor Collectr support Card Cove uploading listings to
         them directly. These exports are reference lists to speed up manual
         entry on those platforms, not an automatic sync.
       </DocsCallout>
@@ -59,7 +59,7 @@ export default function ImportExportSection() {
       <h3>Reset all data</h3>
       <DocsCallout kind="warn">
         This wipes the entire catalog and sync queue for <em>everyone</em>{' '}
-        sharing this Ledger login — not just your own session. It asks you
+        sharing this Card Cove login — not just your own session. It asks you
         to type a confirmation password first. There's no undo.
       </DocsCallout>
     </DocsSection>

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_QUOTE_TIER_PCTS, normalizeQuoteItem, computeQuoteTotals, computeOfferTiers,
+  DEFAULT_QUOTE_TIER_PCTS, normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, flatItemAmount,
   itemsFromCatalogRows, buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems,
 } from './quoteUtils.js';
 
@@ -52,6 +52,51 @@ describe('normalizeQuoteItem', () => {
   it('defaults isBulk to false, but preserves an explicit true', () => {
     expect(normalizeQuoteItem({ name: 'X' }).isBulk).toBe(false);
     expect(normalizeQuoteItem({ game: 'Pokemon', isBulk: true }).isBulk).toBe(true);
+  });
+
+  it('defaults pctEnabled to false and pctValue to null, but preserves explicit values', () => {
+    const blank = normalizeQuoteItem({ name: 'Binder', isAddOn: true });
+    expect(blank.pctEnabled).toBe(false);
+    expect(blank.pctValue).toBeNull();
+    const set = normalizeQuoteItem({ name: 'Binder', isAddOn: true, pctEnabled: true, pctValue: 60 });
+    expect(set.pctEnabled).toBe(true);
+    expect(set.pctValue).toBe(60);
+  });
+
+  it('defaults pctAltered to false and pctDelta to null, but preserves an explicit negative delta', () => {
+    const blank = normalizeQuoteItem({ name: 'Charizard' });
+    expect(blank.pctAltered).toBe(false);
+    expect(blank.pctDelta).toBeNull();
+    const altered = normalizeQuoteItem({ name: 'Charizard', pctAltered: true, pctDelta: -20 });
+    expect(altered.pctAltered).toBe(true);
+    expect(altered.pctDelta).toBe(-20);
+  });
+});
+
+describe('flatItemAmount', () => {
+  it('returns the raw price when pctEnabled is off', () => {
+    const item = normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true });
+    expect(flatItemAmount(item)).toBe(5);
+  });
+
+  it('applies pctValue as a percentage of the raw price when pctEnabled is on', () => {
+    const item = normalizeQuoteItem({ name: 'Bulk lot', price: 5, isBulk: true, pctEnabled: true, pctValue: 60 });
+    expect(flatItemAmount(item)).toBe(3);
+  });
+
+  it('is not locked to 50/60/70 — any percentage, including 100, works', () => {
+    const item = normalizeQuoteItem({ name: 'Bulk lot', price: 5, isBulk: true, pctEnabled: true, pctValue: 100 });
+    expect(flatItemAmount(item)).toBe(5);
+  });
+
+  it('returns null for a blank price regardless of pctEnabled', () => {
+    const item = normalizeQuoteItem({ name: 'Binder', price: null, isAddOn: true, pctEnabled: true, pctValue: 60 });
+    expect(flatItemAmount(item)).toBeNull();
+  });
+
+  it('ignores pctEnabled when pctValue itself is blank, falling back to the raw price', () => {
+    const item = normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true, pctEnabled: true, pctValue: null });
+    expect(flatItemAmount(item)).toBe(5);
   });
 });
 
@@ -138,21 +183,82 @@ describe('computeQuoteTotals', () => {
     expect(addOnsTotal).toBe(5);
     expect(bulkTotal).toBe(8);
   });
+
+  it('applies an add-on\'s own opted-in percentage to addOnsTotal instead of the raw price', () => {
+    const items = [normalizeQuoteItem({ name: '5x $1-5 cards', price: 10, isAddOn: true, pctEnabled: true, pctValue: 60 })];
+    expect(computeQuoteTotals(items).addOnsTotal).toBe(6);
+  });
+
+  it('applies a bulk lot\'s own opted-in percentage to bulkTotal instead of the raw price', () => {
+    const items = [normalizeQuoteItem({ game: 'Pokemon', price: 5, qty: 20, isBulk: true, pctEnabled: true, pctValue: 70 })];
+    expect(computeQuoteTotals(items).bulkTotal).toBe(3.5);
+  });
 });
 
 describe('computeOfferTiers', () => {
   it('computes the three tiers from custom store settings, not just the 50/60/70 default', () => {
-    const tiers = computeOfferTiers(100, { tier1: 40, tier2: 55, tier3: 75 });
+    const items = [normalizeQuoteItem({ name: 'A', price: 100, qty: 1 })];
+    const tiers = computeOfferTiers(items, { tier1: 40, tier2: 55, tier3: 75 });
     expect(tiers).toEqual({ tier1: 40, tier2: 55, tier3: 75 });
   });
 
   it('falls back to DEFAULT_QUOTE_TIER_PCTS when no settings are given', () => {
-    const tiers = computeOfferTiers(200, null);
+    const items = [normalizeQuoteItem({ name: 'A', price: 200, qty: 1 })];
+    const tiers = computeOfferTiers(items, null);
     expect(tiers).toEqual({
       tier1: 200 * DEFAULT_QUOTE_TIER_PCTS.tier1 / 100,
       tier2: 200 * DEFAULT_QUOTE_TIER_PCTS.tier2 / 100,
       tier3: 200 * DEFAULT_QUOTE_TIER_PCTS.tier3 / 100,
     });
+  });
+
+  it('sums qty × price across several unaltered cards, same as the old total × pct math', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'A', price: 10, qty: 2 }),
+      normalizeQuoteItem({ name: 'B', price: 5, qty: 1 }),
+    ];
+    const tiers = computeOfferTiers(items, { tier1: 50, tier2: 60, tier3: 70 });
+    // total = 25; 50% = 12.50, 60% = 15, 70% = 17.50
+    expect(tiers).toEqual({ tier1: 12.5, tier2: 15, tier3: 17.5 });
+  });
+
+  it('pays an altered card at tierPct + pctDelta instead of the blanket tierPct, for every tier', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Unaltered', price: 100, qty: 1 }),
+      normalizeQuoteItem({ name: 'Altered +10', price: 100, qty: 1, pctAltered: true, pctDelta: 10 }),
+    ];
+    const tiers = computeOfferTiers(items, { tier1: 50, tier2: 60, tier3: 70 });
+    // Unaltered: 100 × tierPct. Altered: 100 × (tierPct + 10).
+    expect(tiers.tier1).toBe(100 * 0.5 + 100 * 0.6);
+    expect(tiers.tier2).toBe(100 * 0.6 + 100 * 0.7);
+    expect(tiers.tier3).toBe(100 * 0.7 + 100 * 0.8);
+  });
+
+  it('clamps an altered card\'s effective percentage to 0-100%, never negative or over full price', () => {
+    const items = [normalizeQuoteItem({ name: 'Deep discount', price: 100, qty: 1, pctAltered: true, pctDelta: -90 })];
+    // 50 - 90 would be -40%, clamped to 0.
+    expect(computeOfferTiers(items, { tier1: 50, tier2: 60, tier3: 70 }).tier1).toBe(0);
+    const overshoot = [normalizeQuoteItem({ name: 'Big bonus', price: 100, qty: 1, pctAltered: true, pctDelta: 50 })];
+    // 70 + 50 would be 120%, clamped to 100.
+    expect(computeOfferTiers(overshoot, { tier1: 50, tier2: 60, tier3: 70 }).tier3).toBe(100);
+  });
+
+  it('ignores pctDelta when pctAltered is checked but no delta was typed yet', () => {
+    const items = [normalizeQuoteItem({ name: 'A', price: 100, qty: 1, pctAltered: true, pctDelta: null })];
+    expect(computeOfferTiers(items, { tier1: 50, tier2: 60, tier3: 70 }).tier1).toBe(50);
+  });
+
+  it('skips isAddOn/isBulk items entirely — their payout comes from flatItemAmount/pctEnabled instead', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'Binder', price: 1000, isAddOn: true }),
+      normalizeQuoteItem({ game: 'Pokemon', price: 1000, isBulk: true }),
+    ];
+    expect(computeOfferTiers(items, { tier1: 50, tier2: 60, tier3: 70 })).toEqual({ tier1: 0, tier2: 0, tier3: 0 });
+  });
+
+  it('excludes a blank-price card from every tier, same as computeQuoteTotals\' own total', () => {
+    const items = [normalizeQuoteItem({ name: 'A', price: null, qty: 5 })];
+    expect(computeOfferTiers(items, { tier1: 50, tier2: 60, tier3: 70 })).toEqual({ tier1: 0, tier2: 0, tier3: 0 });
   });
 });
 

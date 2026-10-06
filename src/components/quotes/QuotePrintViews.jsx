@@ -1,4 +1,4 @@
-import { computeQuoteTotals, computeOfferTiers } from '../../lib/quoteUtils.js';
+import { computeQuoteTotals, computeOfferTiers, flatItemAmount } from '../../lib/quoteUtils.js';
 
 // Both sheets render permanently in the DOM (display:none on screen) and
 // are only made visible by the .print-sheet CSS rule under @media print —
@@ -14,7 +14,7 @@ const th = { ...cell, background: '#eee', fontWeight: 700 };
 
 export function QuotePrintSheet({ quote, tierSettings }) {
   const { qty, total, addOnsTotal, bulkTotal } = computeQuoteTotals(quote.items);
-  const tiers = computeOfferTiers(total, tierSettings);
+  const tiers = computeOfferTiers(quote.items, tierSettings);
   return (
     <div className="print-sheet" style={{ fontFamily: 'Arial, sans-serif', color: '#000', background: '#fff' }}>
       <h1 style={{ fontSize: '18px', margin: '0 0 4px' }}>Board Game Paradise — Quote</h1>
@@ -46,8 +46,16 @@ export function QuotePrintSheet({ quote, tierSettings }) {
               <td style={cell}>{item.rarity}</td>
               <td style={cell}>{item.condition}</td>
               <td style={cell}>{item.qty}</td>
-              <td style={cell}>{item.price != null ? `$${Number(item.price).toFixed(2)}` : '—'}</td>
-              <td style={cell}>{item.price == null ? '—' : `$${((item.isAddOn || item.isBulk) ? Number(item.price) : Number(item.price) * Number(item.qty)).toFixed(2)}`}</td>
+              <td style={cell}>
+                {item.price != null ? `$${Number(item.price).toFixed(2)}` : '—'}
+                {!item.isAddOn && !item.isBulk && item.pctAltered && item.pctDelta != null
+                  ? ` (${item.pctDelta > 0 ? '+' : ''}${item.pctDelta}%)` : ''}
+              </td>
+              <td style={cell}>
+                {(item.isAddOn || item.isBulk)
+                  ? (flatItemAmount(item) != null ? `$${flatItemAmount(item).toFixed(2)}` : '—')
+                  : (item.price != null ? `$${(Number(item.price) * Number(item.qty)).toFixed(2)}` : '—')}
+              </td>
             </tr>
           ))}
         </tbody>

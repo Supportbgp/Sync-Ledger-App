@@ -1,3 +1,5 @@
+import { flatItemAmount } from '../../lib/quoteUtils.js';
+
 // A flat, non-card line item — a playmat, a couple of binders the shop
 // wants to offer a flat $5 for, or "$1 for 3 bulk V/ex" — deliberately
 // minimal next to QuoteLineItemRow's full card form: no Game/Set/Rarity/
@@ -16,10 +18,20 @@
 // not $5 × Qty. Reuses notes as "Description" — a field every quote item
 // already has but that QuoteLineItemRow never surfaces in its own UI, so
 // there's no conflict reusing it here.
+//
+// "Apply a %?" (pctEnabled/pctValue, via flatItemAmount in quoteUtils.js)
+// lets staff enter a bundle's full assessed value and have the app work
+// out what to actually offer, instead of pre-calculating "60% of $5" by
+// hand — real ask: several $1-5 cards thrown into one bundle at a rate
+// that isn't necessarily the quote's own tier. Not locked to the three
+// configured tiers (60%, 70%, "etc." was explicit), so it's a plain
+// percentage input, not a dropdown.
 export default function AddOnLineItemRow({ item, onChange, onRemove }) {
   function patch(p) {
     onChange({ ...item, ...p });
   }
+
+  const amount = flatItemAmount(item);
 
   return (
     <div className="scan-row">
@@ -57,8 +69,30 @@ export default function AddOnLineItemRow({ item, onChange, onRemove }) {
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
           </div>
         </div>
+        <div className="scan-row-line" style={{ alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="checkbox-row" style={{ margin: 0 }}>
+            <input
+              type="checkbox" id={`addon-pct-${item.id}`} checked={item.pctEnabled}
+              onChange={(e) => patch({ pctEnabled: e.target.checked })}
+            />
+            <label htmlFor={`addon-pct-${item.id}`} style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Apply a %?</label>
+          </div>
+          {item.pctEnabled && (
+            <>
+              <input
+                type="number" placeholder="e.g. 60" value={item.pctValue ?? ''}
+                onChange={(e) => patch({ pctValue: e.target.value === '' ? null : Number(e.target.value) })}
+                style={{ width: '70px' }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>%</span>
+              {amount != null && (
+                <span style={{ fontSize: '11.5px', fontFamily: "'IBM Plex Mono', monospace" }}>= ${amount.toFixed(2)}</span>
+              )}
+            </>
+          )}
+        </div>
         <div style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>
-          Flat add-on — Qty is a record only (never multiplies the price). Excluded from the tier % offers below; only affects Payout amount if you click "Add to payout."
+          Flat add-on — Qty is a record only (never multiplies the price). Excluded from the tier % offers below; only affects Payout amount if you click "Add to payout." Check "Apply a %?" to offer only part of the entered value, instead of pre-calculating it yourself.
         </div>
       </div>
     </div>

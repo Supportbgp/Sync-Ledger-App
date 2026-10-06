@@ -15,7 +15,7 @@ export default function ExportPanel({ catalog, queue, locations, onClearAll }) {
   const [showQrModal, setShowQrModal] = useState(false);
 
   async function handleClearAll() {
-    if (!(await showConfirm("This clears the shared catalog and sync queue for everyone using this Ledger. Continue?", "Reset all data", { requirePassword: true }))) return;
+    if (!(await showConfirm("This clears the shared catalog and sync queue for everyone using Card Cove. Continue?", "Reset all data", { requirePassword: true }))) return;
     await onClearAll();
   }
 

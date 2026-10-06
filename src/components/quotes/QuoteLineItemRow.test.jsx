@@ -97,3 +97,21 @@ describe('QuoteLineItemRow — candidate selection backfill', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ set: 'OP01', rarity: 'Rare', basePrice: 5 }));
   });
 });
+
+describe('QuoteLineItemRow — Alter %', () => {
+  it('hides the +/-X% input until "Alter %?" is checked', () => {
+    renderRow();
+    expect(screen.queryByPlaceholderText('e.g. +10 or -20')).not.toBeInTheDocument();
+  });
+
+  it('checking "Alter %?" patches pctAltered, and typing a delta patches pctDelta', () => {
+    const { onChange } = renderRow();
+    fireEvent.click(screen.getByLabelText('Alter %?'));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ pctAltered: true }));
+  });
+
+  it('shows the delta input with its current value once pctAltered is on', () => {
+    renderRow({ pctAltered: true, pctDelta: -20 });
+    expect(screen.getByDisplayValue('-20')).toBeInTheDocument();
+  });
+});

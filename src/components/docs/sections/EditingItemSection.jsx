@@ -57,7 +57,7 @@ export default function EditingItemSection() {
 
       <h3>Quantity &amp; pricing</h3>
       <p>
-        "Our price" is always yours to set directly — Ledger never changes
+        "Our price" is always yours to set directly — Card Cove never changes
         it automatically. A <strong>Find market price</strong> button here
         runs the same name/game/set/rarity search as Find stock image, but
         independently of whichever image is showing — pick a result to set

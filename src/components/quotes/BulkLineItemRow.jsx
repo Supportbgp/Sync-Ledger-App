@@ -1,4 +1,5 @@
 import { GAMES } from '../../lib/cardUtils.js';
+import { flatItemAmount } from '../../lib/quoteUtils.js';
 
 // A whole bulk lot — e.g. 20 Pokemon commons, priced as one flat amount
 // ("$5 for the lot"), not per card. Treated exactly like a misc. add-on
@@ -15,10 +16,17 @@ import { GAMES } from '../../lib/cardUtils.js';
 // Sorting time is keyed on (location, game); Name/Description (reusing
 // `notes`) describe the lot itself, e.g. "Pokemon surge bulk" / "all
 // Pikachus in different conditions".
+//
+// "Apply a %?" (pctEnabled/pctValue, via flatItemAmount in quoteUtils.js) —
+// same mechanic and reasoning as AddOnLineItemRow's own: enter the lot's
+// full assessed value, check the box, and let the app work out "60% of
+// this" instead of doing it by hand.
 export default function BulkLineItemRow({ item, onChange, onRemove }) {
   function patch(p) {
     onChange({ ...item, ...p });
   }
+
+  const amount = flatItemAmount(item);
 
   return (
     <div className="scan-row">
@@ -63,8 +71,30 @@ export default function BulkLineItemRow({ item, onChange, onRemove }) {
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
           </div>
         </div>
+        <div className="scan-row-line" style={{ alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="checkbox-row" style={{ margin: 0 }}>
+            <input
+              type="checkbox" id={`bulk-pct-${item.id}`} checked={item.pctEnabled}
+              onChange={(e) => patch({ pctEnabled: e.target.checked })}
+            />
+            <label htmlFor={`bulk-pct-${item.id}`} style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Apply a %?</label>
+          </div>
+          {item.pctEnabled && (
+            <>
+              <input
+                type="number" placeholder="e.g. 60" value={item.pctValue ?? ''}
+                onChange={(e) => patch({ pctValue: e.target.value === '' ? null : Number(e.target.value) })}
+                style={{ width: '70px' }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>%</span>
+              {amount != null && (
+                <span style={{ fontSize: '11.5px', fontFamily: "'IBM Plex Mono', monospace" }}>= ${amount.toFixed(2)}</span>
+              )}
+            </>
+          )}
+        </div>
         <div style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>
-          Flat lot price — Qty is a record only (never multiplies the price). Excluded from the tier % offers below, same as a misc. item; only affects Payout amount if you click "Add to payout." Still goes to Sorting on accept — place it into Bulk there.
+          Flat lot price — Qty is a record only (never multiplies the price). Excluded from the tier % offers below, same as a misc. item; only affects Payout amount if you click "Add to payout." Still goes to Sorting on accept — place it into Bulk there. Check "Apply a %?" to offer only part of the entered value.
         </div>
       </div>
     </div>

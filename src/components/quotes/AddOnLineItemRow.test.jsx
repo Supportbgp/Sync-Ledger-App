@@ -43,4 +43,25 @@ describe('AddOnLineItemRow', () => {
     render(<AddOnLineItemRow item={item} onChange={vi.fn()} onRemove={vi.fn()} />);
     expect(screen.getByText(/excluded from the tier % offers/i)).toBeInTheDocument();
   });
+
+  it('hides the percentage input until "Apply a %?" is checked', () => {
+    const item = normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true });
+    render(<AddOnLineItemRow item={item} onChange={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.queryByPlaceholderText('e.g. 60')).not.toBeInTheDocument();
+  });
+
+  it('checking "Apply a %?" patches pctEnabled, and typing a value patches pctValue', () => {
+    const onChange = vi.fn();
+    const item = normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true });
+    render(<AddOnLineItemRow item={item} onChange={onChange} onRemove={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Apply a %?'));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ pctEnabled: true }));
+  });
+
+  it('shows the computed dollar amount once pctEnabled and pctValue are both set', () => {
+    const item = normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true, pctEnabled: true, pctValue: 60 });
+    render(<AddOnLineItemRow item={item} onChange={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.getByDisplayValue('60')).toBeInTheDocument();
+    expect(screen.getByText('= $3.00')).toBeInTheDocument();
+  });
 });

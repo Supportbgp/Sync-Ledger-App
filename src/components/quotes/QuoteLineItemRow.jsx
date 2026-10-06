@@ -340,6 +340,36 @@ export default function QuoteLineItemRow({ item, onChange, onRemove, catalog, mu
             <button className="icon-btn" title="Remove" onClick={onRemove}>✕</button>
           </div>
         </div>
+        {/* Alter % — a card that deserves a different payout rate than
+            whatever tier the whole quote ends up bought at (condition,
+            rarity, ease of resale), without hand-editing the price and
+            leaving a note to remember the "real" value. pctDelta is a
+            signed delta in PERCENTAGE POINTS relative to whichever tier
+            gets used below (+10 on a 60% tier pays this card at 70%), not
+            an absolute override — see computeOfferTiers in quoteUtils.js,
+            which already folds this into all three tier amounts shown in
+            Total & offer. */}
+        <div className="scan-row-line" style={{ alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="checkbox-row" style={{ margin: 0 }}>
+            <input
+              type="checkbox" id={`qli-pctAltered-${item.id}`} checked={item.pctAltered}
+              onChange={(e) => patch({ pctAltered: e.target.checked })}
+            />
+            <label htmlFor={`qli-pctAltered-${item.id}`} style={{ margin: 0, fontFamily: "'Inter',sans-serif", textTransform: 'none', letterSpacing: 'normal' }}>Alter %?</label>
+          </div>
+          {item.pctAltered && (
+            <>
+              <input
+                type="number" placeholder="e.g. +10 or -20" value={item.pctDelta ?? ''}
+                onChange={(e) => patch({ pctDelta: e.target.value === '' ? null : Number(e.target.value) })}
+                style={{ width: '110px' }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--ink-faint)' }}>
+                percentage points relative to whichever tier you use below — e.g. +10 on a 60% tier pays this card at 70%.
+              </span>
+            </>
+          )}
+        </div>
         {/* Source link — same role as a catalog row's own "Source / product
             URL" field in EditModal. Given a visible label of its own
             (unlike every other field here, whose label stays hidden on
