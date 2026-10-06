@@ -22,18 +22,35 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 
 ## Branding
 
-- **App renamed from "Ledger" to "Card Cove"** (user-facing text only — the
-  GitHub repo/Pages URL stays `Sync-Ledger-App` for now, a separate,
-  bigger decision not yet made). "Card Cove" is the name everywhere it's
-  shown on its own (topbar, login screen, staff docs header, export
-  labels); "by Board Game Paradise" is appended only in footer-type spots
-  (`App.jsx`'s bottom footnote, `BinderView.jsx`'s public footnote,
-  `StaffDocs.jsx`'s footnote) — not in the topbar/login, per explicit
-  instruction to keep the main name just "Card Cove" everywhere else.
+- **App renamed from "Ledger" to "Card Cove"** (user-facing text only).
+  "Card Cove" is the name everywhere it's shown on its own (topbar, login
+  screen, staff docs header, export labels); "by Board Game Paradise" is
+  appended only in footer-type spots (`App.jsx`'s bottom footnote,
+  `BinderView.jsx`'s public footnote, `StaffDocs.jsx`'s footnote) — not in
+  the topbar/login, per explicit instruction to keep the main name just
+  "Card Cove" everywhere else. `package.json`'s internal `name` field was
+  updated to match (`card-cove`) — cosmetic only, no visible effect.
   Every section below this point that still says "Ledger" in its own
   prose is historical — written back when that was the app's name — and
   was deliberately left as-is rather than rewritten, same as this file's
   standing practice of not silently rewriting past decisions.
+  - **The GitHub repo name and Pages URL deliberately stay
+    `Sync-Ledger-App`/`supportbgp.github.io/Sync-Ledger-App/` indefinitely
+    — a real decision, not a placeholder.** Confirmed with the user:
+    renaming the repo would break the live Pages URL (GitHub doesn't
+    auto-redirect a Pages site the way it redirects the repo itself) and
+    any Binder QR codes already printed and taped to physical binders
+    (see `vite.config.js`'s `base`/`playwright.config.js`'s `baseURL`,
+    both tied to this same path) — not worth it when the URL itself is
+    just a bookmark staff/customers use, not something they read as a
+    brand name. A custom domain was offered as a way to decouple the
+    public URL from the repo name entirely; declined for now too. Revisit
+    only if a strong reason to actually change the URL comes up later.
+  - **Logo/icon imagery deliberately unchanged** — confirmed with the
+    user to keep the existing Board Game Paradise palm/sun/meeple/wave
+    emblem (see "Logo assets" below) as Card Cove's own icon rather than
+    commissioning distinct mark, i.e. Card Cove reads as a feature/
+    sub-brand under the same visual identity, not a fully separate one.
 - **Logo assets**: `src/assets/logo-icon.png` (square, transparent, used
   inline via `<img>` in `App.jsx`'s topbar, `Login.jsx`, and
   `BinderView.jsx`'s public topbar) plus `public/favicon.ico`,
