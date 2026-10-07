@@ -186,7 +186,13 @@ export const RARITY_OPTIONS_BY_GAME = {
   // `rarity` field assigns to cards from non-numbered promotional sets
   // (verified against a real sample: an entire promo set's cards all
   // reported `"rarity": "Promo"`, not one of the six tiers above).
-  Lorcana: ["Common", "Uncommon", "Rare", "Super Rare", "Legendary", "Enchanted", "Promo"],
+  //
+  // "Epic" added per explicit staff confirmation (seen on real cards) —
+  // not yet independently verified against a Lorcast API sample the way
+  // the six tiers above were, so its exact position in the rarity ladder
+  // relative to Super Rare/Legendary is a best guess, not researched.
+  // Revisit the ordering if a real sample surfaces.
+  Lorcana: ["Common", "Uncommon", "Rare", "Super Rare", "Epic", "Legendary", "Enchanted", "Promo"],
   // Star Wars: Unlimited's four pull-structure rarities, each with its own
   // distinct gemstone symbol/color at the bottom of the card (confirmed via
   // multiple community rarity guides): grey/clear (Common), green
@@ -210,7 +216,13 @@ export const RARITY_OPTIONS_BY_GAME = {
   // "Promo" is appended too, despite only weak (non-API) evidence it's a
   // real rarity value for this game — same explicit staff-convenience
   // exception as Magic/Yugioh/One Piece above.
-  SWU: ["Common", "Uncommon", "Rare", "Legendary", "Special", "Promo"],
+  //
+  // "Serialized" added per explicit staff request — this reverses an
+  // earlier call in this file (see PRINTING_OPTIONS_BY_GAME.SWU) that
+  // excluded it from the curated Printing list as event/distribution-tied
+  // vocabulary. Staff specifically want it selectable as a Rarity instead,
+  // so it lives here rather than in Printing.
+  SWU: ["Common", "Uncommon", "Rare", "Legendary", "Special", "Serialized", "Promo"],
   // Riftbound's four functional/pull-structure rarities, each with its own
   // frame style AND gem shape (confirmed via multiple community rarity
   // guides): bronze frame + round gem (Common), silver frame + triangular
@@ -325,14 +337,17 @@ export const PRINTING_OPTIONS_BY_GAME = {
   // swu-db.com card listing (see RARITY_OPTIONS_BY_GAME.SWU) that a base
   // rarity like Rare can independently be Original, Hyperspace, Foil, or
   // Hyperspace Foil, with Showcase and Prestige as further, rarer premium
-  // treatments layered the same way. These six are the real, evergreen
-  // treatment names; deliberately excludes the promo/distribution-specific
-  // variant names also seen in research (Serialized, Weekly Play Promo/
-  // Foil, Prerelease Promo, Convention Exclusive, Judge Promo) — same
-  // "ever-expanding, event-tied vocabulary belongs in the free-text escape
-  // hatch" call as Pokemon's Poke Ball pattern exclusion and Yu-Gi-Oh's
-  // Parallel Rare exclusion above.
-  SWU: ["Normal", "Foil", "Hyperspace", "Hyperspace Foil", "Showcase", "Prestige"],
+  // treatments layered the same way. "Prestige Foil" added alongside
+  // "Prestige" per explicit staff request — same foiled/non-foiled pairing
+  // as Hyperspace/Hyperspace Foil above, not independently re-confirmed via
+  // a new API sample. Deliberately excludes the promo/distribution-specific
+  // variant names also seen in research (Serialized — which staff instead
+  // asked for as a Rarity value, see RARITY_OPTIONS_BY_GAME.SWU — Weekly
+  // Play Promo/Foil, Prerelease Promo, Convention Exclusive, Judge Promo) —
+  // same "ever-expanding, event-tied vocabulary belongs in the free-text
+  // escape hatch" call as Pokemon's Poke Ball pattern exclusion and
+  // Yu-Gi-Oh's Parallel Rare exclusion above.
+  SWU: ["Normal", "Foil", "Hyperspace", "Hyperspace Foil", "Showcase", "Prestige", "Prestige Foil"],
   // Same rarity-vs-finish split as Yu-Gi-Oh/One Piece, not SWU/Lorcana/
   // Magic: a Riftbound print's base rarity (Common/Uncommon/Rare/Epic)
   // already implies its default foil treatment (Common/Uncommon are
