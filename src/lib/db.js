@@ -160,6 +160,32 @@ export async function dbInsertSales(sales, toast) {
   if (error) toast('Sales record failed: ' + error.message, true);
 }
 
+export function rowToSale(r) {
+  return {
+    id: r.id, sku: r.sku, name: r.name, game: r.game, condition: r.condition,
+    qtySold: r.qty_sold, salePrice: r.sale_price,
+    soldAt: r.sold_at ? new Date(r.sold_at).getTime() : Date.now(),
+  };
+}
+
+// Deliberately NOT part of dbLoadAll's eager, always-on-sign-in load —
+// unlike catalog/sync_queue/quotes/sorting_queue, `sales` only ever grows
+// (every Mark Sold event adds a row, forever) with no natural cap the way
+// an in-flight queue has, so pulling the whole table into memory on every
+// app load doesn't scale the way it does for those. The Reports tab fetches
+// just the date range it's actually showing, on demand. Still goes through
+// fetchAllRows so a wide range (e.g. "this year") pages past 1000 rows
+// correctly instead of silently truncating (see CLAUDE.md's "Known
+// constraints" section on the original full-table-read bug this app
+// already hit once).
+export async function dbLoadSales(fromISO, toISO, toast) {
+  const { data, error } = await fetchAllRows('sales', 'sold_at', {
+    filter: (q) => q.gte('sold_at', fromISO).lt('sold_at', toISO),
+  });
+  if (error) { toast('Failed to load sales: ' + error.message, true); return []; }
+  return (data || []).map(rowToSale);
+}
+
 const TICKET_STAMP_COLUMNS = { posDone: 'pos_done', tcgplayerDone: 'tcgplayer_done', collectrDone: 'collectr_done' };
 
 export async function dbUpdateTicketStamp(id, field, value, toast) {
