@@ -141,6 +141,25 @@ export async function dbInsertTickets(tickets, toast) {
   if (error) toast('Sync tickets failed: ' + error.message, true);
 }
 
+// One row per Mark Sold event (see phase12_sales_history.sql) — written
+// alongside the sync_queue ticket, not instead of it; the two tables track
+// different things (in-flight cross-platform cleanup vs. a durable sales
+// record) and have different lifetimes (a ticket gets deleted once every
+// platform's synced; a sale row never does).
+function saleToRow(s) {
+  return {
+    sku: s.sku, name: s.name, game: s.game, condition: s.condition,
+    qty_sold: s.qtySold, sale_price: s.salePrice,
+    sold_at: new Date(s.soldAt).toISOString(),
+  };
+}
+
+export async function dbInsertSales(sales, toast) {
+  if (!sales.length) return;
+  const { error } = await supabaseClient.from('sales').insert(sales.map(saleToRow));
+  if (error) toast('Sales record failed: ' + error.message, true);
+}
+
 const TICKET_STAMP_COLUMNS = { posDone: 'pos_done', tcgplayerDone: 'tcgplayer_done', collectrDone: 'collectr_done' };
 
 export async function dbUpdateTicketStamp(id, field, value, toast) {

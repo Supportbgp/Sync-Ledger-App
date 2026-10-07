@@ -43,6 +43,7 @@ const {
   rowToCard, rowToTicket, dbUpsertCard, dbInsertTicket,
   dbLoadSettings, dbLoadPublicBinder, dbLoadAll,
   rowToSortingItem, dbInsertSortingItems,
+  dbInsertSales,
 } = await import('./db.js');
 
 beforeEach(() => {
@@ -148,6 +149,37 @@ describe('dbInsertTicket (ticketToRow via the real call)', () => {
     expect(sentRow.set_name).toBe('Base Set');
     expect(sentRow.qty_sold).toBe(1);
     expect(sentRow.tcgplayer_channel).toBe(false);
+  });
+});
+
+describe('dbInsertSales (saleToRow via the real call)', () => {
+  it('sends the correctly-shaped row to sales.insert (phase12_sales_history.sql)', async () => {
+    tableResults.sales = { data: null, error: null };
+    const sale = {
+      sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM',
+      qtySold: 2, salePrice: 45, soldAt: Date.parse('2026-01-01T00:00:00.000Z'),
+    };
+    await dbInsertSales([sale], vi.fn());
+    const builder = fromMock.mock.results[0].value;
+    expect(fromMock).toHaveBeenCalledWith('sales');
+    const sentRows = builder.insert.mock.calls[0][0];
+    expect(sentRows[0]).toMatchObject({
+      sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM',
+      qty_sold: 2, sale_price: 45,
+    });
+    expect(sentRows[0].sold_at).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('is a no-op for an empty array — no insert call at all', async () => {
+    await dbInsertSales([], vi.fn());
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('reports an insert error to the toast instead of throwing', async () => {
+    tableResults.sales = { data: null, error: { message: 'boom' } };
+    const toast = vi.fn();
+    await dbInsertSales([{ sku: 's', name: 'n', soldAt: Date.now() }], toast);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('boom'), true);
   });
 });
 

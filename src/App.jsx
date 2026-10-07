@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
-  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus,
+  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales,
   dbLoadSettings, dbSaveSettings,
   dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
   dbLoadSortingQueue, dbInsertSortingItems, dbDeleteSortingItem,
@@ -182,19 +182,28 @@ export default function App() {
     let affected = 0;
     const updatedList = [];
     const newTickets = [];
+    const newSales = [];
+    const soldAt = Date.now();
     const nextCatalog = catalog.map(c => {
       if (!skus.has(c.sku) || c.sold || c.qty <= 0) return c;
       const qtySold = c.qty;
       const updated = {
-        ...c, qty: 0, sold: true, lastUpdated: Date.now(),
+        ...c, qty: 0, sold: true, lastUpdated: soldAt,
         posSynced: false, tcgplayerSynced: false, collectrSynced: false,
       };
       updatedList.push(updated);
       newTickets.push({
         id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
         sku: c.sku, name: c.name, set: c.set, condition: c.condition, printing: c.printing, price: c.price,
-        qtySold, timestamp: Date.now(), posDone: false, tcgplayerDone: false, collectrDone: false,
+        qtySold, timestamp: soldAt, posDone: false, tcgplayerDone: false, collectrDone: false,
         posChannel: c.posChannel, tcgplayerChannel: c.tcgplayerChannel, collectrChannel: c.collectrChannel,
+      });
+      // Only the Mark Sold flow writes a sales record — editing Quantity
+      // down directly in Edit does not, same boundary sync_queue tickets
+      // already draw (see phase12_sales_history.sql).
+      newSales.push({
+        sku: c.sku, name: c.name, game: c.game, condition: c.condition,
+        qtySold, salePrice: c.price, soldAt,
       });
       affected++;
       return updated;
@@ -203,6 +212,7 @@ export default function App() {
     setQueue(prev => [...prev, ...newTickets]);
     await dbUpsertCards(updatedList, toast);
     await dbInsertTickets(newTickets, toast);
+    await dbInsertSales(newSales, toast);
     toast(`Marked ${affected} item(s) sold`);
   }
 

@@ -34,5 +34,6 @@ export function catalogSeed(rows) {
     quotes: [],
     quote_settings: [{ id: 1, tier1_pct: 50, tier2_pct: 60, tier3_pct: 70 }],
     sorting_queue: [],
+    sales: [],
   };
 }

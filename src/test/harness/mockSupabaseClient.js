@@ -18,6 +18,7 @@ const PRIMARY_KEY = {
   quotes: 'id',
   quote_settings: 'id',
   sorting_queue: 'id',
+  sales: 'id',
 };
 
 function defaultSeed() {
@@ -29,6 +30,7 @@ function defaultSeed() {
     quotes: [],
     quote_settings: [{ id: 1, tier1_pct: 50, tier2_pct: 60, tier3_pct: 70 }],
     sorting_queue: [],
+    sales: [],
   };
 }
 
