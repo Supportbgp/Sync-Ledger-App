@@ -25,7 +25,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: 'list',
   use: {
-    baseURL: `http://localhost:${PORT}/Sync-Ledger-App/`,
+    baseURL: `http://localhost:${PORT}/card-cove/`,
     trace: 'retain-on-failure',
     launchOptions: localChromiumPath ? { executablePath: localChromiumPath } : {},
   },

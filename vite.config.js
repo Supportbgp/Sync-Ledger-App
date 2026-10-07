@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 // that mock via this alias; a normal `vite`/`vite build` never sets this mode,
 // so production always gets the real src/lib/supabase.js.
 export default defineConfig(({ mode }) => ({
-  base: '/Sync-Ledger-App/',
+  base: '/card-cove/',
   plugins: [react()],
   resolve: mode === 'harness' ? {
     // Exact-string aliases, not a regex — every relative form actually used

@@ -7,8 +7,10 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
 
 - **Frontend**: Vite + React SPA, deployed to GitHub Pages via
   `.github/workflows/deploy.yml` on every push to `main`. `base:
-  '/Sync-Ledger-App/'` in `vite.config.js` — the live URL is
-  `https://supportbgp.github.io/Sync-Ledger-App/`.
+  '/card-cove/'` in `vite.config.js` — the live URL is
+  `https://supportbgp.github.io/card-cove/`. (Renamed from
+  `Sync-Ledger-App`/`supportbgp.github.io/Sync-Ledger-App/` — see the
+  Branding section below for why that decision was reversed.)
 - **Backend**: Supabase — Postgres (`catalog`, `sync_queue` tables), Supabase
   Auth (one shared login for shop staff, no per-user accounts), Supabase
   Realtime (cross-device live sync), one Edge Function
@@ -34,18 +36,21 @@ slabs). No traditional backend — a React SPA talking directly to Supabase.
   prose is historical — written back when that was the app's name — and
   was deliberately left as-is rather than rewritten, same as this file's
   standing practice of not silently rewriting past decisions.
-  - **The GitHub repo name and Pages URL deliberately stay
-    `Sync-Ledger-App`/`supportbgp.github.io/Sync-Ledger-App/` indefinitely
-    — a real decision, not a placeholder.** Confirmed with the user:
-    renaming the repo would break the live Pages URL (GitHub doesn't
-    auto-redirect a Pages site the way it redirects the repo itself) and
-    any Binder QR codes already printed and taped to physical binders
-    (see `vite.config.js`'s `base`/`playwright.config.js`'s `baseURL`,
-    both tied to this same path) — not worth it when the URL itself is
-    just a bookmark staff/customers use, not something they read as a
-    brand name. A custom domain was offered as a way to decouple the
-    public URL from the repo name entirely; declined for now too. Revisit
-    only if a strong reason to actually change the URL comes up later.
+  - **The GitHub repo was renamed `Sync-Ledger-App` → `card-cove`,
+    reversing an earlier "leave it alone indefinitely" decision.** That
+    earlier call (keep the old name/URL forever, since renaming breaks
+    the live Pages URL and any already-printed Binder QR codes, and a
+    custom domain was offered and declined) stood only briefly — the user
+    decided the mismatch between the live brand name and the repo/URL
+    wasn't worth carrying long-term after all, and went through with the
+    rename. `vite.config.js`'s `base` and `playwright.config.js`'s
+    `baseURL` were updated to `/card-cove/` in the same PR that preceded
+    the rename, merged immediately after the rename to keep the Pages
+    downtime (GitHub does **not** auto-redirect a Pages site on repo
+    rename, unlike the repo's own git/web URLs) to a single redeploy
+    cycle. Every Binder QR code printed under the old URL needed
+    reprinting after this — there is no redirect to fall back on. Local
+    git remotes were repointed to `card-cove` to match.
   - **Logo/icon imagery deliberately unchanged** — confirmed with the
     user to keep the existing Board Game Paradise palm/sun/meeple/wave
     emblem (see "Logo assets" below) as Card Cove's own icon rather than
