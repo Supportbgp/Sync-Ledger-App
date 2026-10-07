@@ -75,6 +75,12 @@ test('selecting an item and clicking Mark sold marks it sold', async ({ page }, 
 
   await expect(page.getByText(/Mark 1 selected item\(s\) as sold\?/)).toHaveCount(0);
   await expect(page.locator('.badge.sold')).toBeVisible();
+
+  // Mark Sold also writes a durable sales-report record (phase12_sales_history.sql),
+  // independent of the sync_queue ticket the UI already shows above.
+  const sales = await page.evaluate(() => window.__HARNESS_DB__.sales);
+  expect(sales).toHaveLength(1);
+  expect(sales[0]).toMatchObject({ sku: 'sku-2', name: 'Blastoise', qty_sold: 1 });
 });
 
 test('clicking anywhere on a desktop row selects it, and clicking Edit does not', async ({ page }, testInfo) => {

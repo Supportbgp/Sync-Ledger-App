@@ -3526,6 +3526,66 @@ previously-documented, researched architecture calls in this file:
   `RARITY_OPTIONS_BY_GAME.Lorcana`/`.SWU` and
   `PRINTING_OPTIONS_BY_GAME.SWU` to match.
 
+## Sales reporting, Feature A of the price-tracking/reporting roadmap
+
+First PR of a two-feature initiative (sales reporting, then price-spike
+tracking) planned out and confirmed with the user before building: a
+durable record of what's actually sold, for a future monthly/yearly
+revenue report. This PR is deliberately scoped to just the data model and
+the write hook — no report UI yet, that's the next PR.
+
+- **New `sales` table** (`phase12_sales_history.sql`) — one row per Mark
+  Sold event: `sku`, `name`, `game`, `condition`, `qty_sold`, `sale_price`,
+  `sold_at`. Append-only, never updated or deleted, independent of both
+  `catalog` (whose rows can be edited/deleted after the fact — a report
+  must never retroactively change) and `sync_queue` (which tracks
+  in-flight cross-platform listing cleanup and gets its rows deleted once
+  resolved — a genuinely different lifetime and purpose). Deliberately
+  snapshots only what a revenue/volume-by-game report needs, not every
+  catalog field (no set/printing/rarity/location) — add columns later if
+  an actual report needs them, rather than guessing a full schema now.
+  No realtime-publication step needed, unlike `quotes`/`sorting_queue` —
+  reports are pull-based, nothing needs to see a sale land live.
+- **Scope decision, confirmed with the user**: only the batch "Mark sold"
+  flow (`App.jsx`'s `handleBatchSell`) writes a sales record — editing
+  Quantity down directly in Edit does **not**, matching the exact same
+  boundary this app already drew for `sync_queue` tickets (see the
+  "Catalog: click-to-select rows, per-row Sell removed" section above,
+  which documents that a direct Quantity edit was never wired to ticket
+  creation either). Kept the two flows' behavior consistent rather than
+  inventing a new rule just for sales reporting.
+- **`db.js` gained `dbInsertSales`** (plus an internal `saleToRow`,
+  unexported — matches `ticketToRow`'s own pattern, no external caller
+  needs the row shape directly), called from `handleBatchSell` right
+  alongside the existing `dbInsertTickets` call — same event, two
+  independent writes, since the two tables serve different purposes.
+  `handleBatchSell` also now shares one `soldAt` timestamp across every
+  item in the same batch action (previously each item's ticket/`
+  lastUpdated` called `Date.now()` separately) — a minor correctness fix
+  motivated directly by this feature: several items marked sold in the
+  same click should report as sold at the same moment, not microseconds
+  apart.
+- **Explicit profit/cost-basis scope cut**: this table has no cost/basis
+  column — confirmed with the user as an explicitly separate, larger
+  initiative (most inbound paths — Scanner, Import — never capture what
+  the shop paid for an item at all; only Quote-tab trade-ins have a real
+  payout amount). This PR only supports revenue/volume reporting.
+- `src/test/harness/mockSupabaseClient.js` and `e2e/fixtures.js`'s
+  `catalogSeed` both gained a `sales: []` table entry, same as every other
+  real table, so e2e specs touching Mark Sold don't hit an unseeded table.
+- Covered by new tests in `db.test.js` (`dbInsertSales`'s row shape, the
+  empty-array no-op, and the error-to-toast path) and an extended
+  assertion in `e2e/catalog.spec.js`'s existing Mark Sold test, reading
+  `window.__HARNESS_DB__.sales` directly to confirm the write actually
+  happened — the first e2e spec in this app to inspect harness DB state
+  directly rather than only the rendered UI, since there's no UI yet to
+  assert against (that's the next PR).
+
+**Requires running `phase12_sales_history.sql`** in the Supabase SQL
+Editor before this code can write sales records — no code-side default
+masks a missing table here, so Mark Sold would start throwing a real
+insert error rather than silently skipping the record.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
