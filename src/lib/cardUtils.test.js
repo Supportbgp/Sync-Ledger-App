@@ -148,15 +148,15 @@ describe('RARITY_OPTIONS_BY_GAME', () => {
     expect(onePiece.some(o => /parallel|alternate art/i.test(o))).toBe(false);
   });
 
-  it('lists the six official Lorcana rarity tiers plus the real "Promo" value, no duplicates', () => {
+  it('lists the six official Lorcana rarity tiers plus "Epic" (added by explicit staff confirmation) and the real "Promo" value, no duplicates', () => {
     const lorcana = RARITY_OPTIONS_BY_GAME.Lorcana;
-    expect(lorcana).toEqual(['Common', 'Uncommon', 'Rare', 'Super Rare', 'Legendary', 'Enchanted', 'Promo']);
+    expect(lorcana).toEqual(['Common', 'Uncommon', 'Rare', 'Super Rare', 'Epic', 'Legendary', 'Enchanted', 'Promo']);
     expect(new Set(lorcana).size).toBe(lorcana.length);
   });
 
-  it('lists the four SWU pull-structure rarities plus "Special" and "Promo" (the latter added by explicit staff request), excluding Hyperspace/Showcase/Prestige (a separate finish axis)', () => {
+  it('lists the four SWU pull-structure rarities plus "Special", "Serialized" (added by explicit staff request, reversing its earlier Printing-list exclusion), and "Promo", excluding Hyperspace/Showcase/Prestige (a separate finish axis)', () => {
     const swu = RARITY_OPTIONS_BY_GAME.SWU;
-    expect(swu).toEqual(['Common', 'Uncommon', 'Rare', 'Legendary', 'Special', 'Promo']);
+    expect(swu).toEqual(['Common', 'Uncommon', 'Rare', 'Legendary', 'Special', 'Serialized', 'Promo']);
     expect(new Set(swu).size).toBe(swu.length);
     expect(swu.some(o => /hyperspace|showcase|prestige/i.test(o))).toBe(false);
   });
@@ -328,9 +328,9 @@ describe('PRINTING_OPTIONS_BY_GAME', () => {
     expect(PRINTING_OPTIONS_BY_GAME.Lorcana).toEqual(['Normal', 'Foil']);
   });
 
-  it('offers the six real SWU treatment names, excluding promo/distribution-specific variants like Serialized or Judge Promo', () => {
+  it('offers the real SWU treatment names including Prestige Foil (added by explicit staff request), excluding promo/distribution-specific variants like Serialized (moved to Rarity instead, by staff request) or Judge Promo', () => {
     const swu = PRINTING_OPTIONS_BY_GAME.SWU;
-    expect(swu).toEqual(['Normal', 'Foil', 'Hyperspace', 'Hyperspace Foil', 'Showcase', 'Prestige']);
+    expect(swu).toEqual(['Normal', 'Foil', 'Hyperspace', 'Hyperspace Foil', 'Showcase', 'Prestige', 'Prestige Foil']);
     expect(swu.some(o => /serial|promo|judge|convention/i.test(o))).toBe(false);
   });
 

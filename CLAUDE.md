@@ -3486,6 +3486,46 @@ screen, staff docs header, export format labels). See this file's own
 Branding section above for the specifics of what changed and what was
 deliberately left alone (historical prose, the repo/Pages URL).
 
+## Rarity additions: Lorcana "Epic", SWU "Serialized" and "Prestige Foil"
+
+Three curated-rarity/printing additions requested directly by staff,
+confirmed with the user before implementing since two of them touch
+previously-documented, researched architecture calls in this file:
+
+- **Lorcana `RARITY_OPTIONS_BY_GAME` gained "Epic"** — not one of the six
+  rarity tiers this file's own Lorcana research confirmed via a real
+  Lorcast API sample (Common/Uncommon/Rare/Super Rare/Legendary/
+  Enchanted). Added anyway on staff's explicit confirmation that it's a
+  real tier they've seen on physical cards — its position in the list
+  (between Super Rare and Legendary) is a best guess, not verified against
+  a real sample the way the other six were. Revisit the ordering if a real
+  Lorcast response for an Epic card ever surfaces.
+- **SWU `RARITY_OPTIONS_BY_GAME` gained "Serialized"** — this reverses part
+  of an earlier, explicit research call in this same file, which evaluated
+  "Serialized" and deliberately excluded it from SWU's curated *Printing*
+  list as event/distribution-tied vocabulary (grouped with Weekly Play
+  Promo/Foil, Prerelease Promo, Convention Exclusive, Judge Promo — all
+  still excluded). Staff specifically asked for it to be selectable as a
+  **Rarity** instead, not a Printing/finish value, so it now lives in
+  `RARITY_OPTIONS_BY_GAME.SWU` rather than being un-excluded from Printing.
+- **SWU `PRINTING_OPTIONS_BY_GAME` gained "Prestige Foil"**, alongside the
+  existing "Prestige" entry — same foiled/non-foiled pairing pattern as the
+  existing Hyperspace/Hyperspace Foil pair. This one does **not** reverse
+  anything: Prestige was already, and remains, modeled as a Printing/finish
+  value (a separate axis from Rarity, per the real swu-db.com card listing
+  this file's SWU research cites), so its foiled variant belongs in the
+  same list.
+- All three are explicit staff-confirmation additions, not independently
+  re-verified against a new API sample — matching this file's existing
+  "Promo added everywhere despite weak/no API confirmation, per explicit
+  staff request" precedent rather than the stricter research-first bar
+  used for e.g. the original per-game parity sprints. Comments at each
+  array in `cardUtils.js` flag this so a future pass doesn't mistake these
+  for independently-researched values or "fix" them back out.
+- Updated `cardUtils.test.js`'s exact-array assertions for
+  `RARITY_OPTIONS_BY_GAME.Lorcana`/`.SWU` and
+  `PRINTING_OPTIONS_BY_GAME.SWU` to match.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
