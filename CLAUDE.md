@@ -3738,6 +3738,142 @@ useful: volume/revenue per game is a good summary, but staff wanted to see
   over without a manual collapse step first, and clicking the same row
   again collapses it.
 
+## Price tracking & spike alerts, Feature B of the price-tracking/reporting roadmap
+
+First PR of the second feature in the two-feature roadmap confirmed with the
+user alongside Feature A (sales reporting, above): a reliable way to notice
+when a card's market price has jumped, so staff know to adjust their own
+price rather than keep selling at a stale, now-too-low number. Six open
+questions were confirmed with the user before building:
+
+- **Only a Mark Sold event, not a manual Quantity edit-down, counts toward
+  reporting** — irrelevant to this PR specifically, but recorded here since
+  it was answered in the same round (see Feature A's own section above for
+  where it actually applies).
+- **Revenue/volume only for sales reporting, profit/cost-basis is a
+  separate, later extension** — same note, applies to Feature A not this PR.
+- **Price tracking is opt-in via a price floor** (an adjustable "high cost"
+  threshold, not every item) — a shop's bulk commons spiking 20% in dollar
+  terms is noise; a $200 card spiking 20% is $40 worth of margin left on the
+  table. `price_tracking_settings.floor_price` (default $25, store-
+  configurable) gates which catalog rows get checked at all.
+- **Refresh cadence: GitHub Actions**, not Supabase's own scheduler —
+  matches this project's existing CI tooling rather than introducing a
+  second scheduling system, and keeps the schedule's definition
+  (`.github/workflows/price-check.yml`) version-controlled in the same repo
+  as everything else.
+- **Spike direction: up only, for v1** — a price drop isn't something staff
+  need to be alerted to adjust *up* for; flagging drops too is a plausible
+  future addition, not built here.
+- **Alert delivery: an in-app badge, for v1** — no Discord webhook/email yet
+  (the `sales` table's own write hook already established "ship the
+  minimal, independently-useful version first" for this roadmap).
+- **Scope, confirmed before writing PR 1's code**: all 8 games with a real
+  price-lookup function get tracked from v1 (not a staged Pokemon-then-
+  Magic rollout the way the original per-game parity initiative was staged)
+  — Sports Singles has no card database to check against at all, same
+  accepted drawback documented elsewhere in this file.
+
+This PR is deliberately scoped to just the data model and the scheduled
+checker — no in-app UI yet (that's PR 2), mirroring exactly how Feature A's
+own PR 1/PR 2 split worked.
+
+- **New tables** (`phase13_price_tracking.sql`): `price_history` (one row
+  per scheduled check per tracked item, append-only like `sales`, kept for
+  a future trend/sparkline view — nothing reads it yet), `price_alerts` (one
+  row per detected spike, `acknowledged` boolean driving PR 2's in-app badge
+  count — never deleted once resolved, unlike `sorting_queue`, since "we got
+  notified about this on this date" is itself a useful historical record),
+  and `price_tracking_settings` (a singleton row, `floor_price`/`spike_pct`,
+  same `id=1`/own-dedicated-row pattern `quote_settings` already established
+  over bolting onto `store_settings` — this is a price-tracking concern, not
+  a Catalog condition-multiplier concern).
+- **New Edge Function, `supabase/functions/price-check`** — the first Edge
+  Function in this repo that reads/writes Postgres directly, rather than
+  only proxying an external lookup. Uses the service-role client Supabase
+  auto-injects into every Edge Function (`SUPABASE_URL`/
+  `SUPABASE_SERVICE_ROLE_KEY` env vars — no `supabase secrets set` needed
+  for those two specifically) so it bypasses RLS to read/write across the
+  whole catalog regardless of which user (if any) triggered it. Per
+  invocation: loads `price_tracking_settings` (falling back to $25/20% if
+  the row is somehow missing, same resilience `dbLoadSettings` already
+  applies to `store_settings`), loads every non-bulk catalog row with a
+  `base_price` at or above the floor (ordered by `base_price` descending,
+  capped at 200 items per run — see below), looks up a fresh price per item
+  with limited concurrency (cap 3, same `runWithConcurrency` pattern already
+  used client-side for CSV import/scanner auto-fill), writes a
+  `price_history` row for every item actually priced, and inserts a
+  `price_alerts` row when the fresh price exceeds the item's own
+  `base_price` by at least `spike_pct` — **unless an unacknowledged alert
+  for that sku already exists**, so a sustained spike doesn't pile up a
+  fresh alert every single day it stays elevated; one unacknowledged alert
+  per sku is enough to drive the badge, resolved by staff dismissing it or
+  updating the price (which this PR does NOT do automatically — `base_price`
+  is never silently overwritten by the scheduled check, matching this app's
+  standing "never silently overwrite a manual entry" / "deliberate pricing
+  decisions are expected" rule from the original Market Value feature).
+  - **Per-game price lookups are a deliberately simpler, single-shot version
+    of `cardSearch.js`'s own interactive multi-tier fallback ladders** — this
+    runs unattended against the whole tracked catalog on a schedule, so
+    request budget across potentially hundreds of items matters more than
+    getting any one item exactly right on the first try. A wrong/no match
+    for one item just skips it until the next scheduled run, not a blocking
+    failure. Field names/endpoints mirror `cardSearch.js`'s own
+    already-confirmed shapes exactly (same real APIs, same response fields
+    — `scryfallPrice`'s usd→usd_foil→usd_etched→usd_glossy fallback,
+    `pokemonTcgplayerPrice`'s market→mid→avg(low,high)→low/high fallback,
+    YGOPRODeck's `card_prices[0].tcgplayer_price`, Lorcast's
+    usd→usd_foil, and the Egman-backed games' card-list-plus-price-list
+    join by `card_code`) — not re-guessed from scratch for this new file.
+  - **`MAX_ITEMS_PER_RUN = 200`, a defensive cap** — Edge Functions have a
+    real execution time limit, and a shop whose tracked (above-floor)
+    catalog eventually grows past this will need a different approach
+    (e.g. splitting the check across more frequent runs) rather than
+    silently timing out partway through an unbounded batch. Ordered by
+    `base_price` descending so the highest-value, highest-spike-risk items
+    get checked first if a run ever does have to truncate. Not expected to
+    bind for a while at this shop's current catalog size — revisit if it
+    ever does, same "parked until it's a real problem" discipline used
+    elsewhere in this file.
+  - No CORS allowlist, unlike `scan-binder-page`/`card-lookup-proxy` —
+    this function is never called from a browser, only from the GitHub
+    Actions workflow below.
+  - Deploy with `supabase functions deploy price-check`.
+- **New GitHub Actions workflow, `.github/workflows/price-check.yml`** —
+  daily cron (`7 13 * * *`, a few minutes off the hour to avoid the
+  on-the-hour traffic spike most scheduled jobs land on) plus
+  `workflow_dispatch` for an on-demand manual run, both just `curl -X POST`
+  to the Edge Function's URL. **Requires a `SUPABASE_SERVICE_ROLE_KEY`
+  repository secret** (Settings → Secrets and variables → Actions) — used as
+  the request's Authorization bearer token so the call passes Supabase's
+  default per-function JWT check. This is a genuinely sensitive credential
+  (full database bypass, same key the Edge Function itself already has
+  automatically) — it must never be logged/echoed, and this is the first
+  place in this repo a GitHub Actions secret of this sensitivity is needed
+  (contrast with `deploy.yml`, which needs no secrets at all for a static
+  GitHub Pages deploy).
+- **No in-app UI yet** — db.js gained no new functions in this PR,
+  mirroring exactly how Feature A's PR 1 added `dbInsertSales` (the write
+  path, called from app code) but not `dbLoadSales` (the read path, which
+  landed in PR 2 alongside its UI). Here, the entire write path lives
+  inside the Edge Function, not app code, so there's nothing for db.js to
+  gain yet — the read-side functions PR 2's in-app badge needs (loading
+  settings, loading/acknowledging alerts) are deferred to that PR, same
+  split.
+- **No automated test coverage for the Edge Function itself** — matches the
+  existing, already-accepted gap for `scan-binder-page`/`card-lookup-proxy`
+  (Deno, not covered by the Vitest/Playwright suites, and this sandbox has
+  no network path to a real Supabase project to exercise it against either
+  — see the standing "Manual QA note"). Verified instead by syntax-checking
+  the file and manually tracing each provider's request/response shape
+  against `cardSearch.js`'s own already-confirmed fields.
+
+**Requires running `phase13_price_tracking.sql`** in the Supabase SQL
+Editor, **deploying `price-check`** (`supabase functions deploy
+price-check`), and **setting the `SUPABASE_SERVICE_ROLE_KEY` GitHub Actions
+repository secret** before the daily check can run at all — no code-side
+default masks any of these three being missing.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
