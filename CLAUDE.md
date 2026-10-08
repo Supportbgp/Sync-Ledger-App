@@ -3920,6 +3920,49 @@ itself.
 price-check`) for this fix to take effect — the previous deploy still has
 the crashing query live.
 
+## Price tracking: tracks against `price` ("Our Price"), not `base_price`
+
+The `number`-column fix above got `price-check` running without erroring,
+but the very next real manual `workflow_dispatch` run returned
+`{"total":0,"checked":0,"spikes":0,"failed":0}` — no crash, but nothing
+matched the floor query either. A second real finding, same "the user's own
+manual test catches what this sandbox can't" pattern as the fix above.
+
+- **Confirmed, not guessed, before touching any code**: a direct query
+  against the real project (`select count(*) filter (where base_price is
+  not null) ...`) showed **0 of 599 real catalog items had `base_price`
+  set at all.** `base_price` is only ever populated when staff run "Find
+  stock image"/"Find market price" and pick a candidate (Sprint 5's Market
+  Value feature) — unlike `sales`, there's no backfill script that
+  populates it for pre-existing inventory, so a shop whose items were
+  mostly added via Import/Scanner without staff separately running a price
+  search has essentially nothing with `base_price` set. PR 1's choice to
+  gate/compare on `base_price` was a reasonable first guess but didn't
+  match this shop's actual data.
+- **Fix, confirmed with the user as correct, not just a workaround**:
+  `price-check` now gates (`price >= floor_price`) and compares
+  (`pctChange` against the fresh lookup) using `catalog.price` ("Our
+  Price") instead of `base_price` — every real item has this, since it's
+  what the item is actually listed for sale at. The user explicitly agreed
+  this is the right comparison for the actual goal here, not merely an
+  acceptable substitute: the point of a spike alert is "our listed price is
+  now stale relative to the market," which comparing against what's
+  currently charged answers more directly than a possibly-never-captured
+  reference price would have. `price_alerts.previous_price` now holds the
+  item's `price` at check time, not `base_price`. Never writes back to
+  `price` — same "never silently overwrite a manual entry" rule already
+  documented for the original `base_price` design.
+- `price_history` itself is unaffected — it already just logged whatever
+  fresh price was fetched, independent of what it gets compared against.
+- Not treated as a reversal of PR 1's core design (`price_tracking_settings`
+  still exists, same floor/spike-pct shape) — just a correction to which
+  existing catalog column the checker reads against, caught by real usage
+  immediately after the `number` fix above, in the same first week of
+  actual use this feature has had.
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

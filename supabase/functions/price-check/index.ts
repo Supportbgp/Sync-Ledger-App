@@ -199,9 +199,9 @@ async function lookupPrice(item) {
 // Functions have a real execution time limit, and a shop whose tracked
 // (above-floor) catalog grows past this will need a different approach
 // (e.g. splitting across more frequent runs) rather than silently timing
-// out partway through an unbounded batch. Ordered by base_price descending
-// so the most valuable (and highest spike-risk) items are checked first if
-// a run ever does have to truncate.
+// out partway through an unbounded batch. Ordered by price descending so
+// the most valuable (and highest spike-risk) items are checked first if a
+// run ever does have to truncate.
 const MAX_ITEMS_PER_RUN = 200;
 const CONCURRENCY = 3;
 
@@ -224,9 +224,7 @@ Deno.serve(async (req) => {
 
   // Bulk lots have no per-print identity to look up at all (see CLAUDE.md's
   // "Sorting stage + Bulk item type" section) — excluded the same way
-  // catalog_public_view excludes them. An item with no base_price was never
-  // priced via a real search result to begin with, so there's nothing to
-  // compare a fresh price against yet. No `number` column — collector
+  // catalog_public_view excludes them. No `number` column — collector
   // number has never been a persisted catalog column anywhere in this app
   // (confirmed against every `alter table catalog add column` migration —
   // only base_price and rarity were ever added), only a transient,
@@ -235,13 +233,27 @@ Deno.serve(async (req) => {
   // ("column catalog.number does not exist") — caught by the user's own
   // manual test, not by review, so each per-game lookup above was also
   // stripped of its now-impossible numberHint narrowing.
+  //
+  // Compares against `price` ("Our Price"), not `base_price` — a second
+  // real finding from manual testing. `base_price` is only ever populated
+  // when staff run "Find stock image"/"Find market price" and pick a
+  // candidate (Sprint 5's Market Value feature); confirmed via a real query
+  // against the live project that 0 of 599 real catalog items had
+  // base_price set, so the floor/comparison never matched anything at all.
+  // `price` is what every real item actually has — confirmed with the user
+  // that comparing a fresh market price against what's currently charged is
+  // the right comparison anyway (the goal is "notice our listed price is
+  // now stale relative to the market," which `price` answers more directly
+  // than a possibly-never-captured reference price would). This never
+  // writes back to `price` — same "never silently overwrite a manual
+  // entry" rule already documented below.
   const { data: items, error } = await admin
     .from("catalog")
-    .select("sku, name, game, base_price")
+    .select("sku, name, game, price")
     .neq("item_type", "bulk")
-    .not("base_price", "is", null)
-    .gte("base_price", floor)
-    .order("base_price", { ascending: false })
+    .not("price", "is", null)
+    .gte("price", floor)
+    .order("price", { ascending: false })
     .limit(MAX_ITEMS_PER_RUN);
 
   if (error) {
@@ -259,7 +271,7 @@ Deno.serve(async (req) => {
       sku: item.sku, name: item.name, game: item.game, price,
     });
 
-    const pctChange = item.base_price > 0 ? ((price - item.base_price) / item.base_price) * 100 : 0;
+    const pctChange = item.price > 0 ? ((price - item.price) / item.price) * 100 : 0;
     if (pctChange >= spikePct) {
       // Don't pile up a fresh alert every single day a sustained spike
       // persists — one unacknowledged alert per sku is enough to drive the
@@ -275,7 +287,7 @@ Deno.serve(async (req) => {
         spikes++;
         await admin.from("price_alerts").insert({
           sku: item.sku, name: item.name, game: item.game,
-          previous_price: item.base_price, new_price: price, pct_change: pctChange,
+          previous_price: item.price, new_price: price, pct_change: pctChange,
         });
       }
     }
