@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { computeSalesReport, presetDateRange, customDateRangeToBounds } from '../../lib/reportUtils.js';
 
 const PRESETS = [
@@ -19,6 +19,7 @@ export default function ReportsTab({ onLoadSales }) {
   const [customTo, setCustomTo] = useState('');
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [expandedGame, setExpandedGame] = useState(null);
 
   const range = preset === 'custom' ? customDateRangeToBounds(customFrom, customTo) : presetDateRange(preset);
 
@@ -26,6 +27,7 @@ export default function ReportsTab({ onLoadSales }) {
     if (!range) { setSales([]); return; }
     let cancelled = false;
     setLoading(true);
+    setExpandedGame(null);
     onLoadSales(range.from, range.to).then(rows => {
       if (!cancelled) { setSales(rows); setLoading(false); }
     });
@@ -92,13 +94,51 @@ export default function ReportsTab({ onLoadSales }) {
               <tr><th>Game</th><th>Units</th><th>Revenue</th></tr>
             </thead>
             <tbody>
-              {report.byGame.map(g => (
-                <tr key={g.game}>
-                  <td>{g.game}</td>
-                  <td>{g.units}</td>
-                  <td>${g.revenue.toFixed(2)}</td>
-                </tr>
-              ))}
+              {report.byGame.map(g => {
+                const isOpen = expandedGame === g.game;
+                // Mirrors computeSalesReport's own blank-game->"Unknown"
+                // grouping so the drill-down matches exactly the rows that
+                // were summed into this game's totals above.
+                const items = sales
+                  .filter(s => (s.game || 'Unknown') === g.game)
+                  .slice()
+                  .sort((a, b) => b.soldAt - a.soldAt);
+                return (
+                  <Fragment key={g.game}>
+                    <tr
+                      onClick={() => setExpandedGame(isOpen ? null : g.game)}
+                      style={{ cursor: 'pointer' }}
+                      aria-expanded={isOpen}
+                    >
+                      <td>{isOpen ? '▼' : '▶'} {g.game}</td>
+                      <td>{g.units}</td>
+                      <td>${g.revenue.toFixed(2)}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={3} style={{ padding: '0 0 12px 24px', background: 'var(--surface-alt)' }}>
+                          <table>
+                            <thead>
+                              <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Sold</th></tr>
+                            </thead>
+                            <tbody>
+                              {items.map(s => (
+                                <tr key={s.id}>
+                                  <td>{s.name}</td>
+                                  <td>{s.condition || '—'}</td>
+                                  <td>{s.qtySold}</td>
+                                  <td>{s.salePrice == null ? '—' : `$${Number(s.salePrice).toFixed(2)}`}</td>
+                                  <td>{new Date(s.soldAt).toLocaleDateString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </>

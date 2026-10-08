@@ -3703,6 +3703,41 @@ both already non-phase-numbered one-offs for the same reason).
   no reciprocal link back to a `sales` row to de-duplicate on — the
   script's own header comment calls this out explicitly.
 
+## Reports tab: click a game row to drill into its individual sold cards
+
+Real ask right after the backfill above made the by-game breakdown actually
+useful: volume/revenue per game is a good summary, but staff wanted to see
+*which* cards made up that number without leaving the tab.
+
+- **`ReportsTab.jsx`'s by-game `<table>` rows are now clickable** — a new
+  `expandedGame` state (one game at a time, not a Set of several open at
+  once) toggles on row click; the open row's chevron flips `▶`→`▼` and an
+  inline nested `<table>` renders directly below it (as a sibling `<tr>`
+  with a single `colSpan={3}` cell) listing that game's own sold cards —
+  Name/Condition/Qty/Price/Sold date, newest first. Clicking a different
+  game's row switches straight to it without needing to collapse the first
+  one by hand; clicking the same row again collapses it.
+- **No new fetch — filtered client-side from the already-loaded `sales`
+  array**, the same array `computeSalesReport` already summed for the
+  table's own numbers. The drill-down's own filter
+  (`(s.game || 'Unknown') === g.game`) deliberately mirrors
+  `computeSalesReport`'s identical blank-game→`"Unknown"` grouping rule
+  (`reportUtils.js`) so the rows shown under a game are always exactly the
+  ones that were summed into that row's own Units/Revenue — no separate
+  grouping logic to drift out of sync with the totals above it.
+  `expandedGame` is reset to `null` whenever the date range changes (same
+  effect that re-fetches `sales`), so a stale expansion naming a game that
+  might not even appear in the new range's results can't linger.
+- A sale with no captured price still renders `—` in the drill-down's Price
+  column (matching `computeSalesReport`'s own null-price handling, which
+  counts it toward units but contributes 0 revenue) rather than `$NaN` or a
+  blank cell with no explanation.
+- Covered by a new `e2e/reports.spec.js` test: two games' sales seeded,
+  nothing shown until a row is clicked, clicking Pokemon's row reveals only
+  its own cards (not Magic's), clicking Magic's row switches the drill-down
+  over without a manual collapse step first, and clicking the same row
+  again collapses it.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
