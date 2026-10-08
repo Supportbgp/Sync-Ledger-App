@@ -17,6 +17,8 @@ function makeQueryBuilder(table) {
     eq: vi.fn(() => builder),
     in: vi.fn(() => builder),
     neq: vi.fn(() => builder),
+    gte: vi.fn(() => builder),
+    lt: vi.fn(() => builder),
     order: vi.fn(() => builder),
     range: vi.fn(() => builder),
     maybeSingle: vi.fn(() => builder),
@@ -43,7 +45,7 @@ const {
   rowToCard, rowToTicket, dbUpsertCard, dbInsertTicket,
   dbLoadSettings, dbLoadPublicBinder, dbLoadAll,
   rowToSortingItem, dbInsertSortingItems,
-  dbInsertSales,
+  dbInsertSales, rowToSale, dbLoadSales,
 } = await import('./db.js');
 
 beforeEach(() => {
@@ -179,6 +181,59 @@ describe('dbInsertSales (saleToRow via the real call)', () => {
     tableResults.sales = { data: null, error: { message: 'boom' } };
     const toast = vi.fn();
     await dbInsertSales([{ sku: 's', name: 'n', soldAt: Date.now() }], toast);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('boom'), true);
+  });
+});
+
+describe('rowToSale', () => {
+  it('maps snake_case sale columns to the camelCase shape', () => {
+    const row = {
+      id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM',
+      qty_sold: 2, sale_price: 45, sold_at: '2026-01-01T00:00:00.000Z',
+    };
+    expect(rowToSale(row)).toMatchObject({
+      id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM',
+      qtySold: 2, salePrice: 45,
+    });
+    expect(rowToSale(row).soldAt).toBe(new Date('2026-01-01T00:00:00.000Z').getTime());
+  });
+});
+
+describe('dbLoadSales', () => {
+  it('filters by the given [from, to) range via gte/lt on sold_at', async () => {
+    tableResults.sales = { data: [], error: null };
+    await dbLoadSales('2026-01-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z', vi.fn());
+    const builder = fromMock.mock.results[0].value;
+    expect(builder.gte).toHaveBeenCalledWith('sold_at', '2026-01-01T00:00:00.000Z');
+    expect(builder.lt).toHaveBeenCalledWith('sold_at', '2026-02-01T00:00:00.000Z');
+  });
+
+  it('maps returned rows through rowToSale', async () => {
+    tableResults.sales = {
+      data: [{ id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM', qty_sold: 1, sale_price: 10, sold_at: '2026-01-05T00:00:00.000Z' }],
+      error: null,
+    };
+    const sales = await dbLoadSales('2026-01-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z', vi.fn());
+    expect(sales).toHaveLength(1);
+    expect(sales[0]).toMatchObject({ sku: 'sku-1', qtySold: 1, salePrice: 10 });
+  });
+
+  it('pages past 1000 rows the same way dbLoadAll does', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => ({ id: `s${i}`, sku: `sku-${i}`, name: 'n', game: 'Pokemon', condition: 'NM', qty_sold: 1, sale_price: 1, sold_at: '2026-01-01T00:00:00.000Z' }));
+    const page2 = [{ id: 's1000', sku: 'sku-1000', name: 'n', game: 'Pokemon', condition: 'NM', qty_sold: 1, sale_price: 1, sold_at: '2026-01-01T00:00:00.000Z' }];
+    tableResults.sales = [
+      { data: page1, error: null },
+      { data: page2, error: null },
+    ];
+    const sales = await dbLoadSales('2026-01-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z', vi.fn());
+    expect(sales).toHaveLength(1001);
+  });
+
+  it('reports a load error to the toast and returns an empty array rather than throwing', async () => {
+    tableResults.sales = { data: null, error: { message: 'boom' } };
+    const toast = vi.fn();
+    const sales = await dbLoadSales('2026-01-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z', toast);
+    expect(sales).toEqual([]);
     expect(toast).toHaveBeenCalledWith(expect.stringContaining('boom'), true);
   });
 });

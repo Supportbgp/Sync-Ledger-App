@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
-  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales,
+  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales, dbLoadSales,
   dbLoadSettings, dbSaveSettings,
   dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
   dbLoadSortingQueue, dbInsertSortingItems, dbDeleteSortingItem,
@@ -23,6 +23,7 @@ import ScannerPanel from './components/scanner/ScannerPanel.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import QuotesTab from './components/quotes/QuotesTab.jsx';
 import SortingTab from './components/sorting/SortingTab.jsx';
+import ReportsTab from './components/reports/ReportsTab.jsx';
 
 const TABS = [
   { key: 'catalog', label: 'Catalog' },
@@ -31,6 +32,7 @@ const TABS = [
   { key: 'scanner', label: 'Scan Binder' },
   { key: 'quote', label: 'Quote' },
   { key: 'sorting', label: 'Sorting' },
+  { key: 'reports', label: 'Reports' },
 ];
 
 const CONDITION_RANK = { NM: 0, LP: 1, MP: 2, HP: 3, DMG: 4 };
@@ -214,6 +216,13 @@ export default function App() {
     await dbInsertTickets(newTickets, toast);
     await dbInsertSales(newSales, toast);
     toast(`Marked ${affected} item(s) sold`);
+  }
+
+  // Thin passthrough to dbLoadSales — ReportsTab owns the date-range UI and
+  // calls this on demand (see ReportsTab.jsx's own comment for why sales
+  // isn't eagerly loaded into top-level state like catalog/quotes/sorting).
+  function handleLoadSalesReport(fromISO, toISO) {
+    return dbLoadSales(fromISO, toISO, toast);
   }
 
   async function handleToggleStamp(id, field) {
@@ -431,6 +440,10 @@ export default function App() {
 
       <div className={`panel${tab === 'sorting' ? ' active' : ''}`}>
         <SortingTab sorting={sorting} catalog={catalog} locations={locations} onSortItems={handleSortItems} />
+      </div>
+
+      <div className={`panel${tab === 'reports' ? ' active' : ''}`}>
+        <ReportsTab onLoadSales={handleLoadSalesReport} />
       </div>
 
       <div className="footnote">

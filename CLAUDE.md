@@ -3586,6 +3586,80 @@ Editor before this code can write sales records — no code-side default
 masks a missing table here, so Mark Sold would start throwing a real
 insert error rather than silently skipping the record.
 
+## Sales reporting, PR 2: the Reports tab
+
+Second and final PR of Feature A — a new top-level **Reports** tab
+rendering the revenue/volume report PR 1's `sales` table was written for.
+No cost-basis/profit here either (same explicit scope cut as PR 1); this
+reads `sales` as-is.
+
+- **`src/lib/reportUtils.js`** — the report's pure, unit-tested logic,
+  deliberately kept separate from `quoteUtils.js` despite the superficially
+  similar "sum some money" shape (sales reporting and Quote-tab offer math
+  are unrelated features that happen to both total currency; coupling them
+  would make neither easier to change later). `computeSalesReport(sales)`
+  sums `revenue`/`units` and breaks them down `byGame` (sorted by revenue,
+  descending) — a blank/missing `game` groups under `"Unknown"` rather than
+  being dropped, and a sale with a null `salePrice` still counts its `qty`
+  toward units (the sale genuinely happened, even if the price wasn't
+  captured). `presetDateRange('month'|'year', now?)` and
+  `customDateRangeToBounds(fromStr, toStr)` compute the `[from, to)` ISO
+  bounds `dbLoadSales` expects — the custom-range helper bumps the end date
+  one day forward so the picked end date is itself included, matching how
+  a person reads "Jan 1 to Jan 31" (both days counted), not an exact-
+  midnight cutoff that would silently exclude the last day.
+- **`db.js` gained `dbLoadSales(fromISO, toISO, toast)`/`rowToSale`** —
+  deliberately **not** added to `dbLoadAll`'s eager, sign-in-time load the
+  way `catalog`/`sync_queue`/`quotes`/`sorting_queue` are. Every one of
+  those has a natural cap (an in-flight queue drains, a quote resolves) —
+  `sales` only ever grows, forever, with no equivalent ceiling, so eagerly
+  pulling the whole table into memory on every login doesn't scale the way
+  it does for those. `dbLoadSales` fetches only the date range the Reports
+  tab is actually showing, still routed through the existing
+  `fetchAllRows` paging helper so a wide range (e.g. "this year" for a
+  genuinely busy shop) pages correctly past 1000 rows instead of silently
+  truncating — the exact production bug this app already hit once with a
+  bare `.select()` (see "Known constraints" above).
+- **`ReportsTab.jsx`** fetches on demand via a `fromISO, toISO) => Promise`
+  prop (`App.jsx`'s `handleLoadSalesReport`, a thin passthrough to
+  `dbLoadSales`) rather than receiving a pre-loaded `sales` array the way
+  `SortingTab`/`QuotesTab` receive their data — this is the one tab in the
+  app that owns its own data-fetching trigger, since "fetch only what's
+  being looked at" is the entire point of not eager-loading this table.
+  Like every other tab, it's mounted unconditionally (just hidden via
+  `.panel`'s CSS, not conditionally rendered) — so its default "this
+  month" range is fetched once at app load regardless of whether staff
+  ever open the tab, the same trade-off `quotes`/`sorting_queue` already
+  make by eager-loading in full; the difference here is it is scoped to
+  one month's rows, not the whole table.
+  - **Date range**: three choices — **This month** (default), **This
+    year**, or **Custom** (two `<input type="date">` fields, the only date-
+    picker pattern already used elsewhere in this app, e.g.
+    `QuoteDetail.jsx`'s Date quoted field). Picking Custom with one or both
+    dates still blank shows an explicit "Pick both dates" prompt rather
+    than quietly loading nothing or erroring.
+  - **Display**: Units sold/Revenue as two stat tiles (same uppercase-
+    label-plus-monospace-value inline style `QuoteDetail.jsx`'s own
+    Total & offer stats already use, for visual consistency with the
+    closest existing "a few money numbers side by side" pattern in the
+    app), then a plain `<table>` breaking totals down by game. An empty
+    result shows "Nothing sold in this range," distinct from the Custom-
+    range blank-dates prompt.
+- **`mockSupabaseClient.js` gained `gte`/`lt` filter support** — needed for
+  the harness to actually honor `dbLoadSales`'s date-range query under e2e;
+  previously the mock only understood `eq`/`neq`/`in`. String comparison on
+  the ISO timestamp values is enough, since they sort the same way as
+  plain strings that Postgres's own timestamp comparison would.
+- Covered by `reportUtils.test.js` (every pure function: the revenue/units/
+  byGame math including the null-price and blank-game edge cases, both
+  preset ranges, and the custom-range inclusive-end-date behavior), new
+  `db.test.js` cases (`rowToSale`, `dbLoadSales`'s gte/lt call shape, its
+  own 1000-row pagination, and its error-to-empty-array-plus-toast path),
+  and a new `e2e/reports.spec.js`: the default month view's totals and
+  sorted by-game breakdown, the real empty state for a range with nothing
+  sold, and the Custom range's pick-both-dates prompt followed by a real
+  (empty) result once both dates are filled.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

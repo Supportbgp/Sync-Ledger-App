@@ -48,6 +48,11 @@ function matchesFilters(row, filters) {
     if (type === 'eq') return row[field] === value;
     if (type === 'neq') return row[field] !== value;
     if (type === 'in') return value.includes(row[field]);
+    // String comparison is enough here — every real caller compares ISO
+    // timestamp strings (see db.js's dbLoadSales), which sort correctly as
+    // plain strings the same way Postgres compares them as timestamps.
+    if (type === 'gte') return row[field] >= value;
+    if (type === 'lt') return row[field] < value;
     return true;
   });
 }
@@ -134,6 +139,8 @@ function makeBuilder(table) {
     eq(field, value) { filters.push(['eq', field, value]); return builder; },
     neq(field, value) { filters.push(['neq', field, value]); return builder; },
     in(field, values) { filters.push(['in', field, values]); return builder; },
+    gte(field, value) { filters.push(['gte', field, value]); return builder; },
+    lt(field, value) { filters.push(['lt', field, value]); return builder; },
     order(field, opts) { order = { field, ascending: !(opts && opts.ascending === false) }; return builder; },
     range(from, to) { range = { from, to }; return builder; },
     maybeSingle() { single = true; return builder; },
