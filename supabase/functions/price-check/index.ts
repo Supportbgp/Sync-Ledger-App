@@ -44,6 +44,27 @@ async function fetchWithRetry(url, delayMs = 500) {
   return res;
 }
 
+// pokemontcg.io's own key-less public tier is documented elsewhere in this
+// app (cardSearch.js's pokemonQueryUncached) as needing anywhere from 3 to
+// 12 *consecutive* 5xx retries in real live testing before succeeding — a
+// single retry (fetchWithRetry above) is nowhere near enough. A real run of
+// this checker against a catalog that's ~80% Pokemon by count confirmed
+// this isn't theoretical: most of a 156/200 failure count traced back to
+// this exact gap. Same 4-attempt backoff (400ms/1.0s/2.2s) already proven
+// out for the interactive search, ported here since Edge Functions can't
+// import from the client bundle.
+const POKEMON_RETRY_DELAYS_MS = [400, 1000, 2200];
+async function fetchWithPokemonRetry(url) {
+  let res = await fetch(url);
+  let attempt = 0;
+  while (!res.ok && res.status >= 500 && attempt < POKEMON_RETRY_DELAYS_MS.length) {
+    await new Promise((r) => setTimeout(r, POKEMON_RETRY_DELAYS_MS[attempt]));
+    res = await fetch(url);
+    attempt++;
+  }
+  return res;
+}
+
 async function runWithConcurrency(items, limit, worker) {
   let i = 0;
   async function next() {
@@ -104,7 +125,7 @@ async function pokemonPrice(item) {
   // everywhere else in this app too — see CLAUDE.md). Name-only, same as
   // every other provider below.
   const q = `name:"${item.name}"`;
-  const res = await fetchWithRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
+  const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
   if (!res.ok) return null;
   const data = await res.json();
   const card = (data.data || [])[0];
@@ -247,12 +268,26 @@ Deno.serve(async (req) => {
   // than a possibly-never-captured reference price would). This never
   // writes back to `price` — same "never silently overwrite a manual
   // entry" rule already documented below.
+  //
+  // `.in("game", ...)` — a third real finding from the first full-volume
+  // test run: a shop catalog of 241 above-floor items broke down as 166
+  // Pokemon / 36 Magic / 12 "Other" / 10 One Piece / 9 SWU / 8 Lorcana (a
+  // real query against the live project, not guessed) — "Other" is a real,
+  // legitimate GAMES value (canonicalizeGame's own fallback for an
+  // unrecognized game string, e.g. some Quote-tab-originated items), but
+  // PRICE_LOOKUPS has no entry for it at all, so those items could never
+  // succeed and were just burning slots in the 200-item cap for no reason.
+  // Filtering to only games this file actually knows how to look up keeps
+  // every checked slot meaningful; Sports Singles is excluded the same way
+  // (no card database exists for it, a documented drawback elsewhere in
+  // this app) without needing its own special case.
   const { data: items, error } = await admin
     .from("catalog")
     .select("sku, name, game, price")
     .neq("item_type", "bulk")
     .not("price", "is", null)
     .gte("price", floor)
+    .in("game", Object.keys(PRICE_LOOKUPS))
     .order("price", { ascending: false })
     .limit(MAX_ITEMS_PER_RUN);
 
@@ -261,10 +296,15 @@ Deno.serve(async (req) => {
   }
 
   let checked = 0, spikes = 0, failed = 0;
+  const failedByGame = {};
 
   await runWithConcurrency(items || [], CONCURRENCY, async (item) => {
     const price = await lookupPrice(item);
-    if (price == null) { failed++; return; }
+    if (price == null) {
+      failed++;
+      failedByGame[item.game] = (failedByGame[item.game] || 0) + 1;
+      return;
+    }
     checked++;
 
     await admin.from("price_history").insert({
@@ -293,7 +333,11 @@ Deno.serve(async (req) => {
     }
   });
 
-  return json({ total: (items || []).length, checked, spikes, failed }, 200);
+  // failedByGame is included so a future high-failure run can be diagnosed
+  // from the response alone, the same real-usage-driven approach that
+  // found the "Other" and Pokemon-retry issues above in the first place —
+  // no need to go back to a SQL query every time.
+  return json({ total: (items || []).length, checked, spikes, failed, failedByGame }, 200);
 });
 
 function json(body, status) {
