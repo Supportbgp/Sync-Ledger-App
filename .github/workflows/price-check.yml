@@ -1,0 +1,29 @@
+name: Daily price check
+
+# Feature B (price tracking + spike alerts), PR 1 — see CLAUDE.md's "Price
+# tracking & spike alerts" section. Calls the price-check Edge Function,
+# which does the actual per-item price lookup/comparison/alert-writing
+# server-side. This workflow is just the scheduler + the authenticated
+# trigger — requires a SUPABASE_SERVICE_ROLE_KEY repository secret (Settings
+# -> Secrets and variables -> Actions) to authenticate the call; see
+# CLAUDE.md for why a service-role key specifically, and the real risk of
+# that secret (full database bypass — never log it, never echo it).
+on:
+  schedule:
+    # 13:07 UTC daily — a few minutes off the hour to avoid the traffic
+    # spike every schedule-on-the-hour cron job causes on GitHub's runners,
+    # same jitter reasoning this project's create_trigger tooling already
+    # applies elsewhere.
+    - cron: "7 13 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  price-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call price-check Edge Function
+        run: |
+          curl -sS --fail-with-body -X POST \
+            "https://pkyeytypgifgyiartgii.supabase.co/functions/v1/price-check" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
