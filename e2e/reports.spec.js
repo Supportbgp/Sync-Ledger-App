@@ -43,6 +43,46 @@ test('a range with nothing sold shows the empty state, not a zeroed table', asyn
   await expect(page.locator('table')).toHaveCount(0);
 });
 
+test('clicking a game row in the by-game breakdown expands to show its individual sold cards', async ({ page }) => {
+  const now = new Date().toISOString();
+  await seedHarness(page, {
+    seed: {
+      ...catalogSeed([]),
+      sales: [
+        makeSaleRow({ id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM', qty_sold: 1, sale_price: 45, sold_at: now }),
+        makeSaleRow({ id: 's2', sku: 'sku-2', name: 'Pikachu', game: 'Pokemon', condition: 'LP', qty_sold: 2, sale_price: 5, sold_at: now }),
+        makeSaleRow({ id: 's3', sku: 'sku-3', name: 'Black Lotus', game: 'Magic', condition: 'NM', qty_sold: 1, sale_price: 100, sold_at: now }),
+      ],
+    },
+  });
+  await page.goto('./');
+  await page.locator('.tab', { hasText: 'Reports' }).click();
+
+  const pokemonRow = page.locator('table tbody tr', { hasText: 'Pokemon' });
+  const magicRow = page.locator('table tbody tr', { hasText: 'Magic' });
+
+  // No drill-down rows visible until a game row is clicked.
+  await expect(page.getByText('Pikachu')).not.toBeVisible();
+  await expect(page.getByText('Black Lotus')).not.toBeVisible();
+
+  await pokemonRow.click();
+  await expect(page.getByText('Charizard')).toBeVisible();
+  await expect(page.getByText('Pikachu')).toBeVisible();
+  // Only Pokemon's rows show — Magic's own sale isn't mixed in.
+  await expect(page.getByText('Black Lotus')).not.toBeVisible();
+
+  // Expanding a different game doesn't require collapsing the first by hand
+  // first — only one game's drill-down is open at a time, so Pokemon's own
+  // rows close automatically.
+  await magicRow.click();
+  await expect(page.getByText('Black Lotus')).toBeVisible();
+  await expect(page.getByText('Pikachu')).not.toBeVisible();
+
+  // Clicking the same row again collapses it back.
+  await magicRow.click();
+  await expect(page.getByText('Black Lotus')).not.toBeVisible();
+});
+
 test('Custom range prompts for both dates before loading anything', async ({ page }) => {
   await seedHarness(page, {
     seed: { ...catalogSeed([]), sales: [makeSaleRow()] },
