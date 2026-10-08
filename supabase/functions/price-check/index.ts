@@ -98,8 +98,12 @@ function pokemonTcgplayerPrice(c) {
 }
 
 async function pokemonPrice(item) {
-  let q = `name:"${item.name}"`;
-  if (item.number) q += ` number:${item.number.split("/")[0].trim()}`;
+  // No numberHint here — unlike cardSearch.js's interactive search, this
+  // only has what catalog itself persists, and the collector number was
+  // never one of those columns (it's a transient, never-saved search hint
+  // everywhere else in this app too — see CLAUDE.md). Name-only, same as
+  // every other provider below.
+  const q = `name:"${item.name}"`;
   const res = await fetchWithRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
   if (!res.ok) return null;
   const data = await res.json();
@@ -134,9 +138,10 @@ async function lorcanaPrice(item) {
 
 // One Piece / Riftbound / Gundam — Egman's deckbuilder, same two-endpoint
 // (full card list + full price list, joined by card_code) shape
-// card-lookup-proxy's own egmanQuery already uses. numberHint narrows by the
-// printed collector number (card_code's suffix after the last dash), same
-// leading-zero-insensitive match used there.
+// card-lookup-proxy's own egmanQuery already uses. No numberHint narrowing
+// here (unlike egmanQuery's own interactive version) — catalog never
+// persists a collector number (see pokemonPrice's own comment above for
+// why), so this is name-match only, taking the first result.
 async function egmanPrice(gameSlug, item) {
   const [cardsRes, pricesRes] = await Promise.all([
     fetchWithRetry(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`),
@@ -148,19 +153,8 @@ async function egmanPrice(gameSlug, item) {
   const priceByCode = new Map((Array.isArray(prices) ? prices : []).map((p) => [p.card_code, p]));
 
   const nameNeedle = item.name.toLowerCase();
-  let matches = (Array.isArray(cards) ? cards : [])
+  const matches = (Array.isArray(cards) ? cards : [])
     .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
-
-  if (item.number) {
-    const needle = String(item.number).trim().toLowerCase();
-    const numNeedle = needle.replace(/^0+/, "") || "0";
-    const narrowed = matches.filter((c) => {
-      const code = (c.card_code || "").toLowerCase();
-      const suffix = code.includes("-") ? code.split("-").pop() : code;
-      return (suffix.replace(/^0+/, "") || "0") === numNeedle;
-    });
-    if (narrowed.length) matches = narrowed;
-  }
 
   const match = matches[0];
   if (!match) return null;
@@ -232,10 +226,18 @@ Deno.serve(async (req) => {
   // "Sorting stage + Bulk item type" section) — excluded the same way
   // catalog_public_view excludes them. An item with no base_price was never
   // priced via a real search result to begin with, so there's nothing to
-  // compare a fresh price against yet.
+  // compare a fresh price against yet. No `number` column — collector
+  // number has never been a persisted catalog column anywhere in this app
+  // (confirmed against every `alter table catalog add column` migration —
+  // only base_price and rarity were ever added), only a transient,
+  // never-saved search-hint field elsewhere in the UI. The first real
+  // manual trigger run of this function failed with exactly this mistake
+  // ("column catalog.number does not exist") — caught by the user's own
+  // manual test, not by review, so each per-game lookup above was also
+  // stripped of its now-impossible numberHint narrowing.
   const { data: items, error } = await admin
     .from("catalog")
-    .select("sku, name, game, number, base_price")
+    .select("sku, name, game, base_price")
     .neq("item_type", "bulk")
     .not("base_price", "is", null)
     .gte("base_price", floor)

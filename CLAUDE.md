@@ -3874,6 +3874,52 @@ price-check`), and **setting the `SUPABASE_SERVICE_ROLE_KEY` GitHub Actions
 repository secret** before the daily check can run at all — no code-side
 default masks any of these three being missing.
 
+## Price tracking: fixed a real `catalog.number` crash found on the first manual trigger run
+
+The user's first manual `workflow_dispatch` run after completing PR 1's setup
+steps failed immediately: `{"error":"column catalog.number does not
+exist"}`. A real bug, not a flake — caught by the user's own manual test,
+exactly the kind of real-world verification this project's "Manual QA note"
+already relies on for anything this sandbox can't reach Supabase to check
+itself.
+
+- **Root cause**: `price-check/index.ts`'s catalog query selected a
+  `number` column that was never actually added to `catalog` — confirmed by
+  grepping every `alter table catalog add column` migration in this repo:
+  only `base_price` (`phase5_market_value.sql`) and `rarity`
+  (`phase7_rarity_column.sql`) were ever added. Collector number has always
+  been a transient, never-saved search-hint field everywhere else in this
+  app (`EditModal`, `ScannerPanel`, the Quote tab's `itemsFromCatalogRows`
+  adapter all explicitly discard it before anything gets saved — see those
+  sections above) — PR 1 incorrectly assumed it was persisted when writing
+  the scheduled checker's own catalog query and per-game numberHint
+  narrowing, the one real guess that slipped past this file's own "never
+  guess, get a real sample first" discipline.
+- **Fix**: dropped `number` from the `catalog` select entirely, and removed
+  the now-impossible numberHint narrowing from `pokemonPrice`/`egmanPrice`
+  (both now name-match only, same as every other provider in this file
+  always was). No other provider function referenced `item.number`, so this
+  was the only place affected.
+- **Impact going forward**: without a number hint, a same-name/different-
+  print disambiguation (e.g. two different printings of the same card name)
+  can occasionally pick the wrong print's price — an accepted, pre-existing
+  limitation of this scheduled checker's deliberately simpler single-shot
+  lookups (see PR 1's own "deliberately simpler... than cardSearch.js's own
+  interactive multi-tier fallback ladders" framing above), not a new
+  regression from this fix. A wrong-print price only ever affects whether
+  *this run's* comparison triggers a spike alert — it's never saved back
+  onto the catalog row itself (`base_price` is still never silently
+  overwritten by this checker).
+- Verified the same way PR 1 itself was (no network path from this sandbox
+  to the real Supabase project): syntax-checked the file and grepped for
+  any remaining `item.number`/`.number` reference after the edit, finding
+  none. Real verification is the next manual `workflow_dispatch` run once
+  this fix is deployed.
+
+**Requires redeploying `price-check`** (`supabase functions deploy
+price-check`) for this fix to take effect — the previous deploy still has
+the crashing query live.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
