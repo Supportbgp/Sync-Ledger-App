@@ -3660,6 +3660,49 @@ reads `sales` as-is.
   sold, and the Custom range's pick-both-dates prompt followed by a real
   (empty) result once both dates are filled.
 
+## Sales reporting: one-time backfill from sync_queue
+
+A real gap raised right after PR 1 shipped: every `sync_queue` ticket
+already sitting in the real project predates the `sales` table, so none
+of that real sales history had a `sales` row — the Reports tab (PR 2)
+would only ever show sales from the moment this feature went live
+forward, not the shop's actual history. `backfill_sales_from_sync_queue.sql`
+is a one-time **data** backfill, not a schema migration — it belongs in
+`supabase/migrations/` anyway, matching this repo's existing convention
+of tracking every manually-run SQL action as a file with instructions
+(e.g. `phase_qr_public_binder_view.sql`/`phase_security_rls_review.sql`,
+both already non-phase-numbered one-offs for the same reason).
+
+- **`game` has to be recovered via a join back to `catalog` on `sku`** —
+  `sync_queue` never stored a `game` column at all (confirmed against
+  `db.js`'s `rowToTicket`/`ticketToRow`), so there's no historical value
+  to copy directly. This backfills the CURRENT `catalog.game` instead —
+  fine in virtually every real case since Game rarely changes after an
+  item's created, but it's a present-day proxy, not a true historical
+  snapshot. A `sku` whose catalog row has since been deleted backfills
+  with a blank game, which `computeSalesReport` already groups under
+  `"Unknown"` rather than erroring — same handling as any other blank
+  game value.
+- **`price`/`qty_sold` are a direct, lossless copy, not an approximation**
+  — `handleBatchSell` (`App.jsx`) has always set both the ticket's and the
+  (now) sale record's price/qty from the exact same `c.price`/`qtySold`
+  values in the same loop, so a historical ticket's own `price`/`qty_sold`
+  columns are exactly what a `sales` row would have recorded had the table
+  existed at the time.
+- **Double-counting guard**: any real Mark Sold test performed against
+  this project *after* `phase12_sales_history.sql` was deployed already
+  wrote a row to both `sync_queue` and `sales` (the write hook fires on
+  both, going forward) — blindly backfilling every `sync_queue` row would
+  double those. The script only backfills tickets older than the
+  earliest `sold_at` already present in `sales` (or everything, if `sales`
+  is still empty) — self-adjusting, no manual cutoff date needed.
+- **Run once** — includes a preview `select` (identical shape to the
+  `insert`) to sanity-check row count/contents before committing to the
+  actual `insert`. There's no unique-constraint protection against
+  re-running the `insert` a second time, since a `sync_queue` ticket has
+  no reciprocal link back to a `sales` row to de-duplicate on — the
+  script's own header comment calls this out explicitly.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
