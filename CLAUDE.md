@@ -3963,6 +3963,59 @@ manual test catches what this sandbox can't" pattern as the fix above.
 **Requires redeploying `price-check`** again (`supabase functions deploy
 price-check`) for this fix to take effect.
 
+## Price tracking: reduced the failed-lookup count (Pokemon retry budget, excluded ungoverned games)
+
+The first full-volume real run after the `price` fix above succeeded with
+no crash and real spikes detected (`{"total":200,"checked":44,"spikes":8,
+"failed":156}`), but a 156/200 failure rate was still high enough to dig
+into properly rather than ship as-is — same "get a real number before
+guessing" approach as the two fixes above.
+
+- **Confirmed via a real query, not guessed**: `select game, count(*) ...`
+  against the live project showed the 241 total above-floor items break
+  down as 166 Pokemon / 36 Magic / 12 "Other" / 10 One Piece / 9 SWU / 8
+  Lorcana — ruling out the canonicalization-mismatch theory considered
+  first (every value is a real, legitimate `GAMES` entry, not a stray
+  alias `cardToRow`'s own no-op-on-write would have let slip through).
+  Two real causes instead:
+  - **`"Other"` has no entry in `PRICE_LOOKUPS` at all** — a real,
+    legitimate `canonicalizeGame` fallback value (for a game string it
+    doesn't recognize), not a bug in itself, but those 12 items could never
+    succeed and were only burning slots in the 200-item cap. The user
+    separately flagged that some of these are Quote-tab-originated items
+    landing in "Other" — a real, separate bug in the Quote→Catalog
+    conversion path worth investigating on its own, not guessed at or
+    fixed here since it's outside `price-check` entirely.
+  - **Pokemon is ~70% of the tracked catalog by volume**, and
+    `cardSearch.js` already documents pokemontcg.io's key-less public tier
+    as needing anywhere from 3 to 12 *consecutive* 5xx retries in real live
+    testing (see that file's own `pokemonQueryUncached` comment) — far more
+    than `price-check`'s original single-retry `fetchWithRetry`. With
+    Pokemon this dominant, that gap alone plausibly explains most of the
+    156 failures.
+- **Fix 1 — `fetchWithPokemonRetry`**: a dedicated 4-attempt backoff
+  (400ms/1.0s/2.2s, matching `pokemonQueryUncached`'s own proven delays
+  exactly) used only for the Pokemon lookup — every other provider keeps
+  the lighter single-retry `fetchWithRetry`, since none of them have a
+  documented flakiness report anywhere near this severe.
+- **Fix 2 — the catalog query now filters `.in("game",
+  Object.keys(PRICE_LOOKUPS))`** — excludes "Other" (and Sports Singles,
+  which already had no lookup either) at the query level instead of
+  wasting a checked slot on something guaranteed to fail. Frees up the
+  200-item cap for games that can actually succeed, and makes `failed`
+  mean "a real lookup attempt came back empty," not "doomed from the
+  start."
+- **`failedByGame` added to the response** — a per-game tally of failures,
+  so a future high-failure run can be diagnosed straight from the
+  workflow's own output instead of needing another round-trip to a SQL
+  query, the same way this round's diagnosis required one.
+- Real verification is the next manual `workflow_dispatch` run once this
+  is deployed — same no-network-path-from-this-sandbox constraint as every
+  other fix in this section.
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
