@@ -78,7 +78,15 @@ async function runWithConcurrency(items, limit, worker) {
 
 // --- Per-game price lookups -------------------------------------------
 // Each takes the catalog row (name/set/rarity/number already on it) and
-// returns a single best-effort price, or null if nothing usable was found.
+// returns { price, reason } — price is null when nothing usable was found,
+// and reason explains which of three distinct failure modes it was:
+// "fetch_failed" (the request itself never succeeded, even after retry),
+// "no_match" (a real response came back with zero results for this name),
+// or "no_price" (a card was found, but it carries no usable price field).
+// Added after a real run's aggregate failedByGame count (99 Pokemon
+// failures even with the 4-attempt retry budget) didn't say which of these
+// three was actually happening — this is what lets the next run's response
+// say that directly instead of requiring another guess-and-redeploy cycle.
 
 function scryfallPrice(c) {
   const p = c.prices;
@@ -92,10 +100,12 @@ function scryfallPrice(c) {
 
 async function magicPrice(item) {
   const res = await fetchWithRetry(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(item.name)}`);
-  if (!res.ok) return null;
+  if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.data || [])[0];
-  return card ? scryfallPrice(card) : null;
+  if (!card) return { price: null, reason: "no_match" };
+  const price = scryfallPrice(card);
+  return { price, reason: price == null ? "no_price" : null };
 }
 
 // Same fallback priority as cardSearch.js's pokemonTcgplayerPrice: a card
@@ -126,19 +136,22 @@ async function pokemonPrice(item) {
   // every other provider below.
   const q = `name:"${item.name}"`;
   const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
-  if (!res.ok) return null;
+  if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.data || [])[0];
-  return card ? pokemonTcgplayerPrice(card) : null;
+  if (!card) return { price: null, reason: "no_match" };
+  const price = pokemonTcgplayerPrice(card);
+  return { price, reason: price == null ? "no_price" : null };
 }
 
 async function yugiohPrice(item) {
   const res = await fetchWithRetry(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(item.name)}`);
-  if (!res.ok) return null;
+  if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.data || [])[0];
-  if (!card) return null;
-  return (card.card_prices && card.card_prices[0] && Number(card.card_prices[0].tcgplayer_price)) || null;
+  if (!card) return { price: null, reason: "no_match" };
+  const price = (card.card_prices && card.card_prices[0] && Number(card.card_prices[0].tcgplayer_price)) || null;
+  return { price, reason: price == null ? "no_price" : null };
 }
 
 function lorcastPrice(c) {
@@ -151,10 +164,12 @@ function lorcastPrice(c) {
 
 async function lorcanaPrice(item) {
   const res = await fetchWithRetry(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(item.name)}`);
-  if (!res.ok) return null;
+  if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.results || [])[0];
-  return card ? lorcastPrice(card) : null;
+  if (!card) return { price: null, reason: "no_match" };
+  const price = lorcastPrice(card);
+  return { price, reason: price == null ? "no_price" : null };
 }
 
 // One Piece / Riftbound / Gundam — Egman's deckbuilder, same two-endpoint
@@ -168,7 +183,7 @@ async function egmanPrice(gameSlug, item) {
     fetchWithRetry(`https://deckbuilder.egmanevents.com/api/cards/${gameSlug}`),
     fetchWithRetry(`https://deckbuilder.egmanevents.com/api/prices/${gameSlug}`),
   ]);
-  if (!cardsRes.ok) return null;
+  if (!cardsRes.ok) return { price: null, reason: "fetch_failed" };
   const cards = await cardsRes.json();
   const prices = pricesRes.ok ? await pricesRes.json() : [];
   const priceByCode = new Map((Array.isArray(prices) ? prices : []).map((p) => [p.card_code, p]));
@@ -178,17 +193,20 @@ async function egmanPrice(gameSlug, item) {
     .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
 
   const match = matches[0];
-  if (!match) return null;
+  if (!match) return { price: null, reason: "no_match" };
   const priceEntry = priceByCode.get(match.card_code);
-  return priceEntry ? priceEntry.market_price : null;
+  const price = priceEntry ? priceEntry.market_price : null;
+  return { price, reason: price == null ? "no_price" : null };
 }
 
 async function swuPrice(item) {
   const res = await fetchWithRetry(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(item.name)}&pretty=true`);
-  if (!res.ok) return null;
+  if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (Array.isArray(data.data) ? data.data : [])[0];
-  return card && card.MarketPrice ? Number(card.MarketPrice) : null;
+  if (!card) return { price: null, reason: "no_match" };
+  const price = card.MarketPrice ? Number(card.MarketPrice) : null;
+  return { price, reason: price == null ? "no_price" : null };
 }
 
 // Sports Singles has no card database to look up against at all (a
@@ -208,11 +226,11 @@ const PRICE_LOOKUPS = {
 
 async function lookupPrice(item) {
   const fn = PRICE_LOOKUPS[item.game];
-  if (!fn) return null;
+  if (!fn) return { price: null, reason: "no_lookup" };
   try {
     return await fn(item);
   } catch {
-    return null;
+    return { price: null, reason: "exception" };
   }
 }
 
@@ -297,12 +315,24 @@ Deno.serve(async (req) => {
 
   let checked = 0, spikes = 0, failed = 0;
   const failedByGame = {};
+  const failedByReason = {};
+  const sampleFailures = [];
+  const MAX_SAMPLE_FAILURES = 15;
 
   await runWithConcurrency(items || [], CONCURRENCY, async (item) => {
-    const price = await lookupPrice(item);
+    const { price, reason } = await lookupPrice(item);
     if (price == null) {
       failed++;
       failedByGame[item.game] = (failedByGame[item.game] || 0) + 1;
+      failedByReason[reason] = (failedByReason[reason] || 0) + 1;
+      // Capped sample of real failing names so a high-failure run can be
+      // inspected directly from the response instead of needing yet
+      // another round-trip to a SQL query to find real examples — this is
+      // exactly how the "Other"/Pokemon-retry issues above were diagnosed,
+      // just made available without re-querying every time.
+      if (sampleFailures.length < MAX_SAMPLE_FAILURES) {
+        sampleFailures.push({ sku: item.sku, name: item.name, game: item.game, reason });
+      }
       return;
     }
     checked++;
@@ -333,11 +363,12 @@ Deno.serve(async (req) => {
     }
   });
 
-  // failedByGame is included so a future high-failure run can be diagnosed
-  // from the response alone, the same real-usage-driven approach that
-  // found the "Other" and Pokemon-retry issues above in the first place —
-  // no need to go back to a SQL query every time.
-  return json({ total: (items || []).length, checked, spikes, failed, failedByGame }, 200);
+  // failedByGame/failedByReason/sampleFailures are included so a future
+  // high-failure run can be diagnosed from the response alone, the same
+  // real-usage-driven approach that found the "Other" and Pokemon-retry
+  // issues above in the first place — no need to go back to a SQL query
+  // every time.
+  return json({ total: (items || []).length, checked, spikes, failed, failedByGame, failedByReason, sampleFailures }, 200);
 });
 
 function json(body, status) {

@@ -4016,6 +4016,57 @@ guessing" approach as the two fixes above.
 **Requires redeploying `price-check`** again (`supabase functions deploy
 price-check`) for this fix to take effect.
 
+## Price tracking: added per-failure reason + sample diagnostics instead of guessing a fourth fix blind
+
+The Pokemon retry budget + ungoverned-game filtering above helped
+(`failed` dropped from 156 to 144) but didn't come close to fixing it —
+and the next run's own `failedByGame` breakdown (`{"Pokemon":99,"Magic":25,
+"Lorcana":7,"SWU":9,"One Piece":4}`) raised a new question this app's own
+"never guess, get real data" discipline couldn't answer yet: *why* are 99
+Pokemon lookups still failing even with a 4-attempt retry? A transient 5xx,
+a genuine "no card matched this name," and "found the card but it has no
+price data" are three completely different problems with three completely
+different fixes — and `failedByGame` alone can't tell them apart.
+
+- **Every per-game lookup function now returns `{ price, reason }`
+  instead of a bare price-or-null** — `reason` is one of `fetch_failed`
+  (the request never succeeded even after retrying), `no_match` (a real
+  response came back with zero results for that name), or `no_price` (a
+  card was found, but it carries no usable price field in that provider's
+  response) — plus `no_lookup` (the game has no entry in `PRICE_LOOKUPS`,
+  shouldn't occur anymore now that the catalog query filters on exactly
+  those keys) and `exception` (an uncaught error, same as the plain `catch`
+  this already had) from `lookupPrice` itself.
+- **The response now also includes `failedByReason` and a capped
+  `sampleFailures` list** (15 real `{sku, name, game, reason}` entries) —
+  so the *next* high-failure run can be diagnosed straight from its own
+  JSON output, without another SQL round-trip the way this round (and the
+  `base_price`/`"Other"` rounds before it) needed. Concretely: if the next
+  run's `failedByReason` is dominated by `no_match`, the real fix is
+  probably in how catalog item names compare to what these APIs actually
+  index (special characters, possessive apostrophes — already a
+  documented, hard-won problem for Pokemon specifically in `cardSearch.js`
+  — or extra qualifying text in a catalog name that isn't part of the
+  card's official name); if it's `fetch_failed`, the retry budget itself
+  still isn't enough; if it's `no_price`, the cards are being found
+  correctly and this is a real, accepted data-coverage gap like the
+  Mega Gengar ex/Lillie's Clefairy ex cases already documented elsewhere
+  in this file, not a bug to chase further.
+- **Deliberately not a fourth guessed fix** — porting `cardSearch.js`'s
+  full apostrophe-handling/fallback-ladder logic into this Edge Function
+  on spec, without first confirming that's actually what's causing the 99
+  Pokemon failures, risks repeating the exact mistake this doc's own
+  "never guess an external platform's exact capability" rule exists to
+  prevent (see "Workflow conventions" below) — it would also be a real
+  chunk of duplicated complexity if the real cause turns out to be
+  something else entirely (e.g. a lot of these specific 99 names
+  genuinely have no pokemontcg.io entry at all).
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect. The next manual
+`workflow_dispatch` run's `failedByReason`/`sampleFailures` output is what
+determines what (if anything) gets fixed next.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
