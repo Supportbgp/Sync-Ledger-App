@@ -4730,6 +4730,49 @@ tracking" section above describes for historical sales that predate the
     ones) — confirming nothing about this change specifically is reachable
     to verify here. Real confirmation is CI's own next run.
 
+## Reports: fixed CI — Edit Sale's own drill-down table needed .table-scroll on Mobile
+
+That "not independently verified end-to-end" caveat right above turned out
+to matter: CI came back with `unit` green but `e2e` red on exactly one
+spec, `[Mobile] e2e/reports.spec.js` — "Edit sale corrects a past sale" —
+failing (both its initial attempt and its retry) at the very first step,
+clicking the new Edit button, with Playwright reporting a `<td>` (the Sold
+date cell) and the `costUnknownCount` `.status-line` div "intercepting
+pointer events" at the click point.
+
+- **Root cause**: the drill-down table gained a 7th column (the new Edit
+  button) with no mobile-specific handling at all — unlike `CatalogTable`,
+  which swaps to a whole different card layout under its own 700px
+  breakpoint, this table (and the by-game table above it) has always just
+  been a plain `<table>`, never wrapped in the `.table-scroll` class this
+  app already uses elsewhere (`CatalogTable`'s own table, `QuotesTab`'s)
+  specifically to let an overly-wide table scroll within its own bounded
+  box instead of overflowing the page. Six narrow columns apparently stayed
+  under the threshold that would force real page overflow on a 390px
+  (Pixel 7) viewport; the 7th (Edit button) tipped it over. The resulting
+  symptom — an unrelated element elsewhere on the page "intercepting"
+  clicks meant for something further down — is the exact same signature
+  this app already diagnosed once before for `.docs-callout`'s own overflow
+  bug (see that section above): real horizontal overflow forces a mobile
+  browser's auto-zoom-to-fit, which desyncs the page's actual on-screen
+  layout from Playwright's precomputed click coordinates. `body`'s own
+  `overflow-x: hidden` safety net (added for that earlier bug) only clips
+  overflow at the very top level — it doesn't stop a table nested several
+  levels down from forcing its own row, and therefore the page, wider in
+  the first place.
+- **Fix**: wrapped both this table and the nested drill-down table in
+  `<div className="table-scroll">`, the same already-established pattern
+  (`overflow-x: auto`, unconditional, not gated to a breakpoint) —
+  consistent with `CatalogTable`'s own usage, not a new pattern. No test
+  changes needed; `table tbody tr`-style locators still resolve the same
+  way with one extra `<div>` ancestor.
+- Verified the same way every e2e-adjacent fix in this file has been given
+  this sandbox's lack of `cdn.sheetjs.com` access: confirmed `.table-scroll`
+  is an unconditional (not breakpoint-gated) rule already proven to work
+  for `CatalogTable`/`QuotesTab`, and that nothing else in this spec file's
+  locators depends on the table's exact DOM ancestry — real confirmation is
+  CI's own next run.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
