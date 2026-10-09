@@ -4570,6 +4570,61 @@ Edit save, a Mark Sold, or an accepted quote's Sorting handoff would start
 throwing a real insert/update error rather than silently dropping the
 value.
 
+## Cost tracking: fixed CI — Cost/Profit stat tiles need their own locator, not a bare text match
+
+The Cost/Profit PR's own CI run came back red on real failures, not sandbox
+noise this time (this repo's `npm ci` has working `cdn.sheetjs.com` access
+in CI, unlike this sandbox) — `unit` was green, `e2e` failed four of five
+specs in `reports.spec.js` on both the Desktop and Mobile projects.
+
+- **Root cause**: every new Cost/Profit number this feature added can
+  render a dollar string that already exists somewhere else on the same
+  page, and this file's e2e tests asserted on `page.getByText('$X.XX')`
+  with no scoping — a bare text match against the *whole page*, not a
+  specific element. Two real collisions: (1) when a sale has no recorded
+  cost, `cost` is 0 and `profit` equals `revenue` exactly — the pre-existing
+  "this month's totals" test's own `getByText('$145.00')` started matching
+  both the Revenue tile and the new Profit tile; (2) the new Cost/Profit
+  test's `getByText('$20.00')` matched both the new Cost stat tile *and*
+  the by-game table's own Cost column for Pokemon, which happens to show
+  the identical figure for a single-sale-per-game seed. Playwright's text
+  locators match hidden *and* visible elements with no visibility filter by
+  default, and `toBeVisible()`/`toHaveCount()` against a multi-match
+  locator is a real strict-mode violation, not a flake — this would have
+  failed consistently, every run.
+- **Fix**: `ReportsTab.jsx`'s four stat tiles (`Units sold`/`Revenue`/
+  `Cost`/`Profit`) each gained a dedicated `className`
+  (`stat-tile stat-units`/`stat-revenue`/`stat-cost`/`stat-profit` — plain
+  marker classes, no new CSS rules) specifically so a test can address one
+  tile without depending on which other number on the page happens to
+  render the same string. `reports.spec.js`'s two affected assertions now
+  scope to `page.locator('.stat-revenue')`/`.stat-cost`/`.stat-profit`
+  instead of a bare `getByText`, matching the already-established
+  `.n-name`/`.n-sub`-style scoped-locator pattern used throughout this
+  suite's other spec files rather than introducing a new pattern.
+- **Not touched**: a fifth, separate CI failure that run —
+  `[Mobile] e2e/catalog.spec.js:21` (`getByText('Edit')` expected 0, got
+  1) — has no connection to this PR's diff (no file this PR touches is
+  read by that test or the component it exercises). Confirmed, not
+  assumed: `main`'s own most recent push run (the base commit this PR
+  branched from) independently failed its `unit` job on an unrelated
+  pre-existing flake (`CatalogTable.test.jsx`'s 400-row render test timing
+  out at the default 5s Vitest limit under CI's actual hardware, a timing
+  margin this sandbox's own earlier local run didn't hit) — real evidence
+  this repo's CI already carries some run-to-run flakiness independent of
+  any particular change. Left alone rather than guessed at from a single
+  occurrence with zero connection to the diff; worth a dedicated look if
+  it recurs on a PR that actually touches `CatalogTable.jsx`/
+  `catalog.spec.js`.
+- Verified locally the same way every e2e-adjacent fix in this file has
+  been given this sandbox's lack of `cdn.sheetjs.com` access: the full
+  342-test unit suite still passes unchanged (the `className` additions
+  carry no logic), and a local Playwright run against the temporarily
+  xlsx-stripped bundle reproduces the same whole-bundle-broken state
+  already documented above (confirming nothing about *this* fix is
+  reachable to verify end-to-end in this sandbox) — real confirmation is
+  CI's own next run on the real bundle.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

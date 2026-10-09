@@ -24,8 +24,10 @@ test('Reports tab shows this month\'s totals and a by-game breakdown, sorted by 
   await page.locator('.tab', { hasText: 'Reports' }).click();
 
   // "This month" is the default preset, so both sales (dated "now") should
-  // already be included with no extra clicks.
-  await expect(page.getByText('$145.00')).toBeVisible();
+  // already be included with no extra clicks. Scoped to the Revenue stat
+  // tile specifically — with no cost entered, Profit renders the identical
+  // "$145.00" string, and a bare page-wide getByText would match both.
+  await expect(page.locator('.stat-revenue')).toContainText('$145.00');
   const rows = page.locator('table tbody tr');
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText('Magic'); // higher revenue sorts first
@@ -98,9 +100,12 @@ test('Cost/Profit reflect only sales with a recorded cost, flagging the rest', a
   await page.locator('.tab', { hasText: 'Reports' }).click();
 
   // Cost/Profit only count the Charizard sale (the one with a real cost) —
-  // Black Lotus's missing cost contributes 0, not a guess.
-  await expect(page.getByText('$20.00')).toBeVisible();
-  await expect(page.getByText('$125.00')).toBeVisible(); // 145 revenue - 20 cost
+  // Black Lotus's missing cost contributes 0, not a guess. Scoped to the
+  // stat tiles specifically — the by-game table's own Pokemon row renders
+  // an identical "$20.00" Cost cell, which a bare page-wide getByText would
+  // also match.
+  await expect(page.locator('.stat-cost')).toContainText('$20.00');
+  await expect(page.locator('.stat-profit')).toContainText('$125.00'); // 145 revenue - 20 cost
   await expect(page.getByText(/1 sale\(s\) in this range have no recorded cost/)).toBeVisible();
 });
 

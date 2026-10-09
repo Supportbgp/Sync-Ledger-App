@@ -81,19 +81,19 @@ export default function ReportsTab({ onLoadSales }) {
       ) : (
         <>
           <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '13px', marginBottom: '16px' }}>
-            <div>
+            <div className="stat-tile stat-units">
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Units sold</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>{report.units}</div>
             </div>
-            <div>
+            <div className="stat-tile stat-revenue">
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Revenue</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.revenue.toFixed(2)}</div>
             </div>
-            <div>
+            <div className="stat-tile stat-cost">
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Cost</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.cost.toFixed(2)}</div>
             </div>
-            <div>
+            <div className="stat-tile stat-profit">
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Profit</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.profit.toFixed(2)}</div>
             </div>
