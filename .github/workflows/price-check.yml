@@ -8,6 +8,19 @@ name: Daily price check
 # -> Secrets and variables -> Actions) to authenticate the call; see
 # CLAUDE.md for why a service-role key specifically, and the real risk of
 # that secret (full database bypass — never log it, never echo it).
+#
+# Batched, not a single call — a real run hit Supabase Edge Functions' hard
+# 150s idle timeout once enough lookups started succeeding to push one
+# invocation's total wall-clock time over the limit (see CLAUDE.md's "Price
+# tracking: hit Supabase's real 150s idle timeout" section), and the
+# in-function time-budget fix that followed it turned out to make the same
+# ~99 lowest-priced-within-the-cap items get skipped on *every* run,
+# permanently, not just "picked up tomorrow." This loop instead walks the
+# whole above-floor, governed-game catalog in several smaller batches, each
+# its own Edge Function invocation with a fresh 150s clock — offset advances
+# by each batch's own `attempted` count (not a fixed BATCH_SIZE), so a batch
+# that still runs long internally just means the next batch picks up exactly
+# where it left off, instead of a second, compounding skip.
 on:
   schedule:
     # 13:07 UTC daily — a few minutes off the hour to avoid the traffic
@@ -15,15 +28,70 @@ on:
     # same jitter reasoning this project's create_trigger tooling already
     # applies elsewhere.
     - cron: "7 13 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: "Items requested per batch (clamped to 200 server-side)"
+        required: false
+        default: "100"
 
 jobs:
   price-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Call price-check Edge Function
+      - name: Call price-check Edge Function in batches
         run: |
-          curl -sS --fail-with-body -X POST \
-            "https://pkyeytypgifgyiartgii.supabase.co/functions/v1/price-check" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          set -u
+          BATCH_SIZE="${{ github.event.inputs.batch_size || '100' }}"
+          # A defensive cap on how many batches one workflow run will make —
+          # same "a shop whose tracked catalog grows past this will need a
+          # different approach" reasoning the Edge Function's own
+          # MAX_ITEMS_PER_RUN comment already documents, just moved up a
+          # level now that a single run can span several invocations. 20
+          # batches at the default 100/batch covers up to 2000 tracked
+          # items — comfortably past this shop's real catalog size today.
+          MAX_BATCHES=20
+
+          OFFSET=0
+          TOTAL_CHECKED=0
+          TOTAL_SPIKES=0
+          TOTAL_FAILED=0
+          TOTAL_SKIPPED=0
+          BATCH_NUM=0
+
+          while [ "$BATCH_NUM" -lt "$MAX_BATCHES" ]; do
+            BATCH_NUM=$((BATCH_NUM + 1))
+            echo "=== Batch $BATCH_NUM: offset=$OFFSET limit=$BATCH_SIZE ==="
+
+            RESPONSE=$(curl -sS --fail-with-body -X POST \
+              "https://pkyeytypgifgyiartgii.supabase.co/functions/v1/price-check" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"offset\": $OFFSET, \"limit\": $BATCH_SIZE}")
+            echo "$RESPONSE"
+
+            BATCH_TOTAL=$(echo "$RESPONSE" | jq -r '.total // 0')
+            BATCH_ATTEMPTED=$(echo "$RESPONSE" | jq -r '.attempted // 0')
+            TOTAL_CHECKED=$((TOTAL_CHECKED + $(echo "$RESPONSE" | jq -r '.checked // 0')))
+            TOTAL_SPIKES=$((TOTAL_SPIKES + $(echo "$RESPONSE" | jq -r '.spikes // 0')))
+            TOTAL_FAILED=$((TOTAL_FAILED + $(echo "$RESPONSE" | jq -r '.failed // 0')))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + $(echo "$RESPONSE" | jq -r '.skippedForTime // 0')))
+
+            # Fewer rows than requested means this batch reached the end of
+            # the above-floor, governed-game catalog — nothing left to join.
+            if [ "$BATCH_TOTAL" -lt "$BATCH_SIZE" ]; then
+              break
+            fi
+            # Should only be 0 if the batch's own query somehow returned
+            # rows but processed none of them — a safety stop rather than an
+            # infinite loop on an unmoving offset.
+            if [ "$BATCH_ATTEMPTED" -le 0 ]; then
+              echo "Batch made no progress (attempted=0) — stopping."
+              break
+            fi
+            OFFSET=$((OFFSET + BATCH_ATTEMPTED))
+          done
+
+          echo "=== Combined totals across $BATCH_NUM batch(es) ==="
+          echo "{\"checked\":$TOTAL_CHECKED,\"spikes\":$TOTAL_SPIKES,\"failed\":$TOTAL_FAILED,\"skippedForTime\":$TOTAL_SKIPPED}"
