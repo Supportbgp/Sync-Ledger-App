@@ -109,6 +109,40 @@ test('Cost/Profit reflect only sales with a recorded cost, flagging the rest', a
   await expect(page.getByText(/1 sale\(s\) in this range have no recorded cost/)).toBeVisible();
 });
 
+test('Edit sale corrects a past sale and updates the report live', async ({ page }) => {
+  const now = new Date().toISOString();
+  await seedHarness(page, {
+    seed: {
+      ...catalogSeed([]),
+      sales: [
+        makeSaleRow({ id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM', qty_sold: 1, sale_price: 45, cost: null, sold_at: now }),
+      ],
+    },
+  });
+  await page.goto('./');
+  await page.locator('.tab', { hasText: 'Reports' }).click();
+
+  await page.locator('table tbody tr', { hasText: 'Pokemon' }).click();
+  await expect(page.getByText('Charizard')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByText('Edit sale')).toBeVisible();
+
+  const costInput = page.locator('.modal').getByLabel('Cost ($)');
+  await costInput.fill('20');
+  await page.locator('.modal').getByRole('button', { name: 'Save' }).click();
+
+  await expect(page.getByText('Edit sale')).toHaveCount(0);
+  // Revenue stays $45, but Cost/Profit now reflect the corrected $20 —
+  // confirming the edit updated the report live, with no page reload.
+  await expect(page.locator('.stat-cost')).toContainText('$20.00');
+  await expect(page.locator('.stat-profit')).toContainText('$25.00');
+
+  // The real write landed in the harness DB too, not just local state.
+  const dbSales = await page.evaluate(() => window.__HARNESS_DB__.sales);
+  expect(dbSales.find(s => s.id === 's1').cost).toBe(20);
+});
+
 test('Custom range prompts for both dates before loading anything', async ({ page }) => {
   await seedHarness(page, {
     seed: { ...catalogSeed([]), sales: [makeSaleRow()] },

@@ -4648,6 +4648,88 @@ specs in `reports.spec.js` on both the Desktop and Mobile projects.
   never mounted alongside the main tabbed app, so they can't collide the
   same way) — real confirmation is CI's own next run on the real bundle.
 
+## Reports: Edit Sale on the per-game drill-down, to correct a past sale
+
+Real ask right after Cost/Profit shipped, before merge: a way to fix a
+mistake on an already-recorded sale (a typo'd Name/Condition, a wrong
+Price/Cost, a misrecorded Sold date) without going into the Supabase SQL
+Editor by hand — the same manual-backfill route this doc's own "Cost
+tracking" section above describes for historical sales that predate the
+`cost` column entirely.
+
+- **Editing a `sales` row is safe despite this table's own "append-only,
+  never updated or deleted" framing** (`phase12_sales_history.sql`'s header
+  comment, quoted verbatim earlier in this file) — that framing was about
+  the *app* never silently rewriting a sale's history on its own (e.g. if
+  the source catalog row later changes), not a hard rule against a staff
+  member correcting a real mistake they typed in by hand. Confirmed, not
+  assumed, before writing any code: the migration's own RLS policy
+  (`"authenticated full access" ... for all ... using (true) ... with check
+  (true)`) already grants `authenticated` full UPDATE access — the table was
+  never actually locked down to insert-only at the database layer, so this
+  needed no new migration, just application code that previously chose not
+  to use that access.
+- **`db.js` gained `dbUpdateSale(sale, toast)`**, reusing the existing
+  `saleToRow` mapper `dbInsertSales` already has (an update and an insert
+  land on the same columns) — `.update(saleToRow(sale)).eq('id', sale.id)`,
+  same void-return/toast-on-error convention as this file's other
+  `dbUpdate*` functions (`dbUpdateTicketStamp`/`dbUpdatePlatformStatus`).
+- **Scope: every stored field except `id`/`sku` is editable** — Name, Game,
+  Condition, Qty sold, Sale price, Cost, and Sold date, via a new
+  `EditSaleModal.jsx` (same `.overlay`/`.modal` system, explicit Cancel/Save
+  buttons, no backdrop-close, matching this app's standing modal
+  convention). Game uses the same canonical `GAMES` list every other Game
+  field in this app does. Sold date is edited as a plain `<input
+  type="date">` (losing intraday precision, matching every other date-only
+  picker already in this app, e.g. Quote's Date quoted field) — the fix
+  keeps the sale's original time-of-day and only replaces the calendar
+  date, so two sales corrected onto the same day don't lose their relative
+  ordering within it. `sku` is shown nowhere in the form — it's an internal
+  reference that may no longer point at a real catalog row at all, not a
+  human-correctable field.
+  - **A real, deliberate side effect of allowing Game/Sold-date edits**: if
+    a correction moves a sale's Game or Sold date, that row can simply stop
+    appearing in the currently-open drill-down or date range after the
+    save — the same "it moved, not a bug" behavior a real correction should
+    have, not a defect to guard against.
+  - **Found and fixed a real accessibility gap while building this
+    modal, not after**: this app already hit the "a `<label>` that's a
+    visual sibling with no `htmlFor` isn't actually associated with its
+    input" problem once before (`LocationPicker`'s own unlabeled `<select>`,
+    see the "Rarity field gained a `<datalist>`..." section above) — rather
+    than reintroduce that same gap in a brand-new modal, every field here
+    uses a real `htmlFor`/`id` pair from the start, which is also what lets
+    its own e2e test locate the Cost field via `getByLabel('Cost ($)')`
+    instead of a fragile position- or placeholder-based locator.
+- **`ReportsTab.jsx`** gained an `editingSale` state and an Edit button in
+  each drill-down row (next to Sold date) — clicking it opens
+  `EditSaleModal` for that one sale. On Save, `ReportsTab` patches its own
+  local `sales` array by `id` immediately (there's no Realtime subscription
+  on this table — see the Reports tab's own on-demand-fetch design note
+  earlier in this file — so nothing else would reflect the correction
+  otherwise) and fires the real `dbUpdateSale` write in parallel through a
+  new `onUpdateSale` prop (`App.jsx`'s `handleUpdateSale`, a thin
+  passthrough — `sales` isn't top-level App.jsx state, so there's nothing
+  else for that handler to update). `editingSale` resets to `null`
+  whenever the date range changes, same as the existing `expandedGame`
+  reset, so a stale edit targeting a row from a previous fetch can't linger.
+- Covered by new tests in `db.test.js` (`dbUpdateSale`'s row shape matched
+  by id, and its error-to-toast path) and a new `e2e/reports.spec.js` test:
+  opens a seeded Pokemon sale's drill-down, edits its Cost via the real
+  modal, confirms the Cost/Profit stat tiles update live with no reload,
+  and reads `window.__HARNESS_DB__.sales` directly to confirm the real
+  write landed, not just local state — same direct-DB-read pattern already
+  established for the Mark Sold test in `e2e/catalog.spec.js`.
+  - **Not independently verified end-to-end in this sandbox**, same
+    standing constraint as every other e2e-adjacent change in this file:
+    no network path to `cdn.sheetjs.com` blocks a real `npm install`/
+    `test:e2e` run here. A local attempt via the usual temporary
+    xlsx-stripped install reproduced the same whole-bundle-broken state
+    already documented elsewhere (every spec in the file fails at the same
+    first-tab-click step, including the five pre-existing, already-passing
+    ones) — confirming nothing about this change specifically is reachable
+    to verify here. Real confirmation is CI's own next run.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

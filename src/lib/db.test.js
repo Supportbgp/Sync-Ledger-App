@@ -45,7 +45,7 @@ const {
   rowToCard, rowToTicket, dbUpsertCard, dbInsertTicket,
   dbLoadSettings, dbLoadPublicBinder, dbLoadAll,
   rowToSortingItem, dbInsertSortingItems,
-  dbInsertSales, rowToSale, dbLoadSales,
+  dbInsertSales, rowToSale, dbLoadSales, dbUpdateSale,
 } = await import('./db.js');
 
 beforeEach(() => {
@@ -181,6 +181,33 @@ describe('dbInsertSales (saleToRow via the real call)', () => {
     tableResults.sales = { data: null, error: { message: 'boom' } };
     const toast = vi.fn();
     await dbInsertSales([{ sku: 's', name: 'n', soldAt: Date.now() }], toast);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('boom'), true);
+  });
+});
+
+describe('dbUpdateSale', () => {
+  it('sends the corrected row to sales.update, matched by id (Reports tab Edit Sale)', async () => {
+    tableResults.sales = { data: null, error: null };
+    const sale = {
+      id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'LP',
+      qtySold: 1, salePrice: 50, cost: 20, soldAt: Date.parse('2026-01-02T00:00:00.000Z'),
+    };
+    await dbUpdateSale(sale, vi.fn());
+    const builder = fromMock.mock.results[0].value;
+    expect(fromMock).toHaveBeenCalledWith('sales');
+    const sentRow = builder.update.mock.calls[0][0];
+    expect(sentRow).toMatchObject({
+      sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'LP',
+      qty_sold: 1, sale_price: 50, cost: 20,
+    });
+    expect(sentRow.sold_at).toBe('2026-01-02T00:00:00.000Z');
+    expect(builder.eq).toHaveBeenCalledWith('id', 's1');
+  });
+
+  it('reports an update error to the toast instead of throwing', async () => {
+    tableResults.sales = { data: null, error: { message: 'boom' } };
+    const toast = vi.fn();
+    await dbUpdateSale({ id: 's1', sku: 's', name: 'n', soldAt: Date.now() }, toast);
     expect(toast).toHaveBeenCalledWith(expect.stringContaining('boom'), true);
   });
 });

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { computeSalesReport, presetDateRange, customDateRangeToBounds } from '../../lib/reportUtils.js';
+import EditSaleModal from './EditSaleModal.jsx';
 
 const PRESETS = [
   { key: 'month', label: 'This month' },
@@ -13,13 +14,14 @@ const PRESETS = [
 // App.jsx's top-level state the way catalog/quotes/sorting are — sales only
 // ever grows, with no natural cap, so eagerly loading all of it on every
 // sign-in doesn't scale the way it does for those.
-export default function ReportsTab({ onLoadSales }) {
+export default function ReportsTab({ onLoadSales, onUpdateSale }) {
   const [preset, setPreset] = useState('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedGame, setExpandedGame] = useState(null);
+  const [editingSale, setEditingSale] = useState(null);
 
   const range = preset === 'custom' ? customDateRangeToBounds(customFrom, customTo) : presetDateRange(preset);
 
@@ -28,6 +30,7 @@ export default function ReportsTab({ onLoadSales }) {
     let cancelled = false;
     setLoading(true);
     setExpandedGame(null);
+    setEditingSale(null);
     onLoadSales(range.from, range.to).then(rows => {
       if (!cancelled) { setSales(rows); setLoading(false); }
     });
@@ -40,6 +43,18 @@ export default function ReportsTab({ onLoadSales }) {
   }, [range?.from, range?.to]);
 
   const report = computeSalesReport(sales);
+
+  // Patches the local sales array immediately (there's no realtime
+  // subscription on this table — see the Reports tab's own on-demand-fetch
+  // design note above — so nothing else will reflect the correction unless
+  // this does) and fires the real write in parallel. A corrected sale whose
+  // Game or Sold date moved it outside the currently-open drill-down/range
+  // simply stops appearing there on the next render — the same "it moved,
+  // not a bug" behavior a Game/date edit should have.
+  async function handleSaveSale(updated) {
+    setSales(prev => prev.map(s => (s.id === updated.id ? updated : s)));
+    await onUpdateSale(updated);
+  }
 
   return (
     <div>
@@ -138,7 +153,7 @@ export default function ReportsTab({ onLoadSales }) {
                         <td colSpan={5} style={{ padding: '0 0 12px 24px', background: 'var(--surface-alt)' }}>
                           <table>
                             <thead>
-                              <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Cost</th><th>Sold</th></tr>
+                              <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Cost</th><th>Sold</th><th></th></tr>
                             </thead>
                             <tbody>
                               {items.map(s => (
@@ -149,6 +164,9 @@ export default function ReportsTab({ onLoadSales }) {
                                   <td>{s.salePrice == null ? '—' : `$${Number(s.salePrice).toFixed(2)}`}</td>
                                   <td>{s.cost == null ? '—' : `$${Number(s.cost).toFixed(2)}`}</td>
                                   <td>{new Date(s.soldAt).toLocaleDateString()}</td>
+                                  <td>
+                                    <button className="btn secondary small" onClick={() => setEditingSale(s)}>Edit</button>
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -162,6 +180,14 @@ export default function ReportsTab({ onLoadSales }) {
             </tbody>
           </table>
         </>
+      )}
+
+      {editingSale && (
+        <EditSaleModal
+          sale={editingSale}
+          onClose={() => setEditingSale(null)}
+          onSave={handleSaveSale}
+        />
       )}
     </div>
   );

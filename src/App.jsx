@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
-  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales, dbLoadSales,
+  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales, dbLoadSales, dbUpdateSale,
   dbLoadSettings, dbSaveSettings,
   dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
   dbLoadSortingQueue, dbInsertSortingItems, dbDeleteSortingItem,
@@ -223,6 +223,14 @@ export default function App() {
   // isn't eagerly loaded into top-level state like catalog/quotes/sorting).
   function handleLoadSalesReport(fromISO, toISO) {
     return dbLoadSales(fromISO, toISO, toast);
+  }
+
+  // The Reports tab's Edit Sale action. sales isn't top-level App.jsx state
+  // (see the comment above) so there's nothing to update here beyond the
+  // write itself — ReportsTab already patches its own local `sales` array
+  // once this resolves.
+  async function handleUpdateSale(sale) {
+    await dbUpdateSale(sale, toast);
   }
 
   async function handleToggleStamp(id, field) {
@@ -448,7 +456,7 @@ export default function App() {
       </div>
 
       <div className={`panel${tab === 'reports' ? ' active' : ''}`}>
-        <ReportsTab onLoadSales={handleLoadSalesReport} />
+        <ReportsTab onLoadSales={handleLoadSalesReport} onUpdateSale={handleUpdateSale} />
       </div>
 
       <div className="footnote">

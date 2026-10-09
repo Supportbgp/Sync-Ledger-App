@@ -162,6 +162,21 @@ export async function dbInsertSales(sales, toast) {
   if (error) toast('Sales record failed: ' + error.message, true);
 }
 
+// Corrects a past sale (a typo'd Name/Condition/Qty, a wrong Price/Cost, a
+// misrecorded Sold date) from the Reports tab's own drill-down — the Edit
+// Sale action. `sales` is deliberately described elsewhere in this app
+// (phase12_sales_history.sql's own header comment) as "append-only, never
+// updated or deleted"; that was about the app never silently rewriting a
+// sale on its own (e.g. when the source catalog row later changes), not a
+// hard rule against a staff member fixing a mistake they typed in by hand —
+// the table's own RLS policy already grants `authenticated` full update
+// access, so this needed no migration. Reuses `saleToRow` so an edit is
+// mapped onto the same columns an insert already uses.
+export async function dbUpdateSale(sale, toast) {
+  const { error } = await supabaseClient.from('sales').update(saleToRow(sale)).eq('id', sale.id);
+  if (error) toast('Failed to update sale: ' + error.message, true);
+}
+
 export function rowToSale(r) {
   return {
     id: r.id, sku: r.sku, name: r.name, game: r.game, condition: r.condition,
