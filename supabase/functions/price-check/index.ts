@@ -354,13 +354,12 @@ async function lookupPrice(item) {
   }
 }
 
-// A defensive cap on how many items one invocation will check — Edge
-// Functions have a real execution time limit, and a shop whose tracked
-// (above-floor) catalog grows past this will need a different approach
-// (e.g. splitting across more frequent runs) rather than silently timing
-// out partway through an unbounded batch. Ordered by price descending so
-// the most valuable (and highest spike-risk) items are checked first if a
-// run ever does have to truncate.
+// A hard per-invocation ceiling, regardless of what a caller requests —
+// Edge Functions have a real execution time limit (see RUN_DEADLINE_MS
+// below), so no single call is ever allowed to ask for more than this many
+// rows at once. Used as the DEFAULT `limit` too when a caller sends no body
+// at all (e.g. an ad-hoc manual curl with no JSON), matching this
+// function's original single-shot behavior for backward compatibility.
 const MAX_ITEMS_PER_RUN = 200;
 const CONCURRENCY = 3;
 
@@ -386,10 +385,33 @@ const CONCURRENCY = 3;
 // serialization once the loop stops.
 const RUN_DEADLINE_MS = 120000;
 
+// A real run with this deadline in place returned `{"skippedForTime":99}`
+// out of 200 scoped items — not a one-off, but a PERMANENT gap: the catalog
+// query below orders by price descending and always starts at the same
+// place, so the same ~99 lowest-priced-within-the-cap items would be
+// skipped on *every* run, forever, not just "picked up tomorrow" the way
+// the comment above assumed. Fixed by accepting `offset`/`limit` in the
+// request body so the caller (the GitHub Actions workflow, below) can walk
+// the catalog in several smaller batches, each a separate invocation with
+// its own fresh RUN_DEADLINE_MS/150s clock, instead of one invocation
+// trying to cover the whole scoped catalog at once. `limit` is still
+// clamped to MAX_ITEMS_PER_RUN regardless of what's requested.
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return json({ error: "POST only" }, 405);
   }
+
+  let body = {};
+  try {
+    body = await req.json();
+  } catch {
+    // No body sent at all (e.g. an ad-hoc manual curl) — fall through to
+    // the defaults below, same as this function's original behavior.
+  }
+  const offset = Number.isFinite(body.offset) ? Math.max(0, Math.trunc(body.offset)) : 0;
+  const limit = Number.isFinite(body.limit)
+    ? Math.min(Math.max(1, Math.trunc(body.limit)), MAX_ITEMS_PER_RUN)
+    : MAX_ITEMS_PER_RUN;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -449,7 +471,7 @@ Deno.serve(async (req) => {
     .gte("price", floor)
     .in("game", Object.keys(PRICE_LOOKUPS))
     .order("price", { ascending: false })
-    .limit(MAX_ITEMS_PER_RUN);
+    .range(offset, offset + limit - 1);
 
   if (error) {
     return json({ error: error.message }, 500);
@@ -473,9 +495,12 @@ Deno.serve(async (req) => {
     // 150s idle-timeout wall (see RUN_DEADLINE_MS above) — an in-flight
     // request already running when this trips is allowed to finish
     // naturally (runWithConcurrency doesn't cancel it), but no new one
-    // starts, so total time can't keep climbing past this point. A skipped
-    // item just gets picked up on the next scheduled run, same as one that
-    // fell outside MAX_ITEMS_PER_RUN's own cap.
+    // starts, so total time can't keep climbing past this point. Unlike the
+    // old single-invocation design, a skipped item here isn't lost until
+    // tomorrow — the orchestrating workflow (below) advances its next
+    // batch's offset by `attempted`, not by a fixed batch size, so this
+    // batch's untouched tail becomes exactly the start of the very next
+    // batch in the same run.
     if (Date.now() - startedAt > RUN_DEADLINE_MS) {
       skippedForTime++;
       return;
@@ -530,10 +555,19 @@ Deno.serve(async (req) => {
   // same real-usage-driven approach that found the "Other" and
   // Pokemon-retry issues above in the first place — no need to go back to a
   // SQL query every time. truncated/skippedForTime do the same job for the
-  // real-world time-budget wall found above — a non-zero skippedForTime on
-  // a future run is the real signal that MAX_ITEMS_PER_RUN/CONCURRENCY need
-  // tuning, instead of waiting for another 504 to notice.
+  // real-world time-budget wall found above.
+  //
+  // `offset`/`limit` are echoed back so the calling workflow's own log output
+  // identifies which slice this response covers. `attempted` (checked +
+  // failed — i.e. every item that wasn't skipped for time) is what the
+  // orchestrating workflow advances its next batch's offset by, NOT `limit`
+  // — this is what makes a batch's own truncation self-healing rather than
+  // a second permanent skip: the next batch simply starts exactly where
+  // this one's real work stopped, whether that's a full `limit` items in or
+  // fewer.
+  const attempted = checked + failed;
   return json({
+    offset, limit, attempted,
     total: (items || []).length, checked, spikes, failed,
     truncated: skippedForTime > 0, skippedForTime,
     failedByGame, failedByReason, failedDetail, sampleFailures,

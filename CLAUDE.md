@@ -4295,6 +4295,96 @@ price-check`) for this fix to take effect. The next manual
 `workflow_dispatch` run's `truncated`/`skippedForTime` fields confirm
 whether this run actually needed the budget, or completed well within it.
 
+## Price tracking: split into several batched invocations instead of one, with a self-healing offset
+
+The very next manual trigger after the deadline fix above confirmed it
+worked (no more 504), but also surfaced the real, deeper problem the
+deadline could only paper over: `{"total":200,"checked":70,"failed":31,
+"truncated":true,"skippedForTime":99,...}` — only 101 of 200 scoped items
+ever got attempted. Asked directly: is there a way to reduce
+`skippedForTime`? The honest answer led to a bigger realization than a
+simple tuning knob — the catalog query (`order by price desc`, a fixed
+start at offset 0) and the worker's own in-array-order consumption mean
+the same ~101 highest-priced items get processed on *every* run, and the
+same ~99 lowest-priced-within-the-200-cap items get skipped on *every*
+run, forever — not "picked up next time" the way the deadline fix's own
+original comment assumed. A skipped item only gets a second chance if
+something about the run actually changes, and nothing about a daily
+re-run of the same query does.
+
+- **Fix: batch the catalog into several smaller Edge Function invocations
+  instead of one, each getting its own fresh 150s clock** — the user's own
+  proposed shape (split into batches of ~99-100, then join the results).
+  `price-check`'s `Deno.serve` handler now reads `offset`/`limit` from the
+  POST body (`{"offset": 100, "limit": 100}`), using them in a real
+  `.range(offset, offset + limit - 1)` instead of the old fixed
+  `.limit(MAX_ITEMS_PER_RUN)` — `limit` is still clamped to
+  `MAX_ITEMS_PER_RUN` (200) regardless of what's requested, and both
+  default to `{offset: 0, limit: MAX_ITEMS_PER_RUN}` when no body is sent
+  at all, so an ad-hoc manual curl with no body still behaves exactly like
+  before this change.
+- **The orchestrating loop lives in `.github/workflows/price-check.yml`,
+  not the Edge Function** — a bash loop POSTs successive `{offset, limit}`
+  bodies (`BATCH_SIZE` defaults to 100, overridable via a
+  `workflow_dispatch` input), reading each batch's JSON response with `jq`
+  (preinstalled on GitHub-hosted runners) and accumulating `checked`/
+  `spikes`/`failed`/`skippedForTime` into one combined summary printed at
+  the end — the actual "join" asked for, not just back-to-back logs. Each
+  batch is its own real Edge Function invocation with its own fresh 150s
+  idle-timeout clock, so a batch sized well under the catalog's observed
+  throughput (100 items took ~120s in the run that surfaced this) should
+  normally complete without even needing `RUN_DEADLINE_MS` to trip.
+- **The critical design choice: the next batch's offset advances by the
+  previous batch's own `attempted` count (`checked + failed`, now returned
+  in the response), not by a fixed `BATCH_SIZE`.** This is what makes a
+  batch's own internal truncation self-healing instead of a second,
+  compounding skip: if a batch still somehow runs long and
+  `RUN_DEADLINE_MS` trips partway through it, that batch's untouched tail
+  simply becomes the start of the very next batch, automatically, with no
+  separate retry logic needed. Verified with a standalone bash simulation
+  (three mock batch responses, the first deliberately truncated at
+  `attempted: 85` of a requested 100) before shipping — confirmed the
+  second batch's logged offset was exactly 85, not 100, and the final
+  combined totals summed correctly across all three.
+- **The loop stops once a batch's `total` (the real row count returned for
+  that slice) comes back smaller than the requested `BATCH_SIZE`** — that
+  slice reached the end of the above-floor, governed-game catalog, so
+  there's nothing left to join. A `MAX_BATCHES` safety cap (20, covering up
+  to 2000 tracked items at the default batch size) guards against an
+  unbounded loop the same defensive-cap reasoning `MAX_ITEMS_PER_RUN`
+  itself already documents, just moved up a level now that a single run
+  can span several invocations; a separate `attempted <= 0` guard stops the
+  loop outright if a batch somehow makes zero progress, rather than looping
+  forever on an offset that never advances.
+- **A real side effect, not the original goal**: this removes the old
+  fixed 200-item-per-day ceiling entirely. The previous design could never
+  check more than the top 200 above-floor items by price no matter what —
+  a real, separate starvation gap for anything ranked 201st or lower (the
+  live project had 241 such items a few rounds back). Walking the catalog
+  in batches until a short page is returned means the *whole* tracked
+  catalog gets checked every day now, not just a fixed-size head of it.
+- **Deliberately not a concurrency increase** — same reasoning already
+  documented in the deadline-fix section above: raising `CONCURRENCY`
+  would also help throughput, but at the cost of firing more simultaneous
+  requests at providers (pokemontcg.io specifically) this file has already
+  spent several rounds proving need conservative pacing. Splitting into
+  more invocations achieves more total throughput per day without
+  touching the request rate any single provider sees at once.
+- Verified the same way every fix in this section has been (no network
+  path from this sandbox to Supabase or any of these providers):
+  syntax-checked the Edge Function file, and ran the orchestrating bash
+  logic standalone against three mocked batch responses (including the
+  deliberately-truncated-first-batch case above) to confirm the offset
+  math, the short-page stop condition, and the combined-totals join all
+  behave as intended before touching the real workflow file.
+
+**Requires redeploying `price-check`** (`supabase functions deploy
+price-check`) for the `offset`/`limit`/`attempted` changes to take effect —
+the workflow's new batching loop depends on the Edge Function actually
+honoring those request fields. The next scheduled or manual run's combined
+summary (and the per-batch logs above it) confirm whether `skippedForTime`
+is finally zero across a full day's catalog.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
