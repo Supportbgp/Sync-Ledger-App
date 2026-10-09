@@ -4140,6 +4140,94 @@ price-check`) for this fix to take effect. The next manual
 `workflow_dispatch` run's `failed`/`failedDetail` output confirms how much
 of the remaining failure count this actually resolved.
 
+## Price tracking: bracket/mid-string-paren stripping, Pokemon Lucene escaping, dash-subtitle fallback tier
+
+The `cleanCardName` fix above worked — `checked` climbed from 58 to 133 and
+`failed` dropped from 142 to 67 on the very next real run. Its own
+`failedByReason`/`sampleFailures` output (`{"no_match":37,"no_price":10,
+"fetch_failed":20}`, 15 real examples) pointed at three more distinct, real
+gaps — not retry-budget or volume noise this time, confirmed by inspecting
+the actual failing names rather than guessed:
+
+- **A bracketed annotation survived untouched** — `cleanCardName` only ever
+  stripped `(...)` groups, never `[...]` ones. `"Misty's Psyduck [W
+  Stamped]"` (a grading/stamp annotation, same category as every other
+  bracket/paren annotation already stripped elsewhere in this file) went to
+  pokemontcg.io completely unstripped.
+- **A *mid-string* parenthetical group survived too** — the original regex
+  anchored to a trailing run of groups at the very end of the string, so
+  `"Sheoldred, the Apocalypse (Textured Foil) - Dominaria United (DMU)"`
+  only had its trailing `(DMU)` stripped; the non-paren `" - Dominaria
+  United"` text broke the anchor, leaving `(Textured Foil)` in place to trip
+  Scryfall's own literal-parens-as-grouping-syntax problem again (this
+  file's own already-documented cause of Magic's disproportionate
+  `fetch_failed` share). Every parenthetical/bracketed group seen across
+  every real sample collected in this whole debugging arc has been an
+  extraneous annotation, never part of a card's actual name — so
+  `cleanCardName` now strips every such group anywhere in the string
+  (`replace(/\([^)]*\)/g, ...)`/`replace(/\[[^\]]*\]/g, ...)`), not just a
+  trailing run of them. A safe generalization of the same already-verified
+  assumption, not a new guess.
+- **`pokemonPrice` never applied any of cardSearch.js's own already-
+  confirmed Lucene-escaping fixes** — it wrapped the cleaned name directly
+  in a `name:"..."` field with zero sanitization, despite this exact file
+  documenting (`sanitizeStrippingPossessive`) that pokemontcg.io's `q=` is a
+  Lucene-like query string where an unescaped apostrophe/bracket/etc. can
+  break the query outright, confirmed via extensive real live testing for
+  the interactive search. Ported `sanitizeForPokemonQuery` (strip a trailing
+  possessive `'s`, then every other Lucene special character) directly into
+  `pokemonPrice`'s query building — this file's own header already says
+  every provider's shapes mirror cardSearch.js's already-confirmed ones
+  instead of being rebuilt from scratch, so this is a port, not a guess.
+- **A real dash-subtitle card name still failed `no_match` after every
+  cleanup above** — `"Pongo - Determined Father"` (Lorcana) and `"Cad Bane -
+  He Who Needs No Introduction"` (SWU) are both confirmed-real card names
+  (not noise to strip), and both have now failed three consecutive real
+  runs as a single exact-phrase query. Rather than guess at either
+  provider's exact matching behavior, added a second, narrower fallback
+  tier (`dashFallbackNames`/`withNameFallback`) — if the full cleaned name
+  comes back `no_match`/`fetch_failed`, retry once with just the text
+  before the first `" - "`. Same "narrower tier fails, fall through to a
+  broader one" ladder discipline cardSearch.js's own interactive search
+  already uses everywhere, applied generically across every provider
+  (including Magic, where it turns out to also fix
+  `"Sheoldred, the Apocalypse - Dominaria United"` — once its two paren
+  groups are stripped, the dash-fallback's second tier is exactly
+  `"Sheoldred, the Apocalypse"`, the correct real card name). Only tried
+  when the full name already failed, so it can never override a query that
+  already succeeds, and a confirmed match (including a `no_price` one —
+  found the real card, just no usable price field) stops the ladder
+  immediately rather than risking a second, possibly-wrong card.
+- **Verified against all 15 real sample names from this round before
+  shipping**, same discipline as the `cleanCardName` fix itself — ran
+  `cleanCardName`/`dashFallbackNames`/`sanitizeForPokemonQuery` standalone
+  and confirmed: the bracket and mid-string-paren cases clean correctly,
+  the dash-subtitle fallback produces exactly the right second-tier name
+  for `Cad Bane`/`Pongo`/`Sheoldred`, and no previously-working name (plain
+  single-word names, "ex"/"VSTAR"-suffixed Pokemon names with no dash) is
+  affected by any of these changes.
+- **Deliberately left unfixed, not guessed at**: the Pokemon-GX hyphen
+  question (`"Moltres & Zapdos & Articuno GX"`/`"Pikachu & Zekrom GX"` —
+  pokemontcg.io's own card names for this era are widely reported to use a
+  hyphen directly before `GX`/`EX`, e.g. `"-GX"`, not a space) has no
+  precedent anywhere in this codebase to port the way the Lucene-escaping
+  fix did, and guessing the exact hyphenation rule risks the same mistake
+  this file's own "never guess an external platform's exact capability"
+  rule exists to prevent. Left as a documented, accepted gap — revisit with
+  a real confirmed sample if it's still showing up in a future run's
+  `sampleFailures`. A card with genuinely no usable price anywhere on the
+  provider (`"Mega Greninja ex"`, same documented data-gap class as the
+  Mega Gengar ex/Lillie's Clefairy ex cases elsewhere in this file) and a
+  handful of Pokemon `fetch_failed`s on plain, unremarkable names (e.g.
+  `"Gengar"`) under this run's much higher real request volume (133
+  checked, vs. 58 the run before) are both treated as the accepted residual
+  noise this file already expects, not something to chase further.
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect. The next manual
+`workflow_dispatch` run's `failed`/`failedByReason`/`sampleFailures` output
+confirms how much of the remaining 67 this actually resolved.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

@@ -99,15 +99,89 @@ async function runWithConcurrency(items, limit, worker) {
 // Deliberately does NOT strip a bare " - <Words>" suffix with no trailing
 // number — several real official card names use exactly that format (SWU's
 // "Cad Bane - He Who Needs No Introduction", Lorcana's "Pongo - Determined
-// Father" once its own "(Enchanted)" suffix is removed), so stripping every
-// dash would break those names instead of fixing anything. Only a trailing
-// parenthetical group, or a trailing bare/dash-prefixed number (optionally
-// "n/m"), is removed.
+// Father" once its own "(Enchanted)" suffix is removed). See
+// dashFallbackNames below for how those are handled instead — as a second,
+// narrower fallback tier, not by stripping the dash outright.
+//
+// A follow-up real run (checked climbed from 58 to 133 once this function
+// existed, but still had real failures) showed two more real gaps:
+// (1) a bracketed annotation ("Misty's Psyduck [W Stamped]") survived
+// untouched — this only ever stripped parenthetical groups, never
+// square-bracket ones; (2) a *mid-string* parenthetical group
+// ("Sheoldred, the Apocalypse (Textured Foil) - Dominaria United (DMU)")
+// survived too, because the original regex only matched a run of groups
+// anchored to the very end of the string — the non-paren " - Dominaria
+// United" text between the two groups broke that anchor, leaving
+// "(Textured Foil)" in place to trip Scryfall's own literal-parens-as-
+// grouping-syntax problem again (a "fetch_failed", not a clean no-match).
+// Every parenthetical/bracketed group seen across every real sample
+// collected in this whole debugging arc has been an extraneous staff
+// annotation (rarity/variant/printing note, grading stamp, set code) —
+// never part of a card's actual name — so stripping every such group
+// anywhere in the string, not just a trailing run of them, is a safe
+// generalization of the same already-verified assumption, not a new guess.
 function cleanCardName(name) {
   let n = String(name || "").trim();
-  n = n.replace(/(\s*\([^)]*\))+$/, "").trim();
+  n = n.replace(/\([^)]*\)/g, " ");
+  n = n.replace(/\[[^\]]*\]/g, " ");
+  n = n.replace(/\s+/g, " ").trim();
   n = n.replace(/\s*-?\s*\d+(\/\d+)?$/, "").trim();
   return n || String(name || "").trim();
+}
+
+// A real dash-subtitle card name (SWU's "Cad Bane - He Who Needs No
+// Introduction", Lorcana's "Pongo - Determined Father") has now failed
+// "no_match" for three consecutive real runs even after every cleanup
+// above — the full name is correct, so this isn't noise to strip, but
+// something about the full phrase isn't matching either provider's search
+// as a single query. Rather than guess at either API's exact matching
+// behavior (the thing this file's own header explicitly says not to do),
+// this adds a second, narrower fallback tier — the same "narrower tier
+// fails, fall through to a broader one" ladder discipline already used
+// throughout cardSearch.js's interactive search — tried only once the full
+// name has already come back empty, so it can only help, never override a
+// query that already succeeds.
+function dashFallbackNames(name) {
+  const cleaned = cleanCardName(name);
+  const names = [cleaned];
+  const dashIdx = cleaned.indexOf(" - ");
+  if (dashIdx > 0) {
+    const prefix = cleaned.slice(0, dashIdx).trim();
+    if (prefix && prefix !== cleaned) names.push(prefix);
+  }
+  return names;
+}
+
+// Tries each candidate name in order, stopping as soon as one actually
+// finds something (a real price, or a real card with no usable price field
+// — "no_price" is a confirmed match, not a reason to keep guessing at a
+// different, possibly-wrong card). Only "no_match"/"fetch_failed" fall
+// through to the next, broader candidate.
+async function withNameFallback(item, queryOnce) {
+  const names = dashFallbackNames(item.name);
+  let result = { price: null, reason: "no_match" };
+  for (const name of names) {
+    result = await queryOnce(name);
+    if (result.price != null || result.reason === "no_price") return result;
+  }
+  return result;
+}
+
+// pokemontcg.io's `q=` is a Lucene-like query string, not plain text —
+// cardSearch.js's own interactive search (sanitizeStrippingPossessive) has
+// already confirmed, via extensive real live testing, that an unescaped
+// apostrophe/bracket/etc. in a `name:"..."` field can break the query
+// outright, and that stripping a trailing possessive 's (mirroring the
+// index's own English-analyzer possessive filter) is the correct general
+// fix. Ported directly rather than re-guessed — this file's own header
+// already says every provider's field shapes mirror cardSearch.js's
+// already-confirmed ones instead of being rebuilt from scratch.
+function sanitizeForPokemonQuery(s) {
+  return String(s || "")
+    .replace(/['’]s\b/gi, "")
+    .replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // --- Per-game price lookups -------------------------------------------
@@ -133,13 +207,15 @@ function scryfallPrice(c) {
 }
 
 async function magicPrice(item) {
-  const res = await fetchWithRetry(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(cleanCardName(item.name))}`);
-  if (!res.ok) return { price: null, reason: "fetch_failed" };
-  const data = await res.json();
-  const card = (data.data || [])[0];
-  if (!card) return { price: null, reason: "no_match" };
-  const price = scryfallPrice(card);
-  return { price, reason: price == null ? "no_price" : null };
+  return withNameFallback(item, async (name) => {
+    const res = await fetchWithRetry(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}`);
+    if (!res.ok) return { price: null, reason: "fetch_failed" };
+    const data = await res.json();
+    const card = (data.data || [])[0];
+    if (!card) return { price: null, reason: "no_match" };
+    const price = scryfallPrice(card);
+    return { price, reason: price == null ? "no_price" : null };
+  });
 }
 
 // Same fallback priority as cardSearch.js's pokemonTcgplayerPrice: a card
@@ -168,24 +244,28 @@ async function pokemonPrice(item) {
   // never one of those columns (it's a transient, never-saved search hint
   // everywhere else in this app too — see CLAUDE.md). Name-only, same as
   // every other provider below.
-  const q = `name:"${cleanCardName(item.name)}"`;
-  const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
-  if (!res.ok) return { price: null, reason: "fetch_failed" };
-  const data = await res.json();
-  const card = (data.data || [])[0];
-  if (!card) return { price: null, reason: "no_match" };
-  const price = pokemonTcgplayerPrice(card);
-  return { price, reason: price == null ? "no_price" : null };
+  return withNameFallback(item, async (name) => {
+    const q = `name:"${sanitizeForPokemonQuery(name)}"`;
+    const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
+    if (!res.ok) return { price: null, reason: "fetch_failed" };
+    const data = await res.json();
+    const card = (data.data || [])[0];
+    if (!card) return { price: null, reason: "no_match" };
+    const price = pokemonTcgplayerPrice(card);
+    return { price, reason: price == null ? "no_price" : null };
+  });
 }
 
 async function yugiohPrice(item) {
-  const res = await fetchWithRetry(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(cleanCardName(item.name))}`);
-  if (!res.ok) return { price: null, reason: "fetch_failed" };
-  const data = await res.json();
-  const card = (data.data || [])[0];
-  if (!card) return { price: null, reason: "no_match" };
-  const price = (card.card_prices && card.card_prices[0] && Number(card.card_prices[0].tcgplayer_price)) || null;
-  return { price, reason: price == null ? "no_price" : null };
+  return withNameFallback(item, async (name) => {
+    const res = await fetchWithRetry(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(name)}`);
+    if (!res.ok) return { price: null, reason: "fetch_failed" };
+    const data = await res.json();
+    const card = (data.data || [])[0];
+    if (!card) return { price: null, reason: "no_match" };
+    const price = (card.card_prices && card.card_prices[0] && Number(card.card_prices[0].tcgplayer_price)) || null;
+    return { price, reason: price == null ? "no_price" : null };
+  });
 }
 
 function lorcastPrice(c) {
@@ -197,13 +277,15 @@ function lorcastPrice(c) {
 }
 
 async function lorcanaPrice(item) {
-  const res = await fetchWithRetry(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(cleanCardName(item.name))}`);
-  if (!res.ok) return { price: null, reason: "fetch_failed" };
-  const data = await res.json();
-  const card = (data.results || [])[0];
-  if (!card) return { price: null, reason: "no_match" };
-  const price = lorcastPrice(card);
-  return { price, reason: price == null ? "no_price" : null };
+  return withNameFallback(item, async (name) => {
+    const res = await fetchWithRetry(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(name)}`);
+    if (!res.ok) return { price: null, reason: "fetch_failed" };
+    const data = await res.json();
+    const card = (data.results || [])[0];
+    if (!card) return { price: null, reason: "no_match" };
+    const price = lorcastPrice(card);
+    return { price, reason: price == null ? "no_price" : null };
+  });
 }
 
 // One Piece / Riftbound / Gundam — Egman's deckbuilder, same two-endpoint
@@ -222,25 +304,29 @@ async function egmanPrice(gameSlug, item) {
   const prices = pricesRes.ok ? await pricesRes.json() : [];
   const priceByCode = new Map((Array.isArray(prices) ? prices : []).map((p) => [p.card_code, p]));
 
-  const nameNeedle = cleanCardName(item.name).toLowerCase();
-  const matches = (Array.isArray(cards) ? cards : [])
-    .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
+  return withNameFallback(item, (name) => {
+    const nameNeedle = name.toLowerCase();
+    const matches = (Array.isArray(cards) ? cards : [])
+      .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
 
-  const match = matches[0];
-  if (!match) return { price: null, reason: "no_match" };
-  const priceEntry = priceByCode.get(match.card_code);
-  const price = priceEntry ? priceEntry.market_price : null;
-  return { price, reason: price == null ? "no_price" : null };
+    const match = matches[0];
+    if (!match) return { price: null, reason: "no_match" };
+    const priceEntry = priceByCode.get(match.card_code);
+    const price = priceEntry ? priceEntry.market_price : null;
+    return { price, reason: price == null ? "no_price" : null };
+  });
 }
 
 async function swuPrice(item) {
-  const res = await fetchWithRetry(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(cleanCardName(item.name))}&pretty=true`);
-  if (!res.ok) return { price: null, reason: "fetch_failed" };
-  const data = await res.json();
-  const card = (Array.isArray(data.data) ? data.data : [])[0];
-  if (!card) return { price: null, reason: "no_match" };
-  const price = card.MarketPrice ? Number(card.MarketPrice) : null;
-  return { price, reason: price == null ? "no_price" : null };
+  return withNameFallback(item, async (name) => {
+    const res = await fetchWithRetry(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(name)}&pretty=true`);
+    if (!res.ok) return { price: null, reason: "fetch_failed" };
+    const data = await res.json();
+    const card = (Array.isArray(data.data) ? data.data : [])[0];
+    if (!card) return { price: null, reason: "no_match" };
+    const price = card.MarketPrice ? Number(card.MarketPrice) : null;
+    return { price, reason: price == null ? "no_price" : null };
+  });
 }
 
 // Sports Singles has no card database to look up against at all (a
