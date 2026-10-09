@@ -195,6 +195,67 @@ export function computeOfferTiers(items, tierSettings) {
   return { tier1: round2(sums.tier1), tier2: round2(sums.tier2), tier3: round2(sums.tier3) };
 }
 
+// Cost-basis allocation at quote-accept time (for the Cost-tracking Reports
+// feature — see CLAUDE.md). A quote's own `payoutAmount` is the one real
+// number for "what we actually paid," but it's a single lump sum with no
+// per-item "selected tier" ever persisted — QuoteDetail's own
+// addOnsApplied/bulkApplied toggles are local UI state only, reset every
+// time the modal reopens, never saved onto the quote row — so there's no
+// reliable way to back out exactly how much of payoutAmount came from
+// add-ons vs. real cards. Rather than guess at a field that doesn't exist,
+// this instead:
+//   1. Picks whichever of the three configured tiers' live totals
+//      (computeOfferTiers) is numerically closest to the real
+//      payoutAmount — the tier staff most likely actually used, possibly
+//      with a small manual adjustment.
+//   2. Allocates the real payoutAmount proportionally across every
+//      non-add-on item, weighted by that item's own value AT THAT TIER (so
+//      a card with its own Alter % delta gets a proportionally bigger/
+//      smaller slice, same as it already does in the live tier display) —
+//      scaled so the per-item amounts always sum to exactly payoutAmount
+//      regardless of manual rounding or a hand-typed payout.
+//   3. Divides each item's allocated share by its own qty, since `cost`
+//      (like `price`) is a per-unit figure, not a per-line total.
+// Deliberately does NOT try to exclude whatever portion of payoutAmount
+// came from add-ons — that amount isn't separately recoverable once folded
+// in, so a quote with add-ons applied will slightly overstate real cards'
+// cost. A known, accepted imprecision, documented here rather than silently
+// assumed away. Returns a NEW items array; isAddOn items are returned
+// unchanged (they never reach Sorting/Catalog, so cost has no meaning for
+// them).
+export function computeQuoteItemCosts(items, payoutAmount, tierSettings) {
+  const list = items || [];
+  const amount = parseMoney(payoutAmount);
+  if (amount == null || amount <= 0) {
+    return list.map(item => (item.isAddOn ? item : { ...item, cost: null }));
+  }
+
+  const tiers = computeOfferTiers(list, tierSettings);
+  const tierKeys = ['tier1', 'tier2', 'tier3'];
+  const closestKey = tierKeys.reduce((best, key) =>
+    Math.abs(tiers[key] - amount) < Math.abs(tiers[best] - amount) ? key : best, tierKeys[0]);
+
+  const s = tierSettings || DEFAULT_QUOTE_TIER_PCTS;
+  const basePct = s[closestKey] ?? DEFAULT_QUOTE_TIER_PCTS[closestKey];
+
+  const weights = list.map(item => {
+    if (item.isAddOn) return 0;
+    if (item.isBulk) return flatItemAmount(item) || 0;
+    const price = parseMoney(item.price);
+    if (price == null) return 0;
+    const pct = (item.pctAltered && item.pctDelta != null) ? clampPct(basePct + item.pctDelta) : basePct;
+    return price * (Number(item.qty) || 1) * pct / 100;
+  });
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+  return list.map((item, i) => {
+    if (item.isAddOn) return item;
+    if (totalWeight <= 0 || weights[i] <= 0) return { ...item, cost: null };
+    const lineCost = amount * (weights[i] / totalWeight);
+    return { ...item, cost: round2(lineCost / (Number(item.qty) || 1)) };
+  });
+}
+
 // Adapter for the Scan/Import add-card methods: both ScannerPanel and
 // ImportPanel already produce fully-formed normalizeCard(...)-shaped
 // objects before calling their onImport callback (the same objects they'd
@@ -256,6 +317,7 @@ export function buildCatalogItemsFromQuoteItems(items, destination) {
     qty: item.qty,
     price: item.price,
     basePrice: item.basePrice,
+    cost: item.cost,
     notes: item.notes,
     imageUrl: item.imageUrl,
     imageData: item.imageData,
@@ -294,6 +356,7 @@ export function buildSortingItemsFromQuoteItems(items, quoteId, quoteCollectionN
     condition: item.condition,
     price: item.price,
     basePrice: item.basePrice,
+    cost: item.cost,
     qty: item.qty,
     notes: item.notes,
     imageUrl: item.imageUrl,

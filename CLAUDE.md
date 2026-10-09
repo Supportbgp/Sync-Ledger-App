@@ -4444,6 +4444,335 @@ price-check`) for this fix to take effect. The next run's combined
 `failedByReason`/`sampleFailures` output confirms how much of the
 possessive-name cluster this actually resolved.
 
+## Cost tracking: a `cost` field for tax/profit reporting, deferred from the original sales-reporting scope cut
+
+Real ask, while the price-check investigation above was in progress: include
+what the shop paid for a sold item alongside what it sold for, so the
+Reports tab can feed a real tax/profit breakdown, not just revenue/volume.
+This is the explicitly deferred initiative both "Sales reporting" and
+"Price tracking & spike alerts" above flagged as a separate, later
+extension — "most inbound paths (Scanner, Import) never capture what the
+shop paid for an item at all; only Quote-tab trade-ins have a real payout
+amount." Two design forks were confirmed with the user before building,
+since this feeds a number people may file taxes from — not something to
+guess at:
+
+- **Quote-trade-in items auto-fill Cost from the quote's real payout
+  math** (not left manual like everything else) — the one inbound path
+  where the real cost is already knowable without extra staff work.
+- **CSV/XLSX import stays manual-entry-only for this first version** — no
+  Cost column added to the import mapping screen yet, matching this
+  roadmap's own established "ship the minimal, independently-useful
+  version first" pattern (the `sales` table's own write hook, Feature B's
+  in-app-badge-only v1, etc.).
+
+**Schema** (`phase14_cost_tracking.sql`): `cost numeric`, nullable, no
+default, added to `catalog`, `sales`, and `sorting_queue` — same "never
+force a value" discipline as `catalog.base_price`. `sorting_queue` needs
+its own real column (not just `quotes.items`' schema-less jsonb) for the
+same reason `source_url` did (`phase11_quote_source_url.sql`): an accepted
+quote's items pass through that relational table on their way to becoming
+a Catalog row, and a value with no column there is silently dropped at
+that hop. `cost` is a **per-unit** figure throughout, same convention as
+`price` — `computeSalesReport` multiplies both by `qtySold` to reach a
+sale's real totals, exactly mirroring how it already treats `salePrice`.
+
+- **Manual entry**: a new Cost ($) field in `EditModal`'s Quantity &
+  pricing section, right under Our price — optional, blank by default,
+  staff fill it in by hand wherever known (Scanner/Import/manually-added
+  items have no other way to get one). `normalizeCard`/`cardToRow`/
+  `rowToCard` carry it through the same way `basePrice` already does.
+- **Quote-trade-in auto-fill — `computeQuoteItemCosts` in
+  `quoteUtils.js`**, called from `App.jsx`'s `handleSaveQuote` right
+  before `buildSortingItemsFromQuoteItems`, at the moment a quote is
+  accepted. The real problem this function has to work around: a quote's
+  own `payoutAmount` is the one real "what we actually paid" number, but
+  it's a single lump sum with **no per-item "selected tier" ever
+  persisted** — `QuoteDetail.jsx`'s own `addOnsApplied`/`bulkApplied`
+  toggles are local component state only, reset every time the modal
+  reopens, never saved onto the quote row. Rather than guess at a field
+  that doesn't exist, the function instead: (1) picks whichever of the
+  three configured tiers' live totals (`computeOfferTiers`) is numerically
+  closest to the real `payoutAmount` — the tier staff most likely actually
+  used, possibly with a small manual adjustment; (2) allocates the real
+  payout proportionally across every non-add-on item, weighted by that
+  item's own value **at that tier** (so a card with its own Alter %
+  delta — `pctAltered`/`pctDelta` — gets a proportionally bigger/smaller
+  slice, same as it already does in the live tier display), scaled so the
+  per-item shares always sum to exactly `payoutAmount` regardless of any
+  manual rounding or a fully hand-typed payout; (3) divides each item's
+  allocated line share by its own `qty`, since `cost` is per-unit, not
+  per-line. A bulk-flagged item's weight is its own `flatItemAmount` (the
+  flat lot value), not a per-card price × qty, matching how
+  `computeOfferTiers` already treats it. Returns a new items array;
+  `isAddOn` items pass through completely unchanged (they never reach
+  Sorting/Catalog, so cost has no meaning for them).
+  - **A known, accepted imprecision, not a bug**: this does NOT try to
+    exclude whatever portion of `payoutAmount` came from add-ons folded in
+    via "Add to payout" — that amount isn't separately recoverable once
+    folded into the single `payoutAmount` figure (see the
+    `addOnsApplied`/`bulkApplied` local-state problem above), so a quote
+    with add-ons applied will slightly overstate real cards' allocated
+    cost. Flagged here rather than silently assumed away.
+  - `buildSortingItemsFromQuoteItems`/`buildCatalogItemsFromQuoteItems`
+    both carry `item.cost` through to their output, same mechanical
+    pattern `sourceUrl` already established — a Sorting-placed-individually
+    item's cost survives the trip; a Bulk-placed item's does not, since
+    `buildBulkCatalogItem` never reads/writes `cost` at all (no per-print
+    identity on a Bulk row, same reasoning it already excludes price/set/
+    rarity/sourceUrl).
+- **`sales.cost`** is snapshotted from `catalog.cost` at Mark Sold time
+  (`App.jsx`'s `handleBatchSell`), same "snapshot at the time" discipline
+  `sale_price`/`qty_sold`/`condition` already use on this table — a sale's
+  recorded cost must never retroactively change just because the
+  (possibly already-deleted) catalog row's own cost gets edited later.
+- **`computeSalesReport` (`reportUtils.js`)** now also returns `cost`
+  (sum of `cost × qtySold` over sales that actually have one), `profit`
+  (`revenue - cost`), and `costUnknownCount` (how many sale rows have no
+  recorded cost) — both overall and per-game in `byGame`. A sale with a
+  null cost contributes 0 to the cost sum (same null-handling rule
+  `salePrice` already has) but is also separately counted in
+  `costUnknownCount`, so the Reports tab can show an honest "N sales have
+  no recorded cost" caveat instead of implying `profit` is complete when
+  some of the underlying sales simply never had a cost captured.
+- **`ReportsTab.jsx`** gained Cost/Profit stat tiles next to the existing
+  Units/Revenue ones, a Cost/Profit column in the by-game breakdown table,
+  a Cost column in the per-sale drill-down (rendering `—` for a null cost,
+  same convention the Price column already uses), and the
+  `costUnknownCount` caveat line. The toolbar's explanatory text was
+  rewritten from "not a profit report (no cost basis is tracked yet)" to
+  describe what Cost/Profit actually reflect now.
+- Covered by new tests in `reportUtils.test.js` (cost/profit summation
+  including the per-unit × qty multiplication, the null-cost-excluded-but-
+  counted behavior, and the per-game breakdown), `quoteUtils.test.js`
+  (`computeQuoteItemCosts` directly — the closest-tier pick, proportional
+  allocation matching a real payout exactly, the Alter %-delta weighting,
+  bulk-item flat-value weighting, per-unit division for a multi-qty item,
+  and `isAddOn` items passing through untouched), `cardUtils.test.js`
+  (`normalizeCard`'s cost parsing), and a new `e2e/reports.spec.js` test.
+  - **Verification note**: this sandbox has no network path to
+    `cdn.sheetjs.com` (the `xlsx` dependency's CDN source — see "Known
+    constraints" above), which blocks `npm install`/`npm run build`/
+    `npm run test:e2e` entirely in this environment, not just anything
+    import-related. Unit tests were run successfully (342 passing,
+    including every new case above) by temporarily stripping `xlsx` from
+    `package.json` for a local-only install, never committed. The new e2e
+    test could not be run end-to-end here for the same reason — confirmed
+    by a real attempt, which failed at the same page-load step for every
+    spec in the file (including the three pre-existing, already-passing
+    ones), not just the new test, pointing at the missing `xlsx` dependency
+    breaking the whole app bundle rather than anything in this change.
+
+**Requires running `phase14_cost_tracking.sql`** in the Supabase SQL
+Editor before this code can save/read `cost` on `catalog`/`sales`/
+`sorting_queue` — no code-side default masks a missing column here, so an
+Edit save, a Mark Sold, or an accepted quote's Sorting handoff would start
+throwing a real insert/update error rather than silently dropping the
+value.
+
+## Cost tracking: fixed CI — Cost/Profit stat tiles need their own locator, not a bare text match
+
+The Cost/Profit PR's own CI run came back red on real failures, not sandbox
+noise this time (this repo's `npm ci` has working `cdn.sheetjs.com` access
+in CI, unlike this sandbox) — `unit` was green, `e2e` failed four of five
+specs in `reports.spec.js` on both the Desktop and Mobile projects.
+
+- **Root cause**: every new Cost/Profit number this feature added can
+  render a dollar string that already exists somewhere else on the same
+  page, and this file's e2e tests asserted on `page.getByText('$X.XX')`
+  with no scoping — a bare text match against the *whole page*, not a
+  specific element. Two real collisions: (1) when a sale has no recorded
+  cost, `cost` is 0 and `profit` equals `revenue` exactly — the pre-existing
+  "this month's totals" test's own `getByText('$145.00')` started matching
+  both the Revenue tile and the new Profit tile; (2) the new Cost/Profit
+  test's `getByText('$20.00')` matched both the new Cost stat tile *and*
+  the by-game table's own Cost column for Pokemon, which happens to show
+  the identical figure for a single-sale-per-game seed. Playwright's text
+  locators match hidden *and* visible elements with no visibility filter by
+  default, and `toBeVisible()`/`toHaveCount()` against a multi-match
+  locator is a real strict-mode violation, not a flake — this would have
+  failed consistently, every run.
+- **Fix**: `ReportsTab.jsx`'s four stat tiles (`Units sold`/`Revenue`/
+  `Cost`/`Profit`) each gained a dedicated `className`
+  (`stat-tile stat-units`/`stat-revenue`/`stat-cost`/`stat-profit` — plain
+  marker classes, no new CSS rules) specifically so a test can address one
+  tile without depending on which other number on the page happens to
+  render the same string. `reports.spec.js`'s two affected assertions now
+  scope to `page.locator('.stat-revenue')`/`.stat-cost`/`.stat-profit`
+  instead of a bare `getByText`, matching the already-established
+  `.n-name`/`.n-sub`-style scoped-locator pattern used throughout this
+  suite's other spec files rather than introducing a new pattern.
+- **A fifth CI failure that run, `[Mobile] e2e/catalog.spec.js:21`
+  (`getByText('Edit')` expected 0, got 1), was first assumed unrelated to
+  this PR** — reasoned (wrongly) from `main`'s own most recent push run
+  independently failing its `unit` job on an unrelated flake
+  (`CatalogTable.test.jsx`'s 400-row render test timing out at Vitest's
+  default 5s limit), taken as evidence this repo's CI already carries some
+  flakiness. **That reasoning didn't hold up**: a direct check of that same
+  main-branch run's own `e2e` job (not just the failing `unit` job) showed
+  it passed cleanly — so the Mobile catalog test was never flaky on the
+  commit this PR branched from, and the failure reappeared identically
+  (not just once but across both the initial attempt and its retry) once
+  this PR's commits were on top of it. That's a real regression this PR
+  caused, confirmed by checking the base commit's actual job outcome
+  instead of inferring unrelatedness from a different job's own failure.
+- **Real root cause**: `ReportsTab.jsx`'s always-visible toolbar paragraph
+  (describing what Cost/Profit reflect) contained the literal substring
+  "Edit" — `"...entered on their catalog row (Edit modal) or auto-filled
+  ..."`. Every tab in this app stays mounted at all times (just hidden via
+  `.panel`'s CSS, never conditionally rendered — see the Reports tab's own
+  design note above), and Playwright's `getByText()` matches hidden DOM
+  content with no visibility filter, same lesson as the stat-tile fix
+  above just manifesting on a completely different tab's test. Catalog's
+  own pre-existing Mobile test asserts `page.getByText('Edit')).toHaveCount(0)`
+  with no scoping at all, so once Reports' own (unrelated, always-mounted)
+  copy started containing that substring too, the count went from the
+  real 0 to a real 1 — not from anything Catalog itself changed.
+- **Fix, two parts**: (1) reworded the actual source — `ReportsTab.jsx`'s
+  toolbar text now reads `"...entered on their catalog row (via the item's
+  detail screen) or auto-filled..."`, removing the colliding substring
+  entirely (checked case-insensitively too, since Playwright's default
+  text match isn't case-sensitive — no stray lowercase "edit" either).
+  (2) hardened `catalog.spec.js`'s own assertion defensively, since the
+  underlying fragility (a bare page-wide `getByText` in an app where every
+  tab's content is always in the DOM) will keep producing this exact bug
+  class as more tabs accumulate more copy — scoped both of that test's
+  `getByText('Edit')` calls to `page.locator('.catalog-card')` instead of
+  the whole page, matching the same scoped-locator pattern the stat-tile
+  fix above already established.
+- Verified locally the same way every e2e-adjacent fix in this file has
+  been given this sandbox's lack of `cdn.sheetjs.com` access: grepped
+  every component for a remaining "Edit"/"edit" substring that could
+  collide with an always-mounted tab (only `StaffDocs`' own section files
+  still say it, but those render on a completely separate `?help=1` route
+  never mounted alongside the main tabbed app, so they can't collide the
+  same way) — real confirmation is CI's own next run on the real bundle.
+
+## Reports: Edit Sale on the per-game drill-down, to correct a past sale
+
+Real ask right after Cost/Profit shipped, before merge: a way to fix a
+mistake on an already-recorded sale (a typo'd Name/Condition, a wrong
+Price/Cost, a misrecorded Sold date) without going into the Supabase SQL
+Editor by hand — the same manual-backfill route this doc's own "Cost
+tracking" section above describes for historical sales that predate the
+`cost` column entirely.
+
+- **Editing a `sales` row is safe despite this table's own "append-only,
+  never updated or deleted" framing** (`phase12_sales_history.sql`'s header
+  comment, quoted verbatim earlier in this file) — that framing was about
+  the *app* never silently rewriting a sale's history on its own (e.g. if
+  the source catalog row later changes), not a hard rule against a staff
+  member correcting a real mistake they typed in by hand. Confirmed, not
+  assumed, before writing any code: the migration's own RLS policy
+  (`"authenticated full access" ... for all ... using (true) ... with check
+  (true)`) already grants `authenticated` full UPDATE access — the table was
+  never actually locked down to insert-only at the database layer, so this
+  needed no new migration, just application code that previously chose not
+  to use that access.
+- **`db.js` gained `dbUpdateSale(sale, toast)`**, reusing the existing
+  `saleToRow` mapper `dbInsertSales` already has (an update and an insert
+  land on the same columns) — `.update(saleToRow(sale)).eq('id', sale.id)`,
+  same void-return/toast-on-error convention as this file's other
+  `dbUpdate*` functions (`dbUpdateTicketStamp`/`dbUpdatePlatformStatus`).
+- **Scope: every stored field except `id`/`sku` is editable** — Name, Game,
+  Condition, Qty sold, Sale price, Cost, and Sold date, via a new
+  `EditSaleModal.jsx` (same `.overlay`/`.modal` system, explicit Cancel/Save
+  buttons, no backdrop-close, matching this app's standing modal
+  convention). Game uses the same canonical `GAMES` list every other Game
+  field in this app does. Sold date is edited as a plain `<input
+  type="date">` (losing intraday precision, matching every other date-only
+  picker already in this app, e.g. Quote's Date quoted field) — the fix
+  keeps the sale's original time-of-day and only replaces the calendar
+  date, so two sales corrected onto the same day don't lose their relative
+  ordering within it. `sku` is shown nowhere in the form — it's an internal
+  reference that may no longer point at a real catalog row at all, not a
+  human-correctable field.
+  - **A real, deliberate side effect of allowing Game/Sold-date edits**: if
+    a correction moves a sale's Game or Sold date, that row can simply stop
+    appearing in the currently-open drill-down or date range after the
+    save — the same "it moved, not a bug" behavior a real correction should
+    have, not a defect to guard against.
+  - **Found and fixed a real accessibility gap while building this
+    modal, not after**: this app already hit the "a `<label>` that's a
+    visual sibling with no `htmlFor` isn't actually associated with its
+    input" problem once before (`LocationPicker`'s own unlabeled `<select>`,
+    see the "Rarity field gained a `<datalist>`..." section above) — rather
+    than reintroduce that same gap in a brand-new modal, every field here
+    uses a real `htmlFor`/`id` pair from the start, which is also what lets
+    its own e2e test locate the Cost field via `getByLabel('Cost ($)')`
+    instead of a fragile position- or placeholder-based locator.
+- **`ReportsTab.jsx`** gained an `editingSale` state and an Edit button in
+  each drill-down row (next to Sold date) — clicking it opens
+  `EditSaleModal` for that one sale. On Save, `ReportsTab` patches its own
+  local `sales` array by `id` immediately (there's no Realtime subscription
+  on this table — see the Reports tab's own on-demand-fetch design note
+  earlier in this file — so nothing else would reflect the correction
+  otherwise) and fires the real `dbUpdateSale` write in parallel through a
+  new `onUpdateSale` prop (`App.jsx`'s `handleUpdateSale`, a thin
+  passthrough — `sales` isn't top-level App.jsx state, so there's nothing
+  else for that handler to update). `editingSale` resets to `null`
+  whenever the date range changes, same as the existing `expandedGame`
+  reset, so a stale edit targeting a row from a previous fetch can't linger.
+- Covered by new tests in `db.test.js` (`dbUpdateSale`'s row shape matched
+  by id, and its error-to-toast path) and a new `e2e/reports.spec.js` test:
+  opens a seeded Pokemon sale's drill-down, edits its Cost via the real
+  modal, confirms the Cost/Profit stat tiles update live with no reload,
+  and reads `window.__HARNESS_DB__.sales` directly to confirm the real
+  write landed, not just local state — same direct-DB-read pattern already
+  established for the Mark Sold test in `e2e/catalog.spec.js`.
+  - **Not independently verified end-to-end in this sandbox**, same
+    standing constraint as every other e2e-adjacent change in this file:
+    no network path to `cdn.sheetjs.com` blocks a real `npm install`/
+    `test:e2e` run here. A local attempt via the usual temporary
+    xlsx-stripped install reproduced the same whole-bundle-broken state
+    already documented elsewhere (every spec in the file fails at the same
+    first-tab-click step, including the five pre-existing, already-passing
+    ones) — confirming nothing about this change specifically is reachable
+    to verify here. Real confirmation is CI's own next run.
+
+## Reports: fixed CI — Edit Sale's own drill-down table needed .table-scroll on Mobile
+
+That "not independently verified end-to-end" caveat right above turned out
+to matter: CI came back with `unit` green but `e2e` red on exactly one
+spec, `[Mobile] e2e/reports.spec.js` — "Edit sale corrects a past sale" —
+failing (both its initial attempt and its retry) at the very first step,
+clicking the new Edit button, with Playwright reporting a `<td>` (the Sold
+date cell) and the `costUnknownCount` `.status-line` div "intercepting
+pointer events" at the click point.
+
+- **Root cause**: the drill-down table gained a 7th column (the new Edit
+  button) with no mobile-specific handling at all — unlike `CatalogTable`,
+  which swaps to a whole different card layout under its own 700px
+  breakpoint, this table (and the by-game table above it) has always just
+  been a plain `<table>`, never wrapped in the `.table-scroll` class this
+  app already uses elsewhere (`CatalogTable`'s own table, `QuotesTab`'s)
+  specifically to let an overly-wide table scroll within its own bounded
+  box instead of overflowing the page. Six narrow columns apparently stayed
+  under the threshold that would force real page overflow on a 390px
+  (Pixel 7) viewport; the 7th (Edit button) tipped it over. The resulting
+  symptom — an unrelated element elsewhere on the page "intercepting"
+  clicks meant for something further down — is the exact same signature
+  this app already diagnosed once before for `.docs-callout`'s own overflow
+  bug (see that section above): real horizontal overflow forces a mobile
+  browser's auto-zoom-to-fit, which desyncs the page's actual on-screen
+  layout from Playwright's precomputed click coordinates. `body`'s own
+  `overflow-x: hidden` safety net (added for that earlier bug) only clips
+  overflow at the very top level — it doesn't stop a table nested several
+  levels down from forcing its own row, and therefore the page, wider in
+  the first place.
+- **Fix**: wrapped both this table and the nested drill-down table in
+  `<div className="table-scroll">`, the same already-established pattern
+  (`overflow-x: auto`, unconditional, not gated to a breakpoint) —
+  consistent with `CatalogTable`'s own usage, not a new pattern. No test
+  changes needed; `table tbody tr`-style locators still resolve the same
+  way with one extra `<div>` ancestor.
+- Verified the same way every e2e-adjacent fix in this file has been given
+  this sandbox's lack of `cdn.sheetjs.com` access: confirmed `.table-scroll`
+  is an unconditional (not breakpoint-gated) rule already proven to work
+  for `CatalogTable`/`QuotesTab`, and that nothing else in this spec file's
+  locators depends on the table's exact DOM ancestry — real confirmation is
+  CI's own next run.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

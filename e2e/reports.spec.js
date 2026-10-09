@@ -24,8 +24,10 @@ test('Reports tab shows this month\'s totals and a by-game breakdown, sorted by 
   await page.locator('.tab', { hasText: 'Reports' }).click();
 
   // "This month" is the default preset, so both sales (dated "now") should
-  // already be included with no extra clicks.
-  await expect(page.getByText('$145.00')).toBeVisible();
+  // already be included with no extra clicks. Scoped to the Revenue stat
+  // tile specifically — with no cost entered, Profit renders the identical
+  // "$145.00" string, and a bare page-wide getByText would match both.
+  await expect(page.locator('.stat-revenue')).toContainText('$145.00');
   const rows = page.locator('table tbody tr');
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText('Magic'); // higher revenue sorts first
@@ -81,6 +83,64 @@ test('clicking a game row in the by-game breakdown expands to show its individua
   // Clicking the same row again collapses it back.
   await magicRow.click();
   await expect(page.getByText('Black Lotus')).not.toBeVisible();
+});
+
+test('Cost/Profit reflect only sales with a recorded cost, flagging the rest', async ({ page }) => {
+  const now = new Date().toISOString();
+  await seedHarness(page, {
+    seed: {
+      ...catalogSeed([]),
+      sales: [
+        makeSaleRow({ id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', qty_sold: 1, sale_price: 45, cost: 20, sold_at: now }),
+        makeSaleRow({ id: 's2', sku: 'sku-2', name: 'Black Lotus', game: 'Magic', qty_sold: 1, sale_price: 100, cost: null, sold_at: now }),
+      ],
+    },
+  });
+  await page.goto('./');
+  await page.locator('.tab', { hasText: 'Reports' }).click();
+
+  // Cost/Profit only count the Charizard sale (the one with a real cost) —
+  // Black Lotus's missing cost contributes 0, not a guess. Scoped to the
+  // stat tiles specifically — the by-game table's own Pokemon row renders
+  // an identical "$20.00" Cost cell, which a bare page-wide getByText would
+  // also match.
+  await expect(page.locator('.stat-cost')).toContainText('$20.00');
+  await expect(page.locator('.stat-profit')).toContainText('$125.00'); // 145 revenue - 20 cost
+  await expect(page.getByText(/1 sale\(s\) in this range have no recorded cost/)).toBeVisible();
+});
+
+test('Edit sale corrects a past sale and updates the report live', async ({ page }) => {
+  const now = new Date().toISOString();
+  await seedHarness(page, {
+    seed: {
+      ...catalogSeed([]),
+      sales: [
+        makeSaleRow({ id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', condition: 'NM', qty_sold: 1, sale_price: 45, cost: null, sold_at: now }),
+      ],
+    },
+  });
+  await page.goto('./');
+  await page.locator('.tab', { hasText: 'Reports' }).click();
+
+  await page.locator('table tbody tr', { hasText: 'Pokemon' }).click();
+  await expect(page.getByText('Charizard')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByText('Edit sale')).toBeVisible();
+
+  const costInput = page.locator('.modal').getByLabel('Cost ($)');
+  await costInput.fill('20');
+  await page.locator('.modal').getByRole('button', { name: 'Save' }).click();
+
+  await expect(page.getByText('Edit sale')).toHaveCount(0);
+  // Revenue stays $45, but Cost/Profit now reflect the corrected $20 —
+  // confirming the edit updated the report live, with no page reload.
+  await expect(page.locator('.stat-cost')).toContainText('$20.00');
+  await expect(page.locator('.stat-profit')).toContainText('$25.00');
+
+  // The real write landed in the harness DB too, not just local state.
+  const dbSales = await page.evaluate(() => window.__HARNESS_DB__.sales);
+  expect(dbSales.find(s => s.id === 's1').cost).toBe(20);
 });
 
 test('Custom range prompts for both dates before loading anything', async ({ page }) => {

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { computeSalesReport, presetDateRange, customDateRangeToBounds } from '../../lib/reportUtils.js';
+import EditSaleModal from './EditSaleModal.jsx';
 
 const PRESETS = [
   { key: 'month', label: 'This month' },
@@ -13,13 +14,14 @@ const PRESETS = [
 // App.jsx's top-level state the way catalog/quotes/sorting are — sales only
 // ever grows, with no natural cap, so eagerly loading all of it on every
 // sign-in doesn't scale the way it does for those.
-export default function ReportsTab({ onLoadSales }) {
+export default function ReportsTab({ onLoadSales, onUpdateSale }) {
   const [preset, setPreset] = useState('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedGame, setExpandedGame] = useState(null);
+  const [editingSale, setEditingSale] = useState(null);
 
   const range = preset === 'custom' ? customDateRangeToBounds(customFrom, customTo) : presetDateRange(preset);
 
@@ -28,6 +30,7 @@ export default function ReportsTab({ onLoadSales }) {
     let cancelled = false;
     setLoading(true);
     setExpandedGame(null);
+    setEditingSale(null);
     onLoadSales(range.from, range.to).then(rows => {
       if (!cancelled) { setSales(rows); setLoading(false); }
     });
@@ -41,11 +44,25 @@ export default function ReportsTab({ onLoadSales }) {
 
   const report = computeSalesReport(sales);
 
+  // Patches the local sales array immediately (there's no realtime
+  // subscription on this table — see the Reports tab's own on-demand-fetch
+  // design note above — so nothing else will reflect the correction unless
+  // this does) and fires the real write in parallel. A corrected sale whose
+  // Game or Sold date moved it outside the currently-open drill-down/range
+  // simply stops appearing there on the next render — the same "it moved,
+  // not a bug" behavior a Game/date edit should have.
+  async function handleSaveSale(updated) {
+    setSales(prev => prev.map(s => (s.id === updated.id ? updated : s)));
+    await onUpdateSale(updated);
+  }
+
   return (
     <div>
       <div className="toolbar">
         <div style={{ fontSize: '13px', color: 'var(--ink-soft)', maxWidth: '560px' }}>
-          Revenue and volume from Mark Sold events only — not a profit report (no cost basis is tracked yet).
+          Revenue, volume, and cost/profit from Mark Sold events only. Cost only counts items with a Cost entered on
+          their catalog row (via the item's detail screen) or auto-filled from an accepted Quote trade-in — a sale
+          with no recorded cost still counts toward Units, just not toward Cost/Profit below.
         </div>
       </div>
 
@@ -79,69 +96,112 @@ export default function ReportsTab({ onLoadSales }) {
       ) : (
         <>
           <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '13px', marginBottom: '16px' }}>
-            <div>
+            <div className="stat-tile stat-units">
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Units sold</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>{report.units}</div>
             </div>
-            <div>
+            <div className="stat-tile stat-revenue">
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Revenue</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.revenue.toFixed(2)}</div>
             </div>
+            <div className="stat-tile stat-cost">
+              <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Cost</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.cost.toFixed(2)}</div>
+            </div>
+            <div className="stat-tile stat-profit">
+              <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Profit</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.profit.toFixed(2)}</div>
+            </div>
           </div>
 
-          <table>
-            <thead>
-              <tr><th>Game</th><th>Units</th><th>Revenue</th></tr>
-            </thead>
-            <tbody>
-              {report.byGame.map(g => {
-                const isOpen = expandedGame === g.game;
-                // Mirrors computeSalesReport's own blank-game->"Unknown"
-                // grouping so the drill-down matches exactly the rows that
-                // were summed into this game's totals above.
-                const items = sales
-                  .filter(s => (s.game || 'Unknown') === g.game)
-                  .slice()
-                  .sort((a, b) => b.soldAt - a.soldAt);
-                return (
-                  <Fragment key={g.game}>
-                    <tr
-                      onClick={() => setExpandedGame(isOpen ? null : g.game)}
-                      style={{ cursor: 'pointer' }}
-                      aria-expanded={isOpen}
-                    >
-                      <td>{isOpen ? '▼' : '▶'} {g.game}</td>
-                      <td>{g.units}</td>
-                      <td>${g.revenue.toFixed(2)}</td>
-                    </tr>
-                    {isOpen && (
-                      <tr>
-                        <td colSpan={3} style={{ padding: '0 0 12px 24px', background: 'var(--surface-alt)' }}>
-                          <table>
-                            <thead>
-                              <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Sold</th></tr>
-                            </thead>
-                            <tbody>
-                              {items.map(s => (
-                                <tr key={s.id}>
-                                  <td>{s.name}</td>
-                                  <td>{s.condition || '—'}</td>
-                                  <td>{s.qtySold}</td>
-                                  <td>{s.salePrice == null ? '—' : `$${Number(s.salePrice).toFixed(2)}`}</td>
-                                  <td>{new Date(s.soldAt).toLocaleDateString()}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </td>
+          {report.costUnknownCount > 0 && (
+            <div className="status-line" style={{ marginBottom: '12px' }}>
+              {report.costUnknownCount} sale(s) in this range have no recorded cost — Cost/Profit above only reflect
+              the sales that do.
+            </div>
+          )}
+
+          {/* .table-scroll (not a bare <table>) on both this table and the
+              nested drill-down below — a narrow mobile viewport has no
+              other mobile-specific handling here (unlike CatalogTable's
+              full card-layout swap), so letting a too-wide row scroll
+              within its own bounded container, instead of overflowing the
+              page, is what keeps body's own overflow-x:hidden safety net
+              from ever needing to kick in at the page level (see that
+              rule's own comment in index.css for why a page-level overflow
+              here specifically risks the same mobile zoom-to-fit/Playwright-
+              click-desync bug this app already hit once with .docs-callout). */}
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Game</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr>
+              </thead>
+              <tbody>
+                {report.byGame.map(g => {
+                  const isOpen = expandedGame === g.game;
+                  // Mirrors computeSalesReport's own blank-game->"Unknown"
+                  // grouping so the drill-down matches exactly the rows that
+                  // were summed into this game's totals above.
+                  const items = sales
+                    .filter(s => (s.game || 'Unknown') === g.game)
+                    .slice()
+                    .sort((a, b) => b.soldAt - a.soldAt);
+                  return (
+                    <Fragment key={g.game}>
+                      <tr
+                        onClick={() => setExpandedGame(isOpen ? null : g.game)}
+                        style={{ cursor: 'pointer' }}
+                        aria-expanded={isOpen}
+                      >
+                        <td>{isOpen ? '▼' : '▶'} {g.game}</td>
+                        <td>{g.units}</td>
+                        <td>${g.revenue.toFixed(2)}</td>
+                        <td>${g.cost.toFixed(2)}</td>
+                        <td>${g.profit.toFixed(2)}</td>
                       </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={5} style={{ padding: '0 0 12px 24px', background: 'var(--surface-alt)' }}>
+                            <div className="table-scroll">
+                              <table>
+                                <thead>
+                                  <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Cost</th><th>Sold</th><th></th></tr>
+                                </thead>
+                                <tbody>
+                                  {items.map(s => (
+                                    <tr key={s.id}>
+                                      <td>{s.name}</td>
+                                      <td>{s.condition || '—'}</td>
+                                      <td>{s.qtySold}</td>
+                                      <td>{s.salePrice == null ? '—' : `$${Number(s.salePrice).toFixed(2)}`}</td>
+                                      <td>{s.cost == null ? '—' : `$${Number(s.cost).toFixed(2)}`}</td>
+                                      <td>{new Date(s.soldAt).toLocaleDateString()}</td>
+                                      <td>
+                                        <button className="btn secondary small" onClick={() => setEditingSale(s)}>Edit</button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </>
+      )}
+
+      {editingSale && (
+        <EditSaleModal
+          sale={editingSale}
+          onClose={() => setEditingSale(null)}
+          onSave={handleSaveSale}
+        />
       )}
     </div>
   );

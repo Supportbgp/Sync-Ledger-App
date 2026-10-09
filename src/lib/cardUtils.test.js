@@ -85,6 +85,10 @@ describe('normalizeCard', () => {
     expect(card.price).toBe(5);
     expect(card.basePrice).toBe(10);
   });
+  it('parses cost through parseMoney and leaves it null when not provided', () => {
+    expect(normalizeCard({ cost: '$3.50' }).cost).toBe(3.5);
+    expect(normalizeCard({}).cost).toBeNull();
+  });
   it('defaults activeImage to "photo" unless explicitly "stock"', () => {
     expect(normalizeCard({}).activeImage).toBe('photo');
     expect(normalizeCard({ activeImage: 'stock' }).activeImage).toBe('stock');

@@ -46,6 +46,7 @@ export function rowToCard(r) {
     posSynced: r.pos_synced, tcgplayerSynced: r.tcgplayer_synced, collectrSynced: r.collectr_synced,
     posChannel: r.pos_channel, tcgplayerChannel: r.tcgplayer_channel, collectrChannel: r.collectr_channel,
     basePrice: r.base_price,
+    cost: r.cost,
     photoUrl: r.photo_data ? "local" : (r.photo_url || ""),
     photoData: r.photo_data || "",
     activeImage: r.active_image,
@@ -64,6 +65,7 @@ function cardToRow(c) {
     pos_synced: !!c.posSynced, tcgplayer_synced: !!c.tcgplayerSynced, collectr_synced: !!c.collectrSynced,
     pos_channel: c.posChannel !== false, tcgplayer_channel: c.tcgplayerChannel !== false, collectr_channel: c.collectrChannel !== false,
     base_price: c.basePrice ?? null,
+    cost: c.cost ?? null,
     photo_url: (c.photoUrl && c.photoUrl.startsWith('http')) ? c.photoUrl : '',
     photo_data: c.photoUrl === 'local' ? (c.photoData || '') : '',
     active_image: c.activeImage === 'stock' ? 'stock' : 'photo',
@@ -149,7 +151,7 @@ export async function dbInsertTickets(tickets, toast) {
 function saleToRow(s) {
   return {
     sku: s.sku, name: s.name, game: s.game, condition: s.condition,
-    qty_sold: s.qtySold, sale_price: s.salePrice,
+    qty_sold: s.qtySold, sale_price: s.salePrice, cost: s.cost ?? null,
     sold_at: new Date(s.soldAt).toISOString(),
   };
 }
@@ -160,10 +162,25 @@ export async function dbInsertSales(sales, toast) {
   if (error) toast('Sales record failed: ' + error.message, true);
 }
 
+// Corrects a past sale (a typo'd Name/Condition/Qty, a wrong Price/Cost, a
+// misrecorded Sold date) from the Reports tab's own drill-down — the Edit
+// Sale action. `sales` is deliberately described elsewhere in this app
+// (phase12_sales_history.sql's own header comment) as "append-only, never
+// updated or deleted"; that was about the app never silently rewriting a
+// sale on its own (e.g. when the source catalog row later changes), not a
+// hard rule against a staff member fixing a mistake they typed in by hand —
+// the table's own RLS policy already grants `authenticated` full update
+// access, so this needed no migration. Reuses `saleToRow` so an edit is
+// mapped onto the same columns an insert already uses.
+export async function dbUpdateSale(sale, toast) {
+  const { error } = await supabaseClient.from('sales').update(saleToRow(sale)).eq('id', sale.id);
+  if (error) toast('Failed to update sale: ' + error.message, true);
+}
+
 export function rowToSale(r) {
   return {
     id: r.id, sku: r.sku, name: r.name, game: r.game, condition: r.condition,
-    qtySold: r.qty_sold, salePrice: r.sale_price,
+    qtySold: r.qty_sold, salePrice: r.sale_price, cost: r.cost,
     soldAt: r.sold_at ? new Date(r.sold_at).getTime() : Date.now(),
   };
 }
@@ -365,6 +382,7 @@ export function rowToSortingItem(r) {
     condition: r.condition || '',
     price: r.price,
     basePrice: r.base_price,
+    cost: r.cost,
     qty: r.qty || 1,
     notes: r.notes || '',
     imageUrl: r.image_data ? 'local' : (r.image_url || ''),
@@ -390,6 +408,7 @@ function sortingItemToRow(s) {
     condition: s.condition || null,
     price: s.price ?? null,
     base_price: s.basePrice ?? null,
+    cost: s.cost ?? null,
     qty: s.qty || 1,
     notes: s.notes || null,
     image_url: (s.imageUrl && s.imageUrl.startsWith('http')) ? s.imageUrl : '',

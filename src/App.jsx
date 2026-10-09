@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseClient } from './lib/supabase.js';
 import {
   dbLoadAll, dbUpsertCard, dbUpsertCards, dbDeleteCard, dbDeleteCards, dbClearCatalog,
-  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales, dbLoadSales,
+  dbInsertTickets, dbUpdateTicketStamp, dbClearQueue, dbUpdatePlatformStatus, dbInsertSales, dbLoadSales, dbUpdateSale,
   dbLoadSettings, dbSaveSettings,
   dbLoadQuotes, dbUpsertQuote, dbDeleteQuote, dbLoadQuoteSettings, dbSaveQuoteSettings,
   dbLoadSortingQueue, dbInsertSortingItems, dbDeleteSortingItem,
@@ -11,7 +11,7 @@ import {
   needsPlatformStatusReset, isTicketComplete, canonicalizeCondition, marketValueForCondition,
   DEFAULT_CONDITION_MULTIPLIERS, findBulkRow, buildBulkCatalogItem,
 } from './lib/cardUtils.js';
-import { buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems, DEFAULT_QUOTE_TIER_PCTS } from './lib/quoteUtils.js';
+import { buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems, computeQuoteItemCosts, DEFAULT_QUOTE_TIER_PCTS } from './lib/quoteUtils.js';
 import { useUI } from './context/UIContext.jsx';
 import { useRealtimeSync } from './hooks/useRealtimeSync.js';
 import Login from './components/Login.jsx';
@@ -205,7 +205,7 @@ export default function App() {
       // already draw (see phase12_sales_history.sql).
       newSales.push({
         sku: c.sku, name: c.name, game: c.game, condition: c.condition,
-        qtySold, salePrice: c.price, soldAt,
+        qtySold, salePrice: c.price, cost: c.cost, soldAt,
       });
       affected++;
       return updated;
@@ -223,6 +223,14 @@ export default function App() {
   // isn't eagerly loaded into top-level state like catalog/quotes/sorting).
   function handleLoadSalesReport(fromISO, toISO) {
     return dbLoadSales(fromISO, toISO, toast);
+  }
+
+  // The Reports tab's Edit Sale action. sales isn't top-level App.jsx state
+  // (see the comment above) so there's nothing to update here beyond the
+  // write itself — ReportsTab already patches its own local `sales` array
+  // once this resolves.
+  async function handleUpdateSale(sale) {
+    await dbUpdateSale(sale, toast);
   }
 
   async function handleToggleStamp(id, field) {
@@ -278,7 +286,12 @@ export default function App() {
     const isAccepted = toSave.offerStatus === 'accepted_cash' || toSave.offerStatus === 'accepted_store_credit';
     let movedCount = 0;
     if (isAccepted && !toSave.movedToSorting) {
-      const newSortingItems = buildSortingItemsFromQuoteItems(toSave.items, quoteDraft.id, toSave.collectionName);
+      // Compute each real card/bulk item's own cost from the quote's actual
+      // payout before it becomes a sorting_queue row — see
+      // quoteUtils.js's computeQuoteItemCosts for the full allocation
+      // reasoning (CLAUDE.md's "Cost tracking" section).
+      const itemsWithCost = computeQuoteItemCosts(toSave.items, toSave.payoutAmount, tierSettings);
+      const newSortingItems = buildSortingItemsFromQuoteItems(itemsWithCost, quoteDraft.id, toSave.collectionName);
       if (newSortingItems.length) {
         const inserted = await dbInsertSortingItems(newSortingItems, toast);
         if (inserted.length) {
@@ -443,7 +456,7 @@ export default function App() {
       </div>
 
       <div className={`panel${tab === 'reports' ? ' active' : ''}`}>
-        <ReportsTab onLoadSales={handleLoadSalesReport} />
+        <ReportsTab onLoadSales={handleLoadSalesReport} onUpdateSale={handleUpdateSale} />
       </div>
 
       <div className="footnote">
