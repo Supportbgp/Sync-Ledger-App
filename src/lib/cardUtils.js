@@ -430,6 +430,14 @@ export function normalizeCard(c) {
     // Market Value shown next to Our Price (`price`). Never guessed;
     // stays null until a search result with a real price gets picked.
     basePrice: parseMoney(c.basePrice),
+    // What the shop actually paid for this item, per unit (same per-unit
+    // convention as `price` — see computeSalesReport in reportUtils.js,
+    // which multiplies both by qty to get a sale's real totals). Never
+    // guessed — stays null until staff enter it by hand, or until a
+    // Quote-tab trade-in's cost auto-computes from the quote's own real
+    // payout (see quoteUtils.js's computeQuoteItemCosts). See CLAUDE.md's
+    // "Cost tracking" section.
+    cost: parseMoney(c.cost),
     // Dual-image model (Sprint 6): imageUrl/imageData above are the "stock"
     // reference (card search/manual paste); photoUrl/photoData are a real
     // photo (scanner crop or manual upload). activeImage records which one

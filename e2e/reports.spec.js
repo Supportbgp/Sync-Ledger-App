@@ -83,6 +83,27 @@ test('clicking a game row in the by-game breakdown expands to show its individua
   await expect(page.getByText('Black Lotus')).not.toBeVisible();
 });
 
+test('Cost/Profit reflect only sales with a recorded cost, flagging the rest', async ({ page }) => {
+  const now = new Date().toISOString();
+  await seedHarness(page, {
+    seed: {
+      ...catalogSeed([]),
+      sales: [
+        makeSaleRow({ id: 's1', sku: 'sku-1', name: 'Charizard', game: 'Pokemon', qty_sold: 1, sale_price: 45, cost: 20, sold_at: now }),
+        makeSaleRow({ id: 's2', sku: 'sku-2', name: 'Black Lotus', game: 'Magic', qty_sold: 1, sale_price: 100, cost: null, sold_at: now }),
+      ],
+    },
+  });
+  await page.goto('./');
+  await page.locator('.tab', { hasText: 'Reports' }).click();
+
+  // Cost/Profit only count the Charizard sale (the one with a real cost) —
+  // Black Lotus's missing cost contributes 0, not a guess.
+  await expect(page.getByText('$20.00')).toBeVisible();
+  await expect(page.getByText('$125.00')).toBeVisible(); // 145 revenue - 20 cost
+  await expect(page.getByText(/1 sale\(s\) in this range have no recorded cost/)).toBeVisible();
+});
+
 test('Custom range prompts for both dates before loading anything', async ({ page }) => {
   await seedHarness(page, {
     seed: { ...catalogSeed([]), sales: [makeSaleRow()] },

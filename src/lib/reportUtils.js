@@ -8,35 +8,52 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
-// Revenue/volume only — no cost-basis/profit (see CLAUDE.md's "Sales
-// reporting" section for why that's an explicit, separate scope cut).
-// `sales` is whatever dbLoadSales returns: already-normalized rows with
-// `qtySold`/`salePrice`/`game`. A blank/null salePrice contributes 0 to
-// revenue but still counts its qty toward units, since the sale genuinely
-// happened even if the price wasn't captured.
+// Revenue/volume, plus cost/profit for whichever sales actually have a
+// recorded cost (see CLAUDE.md's "Cost tracking" section — cost-basis was
+// explicitly scoped out of the original sales-reporting work, since most
+// inbound paths never captured what the shop paid; this is that deferred
+// feature). `sales` is whatever dbLoadSales returns: already-normalized
+// rows with `qtySold`/`salePrice`/`cost`/`game`. A blank/null salePrice
+// contributes 0 to revenue but still counts its qty toward units, since the
+// sale genuinely happened even if the price wasn't captured — a blank/null
+// `cost` gets the same treatment (contributes 0, still counts toward
+// units), but is also separately tallied in `costUnknownCount` so a caller
+// can show an honest "N sales have no recorded cost" caveat instead of
+// implying `profit` is complete when it isn't. Both `cost` and `salePrice`
+// are per-unit figures (same convention as catalog.price/catalog.cost), so
+// both get multiplied by qty here to reach a sale's real total.
 export function computeSalesReport(sales) {
   let revenue = 0;
   let units = 0;
+  let cost = 0;
+  let costUnknownCount = 0;
   const byGameMap = new Map();
 
   for (const s of sales || []) {
     const qty = Number(s.qtySold) || 0;
     const lineRevenue = s.salePrice == null ? 0 : Number(s.salePrice) * qty;
+    const lineCost = s.cost == null ? 0 : Number(s.cost) * qty;
+    if (s.cost == null) costUnknownCount++;
     units += qty;
     revenue += lineRevenue;
+    cost += lineCost;
 
     const game = s.game || 'Unknown';
-    const entry = byGameMap.get(game) || { game, units: 0, revenue: 0 };
+    const entry = byGameMap.get(game) || { game, units: 0, revenue: 0, cost: 0 };
     entry.units += qty;
     entry.revenue += lineRevenue;
+    entry.cost += lineCost;
     byGameMap.set(game, entry);
   }
 
   const byGame = Array.from(byGameMap.values())
-    .map(g => ({ ...g, revenue: round2(g.revenue) }))
+    .map(g => ({ ...g, revenue: round2(g.revenue), cost: round2(g.cost), profit: round2(g.revenue - g.cost) }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  return { revenue: round2(revenue), units, byGame };
+  return {
+    revenue: round2(revenue), units, cost: round2(cost), profit: round2(revenue - cost),
+    costUnknownCount, byGame,
+  };
 }
 
 // Calendar-month/calendar-year presets, computed from a real Date so this

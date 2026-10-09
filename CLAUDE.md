@@ -4444,6 +4444,132 @@ price-check`) for this fix to take effect. The next run's combined
 `failedByReason`/`sampleFailures` output confirms how much of the
 possessive-name cluster this actually resolved.
 
+## Cost tracking: a `cost` field for tax/profit reporting, deferred from the original sales-reporting scope cut
+
+Real ask, while the price-check investigation above was in progress: include
+what the shop paid for a sold item alongside what it sold for, so the
+Reports tab can feed a real tax/profit breakdown, not just revenue/volume.
+This is the explicitly deferred initiative both "Sales reporting" and
+"Price tracking & spike alerts" above flagged as a separate, later
+extension — "most inbound paths (Scanner, Import) never capture what the
+shop paid for an item at all; only Quote-tab trade-ins have a real payout
+amount." Two design forks were confirmed with the user before building,
+since this feeds a number people may file taxes from — not something to
+guess at:
+
+- **Quote-trade-in items auto-fill Cost from the quote's real payout
+  math** (not left manual like everything else) — the one inbound path
+  where the real cost is already knowable without extra staff work.
+- **CSV/XLSX import stays manual-entry-only for this first version** — no
+  Cost column added to the import mapping screen yet, matching this
+  roadmap's own established "ship the minimal, independently-useful
+  version first" pattern (the `sales` table's own write hook, Feature B's
+  in-app-badge-only v1, etc.).
+
+**Schema** (`phase14_cost_tracking.sql`): `cost numeric`, nullable, no
+default, added to `catalog`, `sales`, and `sorting_queue` — same "never
+force a value" discipline as `catalog.base_price`. `sorting_queue` needs
+its own real column (not just `quotes.items`' schema-less jsonb) for the
+same reason `source_url` did (`phase11_quote_source_url.sql`): an accepted
+quote's items pass through that relational table on their way to becoming
+a Catalog row, and a value with no column there is silently dropped at
+that hop. `cost` is a **per-unit** figure throughout, same convention as
+`price` — `computeSalesReport` multiplies both by `qtySold` to reach a
+sale's real totals, exactly mirroring how it already treats `salePrice`.
+
+- **Manual entry**: a new Cost ($) field in `EditModal`'s Quantity &
+  pricing section, right under Our price — optional, blank by default,
+  staff fill it in by hand wherever known (Scanner/Import/manually-added
+  items have no other way to get one). `normalizeCard`/`cardToRow`/
+  `rowToCard` carry it through the same way `basePrice` already does.
+- **Quote-trade-in auto-fill — `computeQuoteItemCosts` in
+  `quoteUtils.js`**, called from `App.jsx`'s `handleSaveQuote` right
+  before `buildSortingItemsFromQuoteItems`, at the moment a quote is
+  accepted. The real problem this function has to work around: a quote's
+  own `payoutAmount` is the one real "what we actually paid" number, but
+  it's a single lump sum with **no per-item "selected tier" ever
+  persisted** — `QuoteDetail.jsx`'s own `addOnsApplied`/`bulkApplied`
+  toggles are local component state only, reset every time the modal
+  reopens, never saved onto the quote row. Rather than guess at a field
+  that doesn't exist, the function instead: (1) picks whichever of the
+  three configured tiers' live totals (`computeOfferTiers`) is numerically
+  closest to the real `payoutAmount` — the tier staff most likely actually
+  used, possibly with a small manual adjustment; (2) allocates the real
+  payout proportionally across every non-add-on item, weighted by that
+  item's own value **at that tier** (so a card with its own Alter %
+  delta — `pctAltered`/`pctDelta` — gets a proportionally bigger/smaller
+  slice, same as it already does in the live tier display), scaled so the
+  per-item shares always sum to exactly `payoutAmount` regardless of any
+  manual rounding or a fully hand-typed payout; (3) divides each item's
+  allocated line share by its own `qty`, since `cost` is per-unit, not
+  per-line. A bulk-flagged item's weight is its own `flatItemAmount` (the
+  flat lot value), not a per-card price × qty, matching how
+  `computeOfferTiers` already treats it. Returns a new items array;
+  `isAddOn` items pass through completely unchanged (they never reach
+  Sorting/Catalog, so cost has no meaning for them).
+  - **A known, accepted imprecision, not a bug**: this does NOT try to
+    exclude whatever portion of `payoutAmount` came from add-ons folded in
+    via "Add to payout" — that amount isn't separately recoverable once
+    folded into the single `payoutAmount` figure (see the
+    `addOnsApplied`/`bulkApplied` local-state problem above), so a quote
+    with add-ons applied will slightly overstate real cards' allocated
+    cost. Flagged here rather than silently assumed away.
+  - `buildSortingItemsFromQuoteItems`/`buildCatalogItemsFromQuoteItems`
+    both carry `item.cost` through to their output, same mechanical
+    pattern `sourceUrl` already established — a Sorting-placed-individually
+    item's cost survives the trip; a Bulk-placed item's does not, since
+    `buildBulkCatalogItem` never reads/writes `cost` at all (no per-print
+    identity on a Bulk row, same reasoning it already excludes price/set/
+    rarity/sourceUrl).
+- **`sales.cost`** is snapshotted from `catalog.cost` at Mark Sold time
+  (`App.jsx`'s `handleBatchSell`), same "snapshot at the time" discipline
+  `sale_price`/`qty_sold`/`condition` already use on this table — a sale's
+  recorded cost must never retroactively change just because the
+  (possibly already-deleted) catalog row's own cost gets edited later.
+- **`computeSalesReport` (`reportUtils.js`)** now also returns `cost`
+  (sum of `cost × qtySold` over sales that actually have one), `profit`
+  (`revenue - cost`), and `costUnknownCount` (how many sale rows have no
+  recorded cost) — both overall and per-game in `byGame`. A sale with a
+  null cost contributes 0 to the cost sum (same null-handling rule
+  `salePrice` already has) but is also separately counted in
+  `costUnknownCount`, so the Reports tab can show an honest "N sales have
+  no recorded cost" caveat instead of implying `profit` is complete when
+  some of the underlying sales simply never had a cost captured.
+- **`ReportsTab.jsx`** gained Cost/Profit stat tiles next to the existing
+  Units/Revenue ones, a Cost/Profit column in the by-game breakdown table,
+  a Cost column in the per-sale drill-down (rendering `—` for a null cost,
+  same convention the Price column already uses), and the
+  `costUnknownCount` caveat line. The toolbar's explanatory text was
+  rewritten from "not a profit report (no cost basis is tracked yet)" to
+  describe what Cost/Profit actually reflect now.
+- Covered by new tests in `reportUtils.test.js` (cost/profit summation
+  including the per-unit × qty multiplication, the null-cost-excluded-but-
+  counted behavior, and the per-game breakdown), `quoteUtils.test.js`
+  (`computeQuoteItemCosts` directly — the closest-tier pick, proportional
+  allocation matching a real payout exactly, the Alter %-delta weighting,
+  bulk-item flat-value weighting, per-unit division for a multi-qty item,
+  and `isAddOn` items passing through untouched), `cardUtils.test.js`
+  (`normalizeCard`'s cost parsing), and a new `e2e/reports.spec.js` test.
+  - **Verification note**: this sandbox has no network path to
+    `cdn.sheetjs.com` (the `xlsx` dependency's CDN source — see "Known
+    constraints" above), which blocks `npm install`/`npm run build`/
+    `npm run test:e2e` entirely in this environment, not just anything
+    import-related. Unit tests were run successfully (342 passing,
+    including every new case above) by temporarily stripping `xlsx` from
+    `package.json` for a local-only install, never committed. The new e2e
+    test could not be run end-to-end here for the same reason — confirmed
+    by a real attempt, which failed at the same page-load step for every
+    spec in the file (including the three pre-existing, already-passing
+    ones), not just the new test, pointing at the missing `xlsx` dependency
+    breaking the whole app bundle rather than anything in this change.
+
+**Requires running `phase14_cost_tracking.sql`** in the Supabase SQL
+Editor before this code can save/read `cost` on `catalog`/`sales`/
+`sorting_queue` — no code-side default masks a missing column here, so an
+Edit save, a Mark Sold, or an accepted quote's Sorting handoff would start
+throwing a real insert/update error rather than silently dropping the
+value.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

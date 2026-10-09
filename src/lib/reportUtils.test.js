@@ -20,14 +20,14 @@ describe('computeSalesReport', () => {
     ];
     const report = computeSalesReport(sales);
     expect(report.byGame).toEqual([
-      { game: 'Magic', units: 1, revenue: 100 },
-      { game: 'Pokemon', units: 2, revenue: 10 },
+      { game: 'Magic', units: 1, revenue: 100, cost: 0, profit: 100 },
+      { game: 'Pokemon', units: 2, revenue: 10, cost: 0, profit: 10 },
     ]);
   });
 
   it('groups a blank game under "Unknown" rather than dropping it', () => {
     const report = computeSalesReport([{ game: '', qtySold: 1, salePrice: 5 }]);
-    expect(report.byGame).toEqual([{ game: 'Unknown', units: 1, revenue: 5 }]);
+    expect(report.byGame).toEqual([{ game: 'Unknown', units: 1, revenue: 5, cost: 0, profit: 5 }]);
   });
 
   it('still counts units for a sale with a null salePrice, contributing 0 revenue', () => {
@@ -37,12 +37,12 @@ describe('computeSalesReport', () => {
   });
 
   it('returns zeroed totals and no game rows for an empty array', () => {
-    expect(computeSalesReport([])).toEqual({ revenue: 0, units: 0, byGame: [] });
+    expect(computeSalesReport([])).toEqual({ revenue: 0, units: 0, cost: 0, profit: 0, costUnknownCount: 0, byGame: [] });
   });
 
   it('is a no-op-safe default for null/undefined input', () => {
-    expect(computeSalesReport(null)).toEqual({ revenue: 0, units: 0, byGame: [] });
-    expect(computeSalesReport(undefined)).toEqual({ revenue: 0, units: 0, byGame: [] });
+    expect(computeSalesReport(null)).toEqual({ revenue: 0, units: 0, cost: 0, profit: 0, costUnknownCount: 0, byGame: [] });
+    expect(computeSalesReport(undefined)).toEqual({ revenue: 0, units: 0, cost: 0, profit: 0, costUnknownCount: 0, byGame: [] });
   });
 
   it('rounds to the cent despite floating-point noise', () => {
@@ -52,6 +52,41 @@ describe('computeSalesReport', () => {
     ];
     const report = computeSalesReport(sales);
     expect(report.revenue).toBe(0.3);
+  });
+
+  it('sums cost (per-unit × qty) and computes profit as revenue minus cost', () => {
+    const sales = [
+      { game: 'Pokemon', qtySold: 2, salePrice: 10, cost: 4 },
+      { game: 'Magic', qtySold: 1, salePrice: 100, cost: 60 },
+    ];
+    const report = computeSalesReport(sales);
+    expect(report.revenue).toBe(120);
+    expect(report.cost).toBe(68); // (4*2) + (60*1)
+    expect(report.profit).toBe(52);
+    expect(report.costUnknownCount).toBe(0);
+  });
+
+  it('treats a null cost as unknown — contributes 0 to cost, counted in costUnknownCount, never guessed as 0 profit-wise', () => {
+    const sales = [
+      { game: 'Pokemon', qtySold: 1, salePrice: 10, cost: null },
+      { game: 'Pokemon', qtySold: 1, salePrice: 10, cost: 3 },
+    ];
+    const report = computeSalesReport(sales);
+    expect(report.cost).toBe(3);
+    expect(report.costUnknownCount).toBe(1);
+    expect(report.profit).toBe(17);
+  });
+
+  it('breaks cost/profit down by game too', () => {
+    const sales = [
+      { game: 'Pokemon', qtySold: 1, salePrice: 10, cost: 4 },
+      { game: 'Magic', qtySold: 1, salePrice: 100, cost: 60 },
+    ];
+    const report = computeSalesReport(sales);
+    expect(report.byGame).toEqual([
+      { game: 'Magic', units: 1, revenue: 100, cost: 60, profit: 40 },
+      { game: 'Pokemon', units: 1, revenue: 10, cost: 4, profit: 6 },
+    ]);
   });
 });
 

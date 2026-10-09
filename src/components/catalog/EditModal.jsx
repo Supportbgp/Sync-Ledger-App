@@ -37,6 +37,7 @@ function initForm(card) {
     qty: card ? card.qty : 1,
     price: (card && card.price) ?? "",
     basePrice: (card && card.basePrice) ?? null,
+    cost: (card && card.cost) ?? "",
     notes: card?.notes || "",
     sold: !!card?.sold,
     sourceUrl: card?.sourceUrl || "",
@@ -277,6 +278,7 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
       qty: form.qty,
       price: form.price,
       basePrice: form.basePrice,
+      cost: form.cost,
       notes: form.notes,
       itemType: form.isSlab ? "slab" : "single",
       grader: form.grader.trim(),
@@ -538,6 +540,14 @@ export default function EditModal({ card, catalog, locations, multipliers, onClo
                     onClick={() => set('price', roundPriceUp(Number(form.price)))}
                   >Round up</button>
                 </div>
+              </div>
+            </div>
+            <div className="field-group">
+              <label>Cost ($)</label>
+              <input type="number" step="0.01" min="0" value={form.cost} onChange={(e) => set('cost', e.target.value)} placeholder="What we paid, if known" />
+              <div style={{ fontSize: '11.5px', color: 'var(--ink-faint)', marginTop: '4px' }}>
+                Optional — feeds the Cost/Profit numbers on the Reports tab once this item sells. Left blank unless
+                entered by hand here, or auto-filled when this item came from an accepted Quote trade-in.
               </div>
             </div>
             <div className="field-group">

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_QUOTE_TIER_PCTS, normalizeQuoteItem, computeQuoteTotals, computeOfferTiers, flatItemAmount,
-  itemsFromCatalogRows, buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems,
+  itemsFromCatalogRows, buildCatalogItemsFromQuoteItems, buildSortingItemsFromQuoteItems, computeQuoteItemCosts,
 } from './quoteUtils.js';
 
 describe('normalizeQuoteItem', () => {
@@ -301,6 +301,55 @@ describe('itemsFromCatalogRows', () => {
   it('carries sourceUrl over from a scanned/picked card', () => {
     const items = itemsFromCatalogRows([{ name: 'X', game: 'Pokemon', sourceUrl: 'https://tcg/real-listing' }]);
     expect(items[0].sourceUrl).toBe('https://tcg/real-listing');
+  });
+});
+
+describe('computeQuoteItemCosts', () => {
+  it('leaves cost null for every non-add-on item when there is no payout amount to allocate', () => {
+    const items = [normalizeQuoteItem({ name: 'A', price: 10, qty: 1 })];
+    expect(computeQuoteItemCosts(items, null, DEFAULT_QUOTE_TIER_PCTS)[0].cost).toBeNull();
+    expect(computeQuoteItemCosts(items, 0, DEFAULT_QUOTE_TIER_PCTS)[0].cost).toBeNull();
+  });
+
+  it('allocates payoutAmount proportionally to each item\'s value at the closest-matching tier', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'A', price: 100, qty: 1 }),
+      normalizeQuoteItem({ name: 'B', price: 50, qty: 1 }),
+    ];
+    // tier1 (50%) totals 75, tier2 (60%) totals 90, tier3 (70%) totals 105 —
+    // a real payout of exactly 90 should pick tier2.
+    const result = computeQuoteItemCosts(items, 90, DEFAULT_QUOTE_TIER_PCTS);
+    expect(result[0].cost).toBe(60);
+    expect(result[1].cost).toBe(30);
+  });
+
+  it('returns isAddOn items completely unchanged, since cost has no meaning for them', () => {
+    const items = [normalizeQuoteItem({ name: 'Binder', price: 5, isAddOn: true })];
+    const result = computeQuoteItemCosts(items, 5, DEFAULT_QUOTE_TIER_PCTS);
+    expect(result[0]).toEqual(items[0]);
+  });
+
+  it('allocates a bulk item using its flat lot value as weight, then divides by its own qty for a per-unit cost', () => {
+    const items = [normalizeQuoteItem({ name: 'Bulk lot', price: 20, isBulk: true, game: 'Pokemon', qty: 10 })];
+    const result = computeQuoteItemCosts(items, 20, DEFAULT_QUOTE_TIER_PCTS);
+    expect(result[0].cost).toBe(2);
+  });
+
+  it('gives an Alter %?-adjusted card a proportionally bigger slice than the blanket tier rate', () => {
+    const items = [
+      normalizeQuoteItem({ name: 'A', price: 100, qty: 1 }),
+      normalizeQuoteItem({ name: 'B', price: 100, qty: 1, pctAltered: true, pctDelta: 10 }),
+    ];
+    const result = computeQuoteItemCosts(items, 110, DEFAULT_QUOTE_TIER_PCTS);
+    expect(result[0].cost).toBe(50);
+    expect(result[1].cost).toBe(60);
+  });
+
+  it('divides a multi-qty card\'s allocated line cost by its qty for a per-unit figure', () => {
+    const items = [normalizeQuoteItem({ name: 'A', price: 10, qty: 4 })];
+    // Only item, so it gets the whole payout as its line's cost (40), / 4 qty = 10/unit.
+    const result = computeQuoteItemCosts(items, 40, DEFAULT_QUOTE_TIER_PCTS);
+    expect(result[0].cost).toBe(10);
   });
 });
 

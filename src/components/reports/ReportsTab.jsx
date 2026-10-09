@@ -45,7 +45,9 @@ export default function ReportsTab({ onLoadSales }) {
     <div>
       <div className="toolbar">
         <div style={{ fontSize: '13px', color: 'var(--ink-soft)', maxWidth: '560px' }}>
-          Revenue and volume from Mark Sold events only — not a profit report (no cost basis is tracked yet).
+          Revenue, volume, and cost/profit from Mark Sold events only. Cost only counts items with a Cost entered on
+          their catalog row (Edit modal) or auto-filled from an accepted Quote trade-in — a sale with no recorded
+          cost still counts toward Units, just not toward Cost/Profit below.
         </div>
       </div>
 
@@ -87,11 +89,26 @@ export default function ReportsTab({ onLoadSales }) {
               <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Revenue</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.revenue.toFixed(2)}</div>
             </div>
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Cost</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.cost.toFixed(2)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Profit</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>${report.profit.toFixed(2)}</div>
+            </div>
           </div>
+
+          {report.costUnknownCount > 0 && (
+            <div className="status-line" style={{ marginBottom: '12px' }}>
+              {report.costUnknownCount} sale(s) in this range have no recorded cost — Cost/Profit above only reflect
+              the sales that do.
+            </div>
+          )}
 
           <table>
             <thead>
-              <tr><th>Game</th><th>Units</th><th>Revenue</th></tr>
+              <tr><th>Game</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr>
             </thead>
             <tbody>
               {report.byGame.map(g => {
@@ -113,13 +130,15 @@ export default function ReportsTab({ onLoadSales }) {
                       <td>{isOpen ? '▼' : '▶'} {g.game}</td>
                       <td>{g.units}</td>
                       <td>${g.revenue.toFixed(2)}</td>
+                      <td>${g.cost.toFixed(2)}</td>
+                      <td>${g.profit.toFixed(2)}</td>
                     </tr>
                     {isOpen && (
                       <tr>
-                        <td colSpan={3} style={{ padding: '0 0 12px 24px', background: 'var(--surface-alt)' }}>
+                        <td colSpan={5} style={{ padding: '0 0 12px 24px', background: 'var(--surface-alt)' }}>
                           <table>
                             <thead>
-                              <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Sold</th></tr>
+                              <tr><th>Name</th><th>Condition</th><th>Qty</th><th>Price</th><th>Cost</th><th>Sold</th></tr>
                             </thead>
                             <tbody>
                               {items.map(s => (
@@ -128,6 +147,7 @@ export default function ReportsTab({ onLoadSales }) {
                                   <td>{s.condition || '—'}</td>
                                   <td>{s.qtySold}</td>
                                   <td>{s.salePrice == null ? '—' : `$${Number(s.salePrice).toFixed(2)}`}</td>
+                                  <td>{s.cost == null ? '—' : `$${Number(s.cost).toFixed(2)}`}</td>
                                   <td>{new Date(s.soldAt).toLocaleDateString()}</td>
                                 </tr>
                               ))}
