@@ -4385,6 +4385,65 @@ honoring those request fields. The next scheduled or manual run's combined
 summary (and the per-batch logs above it) confirm whether `skippedForTime`
 is finally zero across a full day's catalog.
 
+## Price tracking: batching worked — `skippedForTime: 0`, and ported the missing half of Pokemon's possessive-name fix
+
+The first real manual trigger run after the batching fix deployed
+confirmed it fully worked: three batches (100/100/33, covering the whole
+233-item above-floor governed-game catalog) each came back
+`"skippedForTime":0`, with real spikes finally detected (7) — the
+core reliability problem this whole arc has been chasing (504s, then
+permanent per-run starvation) is resolved.
+
+Inspecting the combined 54 real failures across all three batches'
+`sampleFailures` surfaced one more real, well-evidenced cluster, not
+generic noise: **`"Cynthia's Garchomp ex"`, `"Ethan's Ho-Oh ex"`, `"Lillie's
+Clefairy ex"`, `"Rocket's Wobbuffet"`, `"N's Zoroark ex"`, `"Lillie's
+Ribombee"`, `"Iono's Kilowattrel"`, `"Misty's Psyduck"`** — every
+possessive Pokemon trainer name in the batch failed `no_match`.
+
+- **Root cause: this file only ever ported half of cardSearch.js's own
+  already-proven possessive-name fix.** `cardSearch.js`'s `searchPokemon`
+  (see its own extensively-documented history earlier in this file) found
+  that neither "strip the possessive `'s` outright" nor "keep the
+  apostrophe literally" is correct on its own for pokemontcg.io's index —
+  it hedges by trying BOTH representations at every precision tier. This
+  file's own `sanitizeForPokemonQuery` (added in the previous
+  "bracket/mid-string-paren" fix) only ever implemented the *stripping*
+  half — functionally identical to cardSearch.js's `sanitizeStrippingPossessive`,
+  despite being named after the plainer, no-possessive-handling function —
+  and never tried the "keep the apostrophe" fallback at all.
+- **Fix**: renamed that function to `sanitizeStrippingPossessive` (matching
+  what it actually does) and added the missing `sanitizeKeepingApostrophe`
+  counterpart, both ported verbatim from `cardSearch.js`. `pokemonPrice`
+  now tries both representations in order (stripped first, same as
+  `searchPokemon`'s own tier order), stopping at the first one that finds a
+  real match or a confirmed no-price result — identical to the dash-subtitle
+  fallback's own "stop at first real signal" rule. For the overwhelming
+  majority of names with no apostrophe at all, both representations are
+  identical, so this costs the same single request as before; only a
+  possessive name pays for a second attempt, and only until one succeeds.
+- **Verified against all 10 real possessive-name failures from this run
+  before shipping** (plus a plain non-possessive control name) — confirmed
+  every one now produces two distinct, sensible query variants, and that
+  the common case (`"Gengar"`) still collapses to a single request
+  unaffected by this change.
+- **Left everything else from this run's failures as accepted, already-
+  documented residual noise**: the Pokemon `-EX`/`-GX` hyphen question
+  (`"Virizion EX (Full Art)"`, `"Dialga GX (Full Art)"`, `"M Blastoise EX
+  (Full Art)"`, `"Sylveon GX"`, `"Giratina EX"` — all parked in the
+  previous round, still no confirmed sample to act on), genuine no-price
+  data gaps on real matched cards (`"Strip Mine"`, `"Pokemon Breeder"`,
+  `"Brain Freeze"`, `"Mega Greninja ex"`), a literal multi-card bundle with
+  no single-card entry to match (`"Legendary Birds Promo Pack"`), and a
+  catalog entry with a placeholder name (`"______'s Pikachu"`) — none of
+  these are new, and none have a real precedent to port the way the
+  possessive fix did.
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect. The next run's combined
+`failedByReason`/`sampleFailures` output confirms how much of the
+possessive-name cluster this actually resolved.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
