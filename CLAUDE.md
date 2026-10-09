@@ -4067,6 +4067,79 @@ price-check`) for this fix to take effect. The next manual
 `workflow_dispatch` run's `failedByReason`/`sampleFailures` output is what
 determines what (if anything) gets fixed next.
 
+## Price tracking: found and fixed the real cause (catalog.name has extra text baked in, not an API-reliability problem)
+
+The diagnostics above paid off immediately — the very next run
+(`{"failed":142,"failedByReason":{"no_match":96,"fetch_failed":42,
+"no_price":4},"sampleFailures":[...]}`) gave real `{name, game, reason}`
+examples, and a clear, consistent pattern fell out of them on inspection.
+This was never a retry-budget or API-flakiness problem at all — the
+previous two rounds' fixes (Pokemon's 4-attempt retry, excluding ungoverned
+games) were real, correct improvements, but they couldn't have fixed this
+because this was never what was failing.
+
+- **The real cause, confirmed from the actual failing names, not guessed**:
+  `catalog.name` routinely has extra text typed straight into it that isn't
+  part of a card's real, indexed name —
+  - **A collector number**: `"Charizard 4/102"`, `"Blastoise 02"`,
+    `"Snorlax - 051"`, `"Vaporeon ex - 149/131"`, `"Dragonite EX -
+    098/087"`. Unsurprising once named: `catalog.number` was never a real
+    column (see the `catalog.number` crash fix above) — staff had nowhere
+    else to put a collector number but Name itself.
+  - **A rarity/variant note**: `"Dialga EX (122 Secret Rare)"`, `"Pongo -
+    Determined Father (Enchanted)"`.
+  - **Several of these stacked**: `"Vampiric Tutor (JP Alternate Art)
+    (Silver Scroll Foil)"`, `"Leonardo, the Balance (0083) (Borderless)
+    (Surge Foil)"`.
+  An exact/near-exact name search on pokemontcg.io (and friends) simply
+  never matches a real card's clean name against this extra text — that's
+  `no_match`, not a retry-able failure. Separately, **Scryfall's own query
+  syntax treats literal parentheses as search-grouping syntax, not plain
+  text** — every single Magic `fetch_failed` sample was a parenthetical-
+  heavy name, plausibly explaining why Magic (a game with no documented
+  API-flakiness report at all, per this app's own `cardSearch.js` notes)
+  had a disproportionate share of `fetch_failed` results: not the API
+  being down, but a malformed query the parentheses broke.
+- **Fix: `cleanCardName(name)`**, applied uniformly to every provider
+  (same "apply equally across every game" discipline this app uses for
+  every other field-level feature) right before building each search
+  query. Strips (1) one or more trailing parenthetical groups, then (2) a
+  trailing bare or dash-prefixed collector number (optionally `n/m`).
+  Verified directly against all 14 real sample names from the two
+  diagnostic runs before shipping (not just reasoned about in the
+  abstract) — every noisy name cleaned to its real card name exactly as
+  expected.
+  - **Deliberately does NOT strip a bare `" - <Words>"` suffix with no
+    trailing number** — two of the real sample names are genuine official
+    card names in that exact format once their own noise is removed
+    (SWU's `"Cad Bane - He Who Needs No Introduction"`, Lorcana's `"Pongo
+    - Determined Father"` after stripping its own `"(Enchanted)"` suffix)
+    — stripping every dash would have broken those instead of fixing
+    anything. Confirmed both are left untouched by the verification pass
+    above.
+  - **SWU's own `"Cad Bane - He Who Needs No Introduction"` failure stays
+    unexplained** — it has neither embedded number nor parenthetical
+    noise, so this fix doesn't address it specifically; left for the next
+    round's `failedDetail`/`sampleFailures` to reveal if it's still
+    failing, rather than guessing a SWU-specific cause now.
+- **`failedDetail` added to the response** (a per-game, per-reason
+  cross-tabulation, e.g. `{Pokemon: {no_match: 90}, Magic: {fetch_failed:
+  20}}`) — this round's diagnosis required manually cross-referencing
+  `failedByGame` against `sampleFailures` to notice Magic's failures were
+  disproportionately `fetch_failed` while Pokemon's were disproportionately
+  `no_match`; this gives that cross-tabulation directly next time.
+- Verified the same way every fix in this section has been (no network
+  path from this sandbox to any of these providers or to Supabase):
+  syntax-checked the file, and ran `cleanCardName` standalone against all
+  14 real names collected across both diagnostic rounds, confirming every
+  noisy one cleaned correctly and both legitimate dash-containing names
+  were left alone.
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect. The next manual
+`workflow_dispatch` run's `failed`/`failedDetail` output confirms how much
+of the remaining failure count this actually resolved.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go

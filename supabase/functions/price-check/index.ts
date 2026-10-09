@@ -76,6 +76,40 @@ async function runWithConcurrency(items, limit, worker) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
 }
 
+// A real run's sampleFailures (see the Deno.serve handler's own diagnostics)
+// showed the dominant cause wasn't retries or API flakiness at all — it was
+// that catalog.name frequently has extra text typed straight into it that
+// isn't part of a card's actual indexed name: a collector number ("Charizard
+// 4/102", "Snorlax - 051", "Vaporeon ex - 149/131"), a rarity/variant note
+// ("Dialga EX (122 Secret Rare)", "Pongo - Determined Father (Enchanted)"),
+// or several of these stacked ("Vampiric Tutor (JP Alternate Art) (Silver
+// Scroll Foil)"). None of this is surprising once named — catalog.number was
+// never a real column (see the Deno.serve handler's own comment on that),
+// so staff had nowhere else to put a collector number but Name itself. Two
+// real, separate problems this one cleanup step fixes: (1) an exact/
+// near-exact name search on pokemontcg.io/Scryfall/etc. simply won't match a
+// real card's name against this extra text, which is "no_match", not a
+// retry-able failure; (2) Scryfall's own query syntax treats literal
+// parentheses as search-grouping syntax, not text, so a parenthetical-heavy
+// name can come back as a request failure rather than a real search
+// attempt — plausibly explaining Magic's own disproportionate share of
+// "fetch_failed" results, all of which were parenthetical-heavy names in
+// the same real sample.
+//
+// Deliberately does NOT strip a bare " - <Words>" suffix with no trailing
+// number — several real official card names use exactly that format (SWU's
+// "Cad Bane - He Who Needs No Introduction", Lorcana's "Pongo - Determined
+// Father" once its own "(Enchanted)" suffix is removed), so stripping every
+// dash would break those names instead of fixing anything. Only a trailing
+// parenthetical group, or a trailing bare/dash-prefixed number (optionally
+// "n/m"), is removed.
+function cleanCardName(name) {
+  let n = String(name || "").trim();
+  n = n.replace(/(\s*\([^)]*\))+$/, "").trim();
+  n = n.replace(/\s*-?\s*\d+(\/\d+)?$/, "").trim();
+  return n || String(name || "").trim();
+}
+
 // --- Per-game price lookups -------------------------------------------
 // Each takes the catalog row (name/set/rarity/number already on it) and
 // returns { price, reason } — price is null when nothing usable was found,
@@ -99,7 +133,7 @@ function scryfallPrice(c) {
 }
 
 async function magicPrice(item) {
-  const res = await fetchWithRetry(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(item.name)}`);
+  const res = await fetchWithRetry(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(cleanCardName(item.name))}`);
   if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.data || [])[0];
@@ -134,7 +168,7 @@ async function pokemonPrice(item) {
   // never one of those columns (it's a transient, never-saved search hint
   // everywhere else in this app too — see CLAUDE.md). Name-only, same as
   // every other provider below.
-  const q = `name:"${item.name}"`;
+  const q = `name:"${cleanCardName(item.name)}"`;
   const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
   if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
@@ -145,7 +179,7 @@ async function pokemonPrice(item) {
 }
 
 async function yugiohPrice(item) {
-  const res = await fetchWithRetry(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(item.name)}`);
+  const res = await fetchWithRetry(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(cleanCardName(item.name))}`);
   if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.data || [])[0];
@@ -163,7 +197,7 @@ function lorcastPrice(c) {
 }
 
 async function lorcanaPrice(item) {
-  const res = await fetchWithRetry(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(item.name)}`);
+  const res = await fetchWithRetry(`https://api.lorcast.com/v0/cards/search?q=${encodeURIComponent(cleanCardName(item.name))}`);
   if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (data.results || [])[0];
@@ -188,7 +222,7 @@ async function egmanPrice(gameSlug, item) {
   const prices = pricesRes.ok ? await pricesRes.json() : [];
   const priceByCode = new Map((Array.isArray(prices) ? prices : []).map((p) => [p.card_code, p]));
 
-  const nameNeedle = item.name.toLowerCase();
+  const nameNeedle = cleanCardName(item.name).toLowerCase();
   const matches = (Array.isArray(cards) ? cards : [])
     .filter((c) => (c.name || "").toLowerCase().includes(nameNeedle));
 
@@ -200,7 +234,7 @@ async function egmanPrice(gameSlug, item) {
 }
 
 async function swuPrice(item) {
-  const res = await fetchWithRetry(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(item.name)}&pretty=true`);
+  const res = await fetchWithRetry(`https://api.swu-db.com/cards/search?q=${encodeURIComponent(cleanCardName(item.name))}&pretty=true`);
   if (!res.ok) return { price: null, reason: "fetch_failed" };
   const data = await res.json();
   const card = (Array.isArray(data.data) ? data.data : [])[0];
@@ -316,6 +350,12 @@ Deno.serve(async (req) => {
   let checked = 0, spikes = 0, failed = 0;
   const failedByGame = {};
   const failedByReason = {};
+  // Finer-grained than either tally alone — this round's diagnosis needed to
+  // cross-reference failedByGame against sampleFailures by hand to see that
+  // Magic's failures were disproportionately fetch_failed while Pokemon's
+  // were disproportionately no_match; this gives that cross-tabulation
+  // directly in the response instead.
+  const failedDetail = {};
   const sampleFailures = [];
   const MAX_SAMPLE_FAILURES = 15;
 
@@ -325,6 +365,8 @@ Deno.serve(async (req) => {
       failed++;
       failedByGame[item.game] = (failedByGame[item.game] || 0) + 1;
       failedByReason[reason] = (failedByReason[reason] || 0) + 1;
+      failedDetail[item.game] = failedDetail[item.game] || {};
+      failedDetail[item.game][reason] = (failedDetail[item.game][reason] || 0) + 1;
       // Capped sample of real failing names so a high-failure run can be
       // inspected directly from the response instead of needing yet
       // another round-trip to a SQL query to find real examples — this is
@@ -363,12 +405,12 @@ Deno.serve(async (req) => {
     }
   });
 
-  // failedByGame/failedByReason/sampleFailures are included so a future
-  // high-failure run can be diagnosed from the response alone, the same
-  // real-usage-driven approach that found the "Other" and Pokemon-retry
-  // issues above in the first place — no need to go back to a SQL query
-  // every time.
-  return json({ total: (items || []).length, checked, spikes, failed, failedByGame, failedByReason, sampleFailures }, 200);
+  // failedByGame/failedByReason/failedDetail/sampleFailures are included so
+  // a future high-failure run can be diagnosed from the response alone, the
+  // same real-usage-driven approach that found the "Other" and
+  // Pokemon-retry issues above in the first place — no need to go back to a
+  // SQL query every time.
+  return json({ total: (items || []).length, checked, spikes, failed, failedByGame, failedByReason, failedDetail, sampleFailures }, 200);
 });
 
 function json(body, status) {
