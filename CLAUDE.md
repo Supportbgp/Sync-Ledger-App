@@ -4602,28 +4602,51 @@ specs in `reports.spec.js` on both the Desktop and Mobile projects.
   instead of a bare `getByText`, matching the already-established
   `.n-name`/`.n-sub`-style scoped-locator pattern used throughout this
   suite's other spec files rather than introducing a new pattern.
-- **Not touched**: a fifth, separate CI failure that run —
-  `[Mobile] e2e/catalog.spec.js:21` (`getByText('Edit')` expected 0, got
-  1) — has no connection to this PR's diff (no file this PR touches is
-  read by that test or the component it exercises). Confirmed, not
-  assumed: `main`'s own most recent push run (the base commit this PR
-  branched from) independently failed its `unit` job on an unrelated
-  pre-existing flake (`CatalogTable.test.jsx`'s 400-row render test timing
-  out at the default 5s Vitest limit under CI's actual hardware, a timing
-  margin this sandbox's own earlier local run didn't hit) — real evidence
-  this repo's CI already carries some run-to-run flakiness independent of
-  any particular change. Left alone rather than guessed at from a single
-  occurrence with zero connection to the diff; worth a dedicated look if
-  it recurs on a PR that actually touches `CatalogTable.jsx`/
-  `catalog.spec.js`.
+- **A fifth CI failure that run, `[Mobile] e2e/catalog.spec.js:21`
+  (`getByText('Edit')` expected 0, got 1), was first assumed unrelated to
+  this PR** — reasoned (wrongly) from `main`'s own most recent push run
+  independently failing its `unit` job on an unrelated flake
+  (`CatalogTable.test.jsx`'s 400-row render test timing out at Vitest's
+  default 5s limit), taken as evidence this repo's CI already carries some
+  flakiness. **That reasoning didn't hold up**: a direct check of that same
+  main-branch run's own `e2e` job (not just the failing `unit` job) showed
+  it passed cleanly — so the Mobile catalog test was never flaky on the
+  commit this PR branched from, and the failure reappeared identically
+  (not just once but across both the initial attempt and its retry) once
+  this PR's commits were on top of it. That's a real regression this PR
+  caused, confirmed by checking the base commit's actual job outcome
+  instead of inferring unrelatedness from a different job's own failure.
+- **Real root cause**: `ReportsTab.jsx`'s always-visible toolbar paragraph
+  (describing what Cost/Profit reflect) contained the literal substring
+  "Edit" — `"...entered on their catalog row (Edit modal) or auto-filled
+  ..."`. Every tab in this app stays mounted at all times (just hidden via
+  `.panel`'s CSS, never conditionally rendered — see the Reports tab's own
+  design note above), and Playwright's `getByText()` matches hidden DOM
+  content with no visibility filter, same lesson as the stat-tile fix
+  above just manifesting on a completely different tab's test. Catalog's
+  own pre-existing Mobile test asserts `page.getByText('Edit')).toHaveCount(0)`
+  with no scoping at all, so once Reports' own (unrelated, always-mounted)
+  copy started containing that substring too, the count went from the
+  real 0 to a real 1 — not from anything Catalog itself changed.
+- **Fix, two parts**: (1) reworded the actual source — `ReportsTab.jsx`'s
+  toolbar text now reads `"...entered on their catalog row (via the item's
+  detail screen) or auto-filled..."`, removing the colliding substring
+  entirely (checked case-insensitively too, since Playwright's default
+  text match isn't case-sensitive — no stray lowercase "edit" either).
+  (2) hardened `catalog.spec.js`'s own assertion defensively, since the
+  underlying fragility (a bare page-wide `getByText` in an app where every
+  tab's content is always in the DOM) will keep producing this exact bug
+  class as more tabs accumulate more copy — scoped both of that test's
+  `getByText('Edit')` calls to `page.locator('.catalog-card')` instead of
+  the whole page, matching the same scoped-locator pattern the stat-tile
+  fix above already established.
 - Verified locally the same way every e2e-adjacent fix in this file has
-  been given this sandbox's lack of `cdn.sheetjs.com` access: the full
-  342-test unit suite still passes unchanged (the `className` additions
-  carry no logic), and a local Playwright run against the temporarily
-  xlsx-stripped bundle reproduces the same whole-bundle-broken state
-  already documented above (confirming nothing about *this* fix is
-  reachable to verify end-to-end in this sandbox) — real confirmation is
-  CI's own next run on the real bundle.
+  been given this sandbox's lack of `cdn.sheetjs.com` access: grepped
+  every component for a remaining "Edit"/"edit" substring that could
+  collide with an always-mounted tab (only `StaffDocs`' own section files
+  still say it, but those render on a completely separate `?help=1` route
+  never mounted alongside the main tabbed app, so they can't collide the
+  same way) — real confirmation is CI's own next run on the real bundle.
 
 ## Workflow conventions
 

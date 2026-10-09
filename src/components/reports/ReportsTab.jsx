@@ -46,8 +46,8 @@ export default function ReportsTab({ onLoadSales }) {
       <div className="toolbar">
         <div style={{ fontSize: '13px', color: 'var(--ink-soft)', maxWidth: '560px' }}>
           Revenue, volume, and cost/profit from Mark Sold events only. Cost only counts items with a Cost entered on
-          their catalog row (Edit modal) or auto-filled from an accepted Quote trade-in — a sale with no recorded
-          cost still counts toward Units, just not toward Cost/Profit below.
+          their catalog row (via the item's detail screen) or auto-filled from an accepted Quote trade-in — a sale
+          with no recorded cost still counts toward Units, just not toward Cost/Profit below.
         </div>
       </div>
 

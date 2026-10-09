@@ -22,10 +22,14 @@ test('mobile shows stacked cards instead of a table, collapsed until tapped', as
   test.skip(testInfo.project.name !== 'Mobile', 'table-vs-cards is desktop/mobile-specific');
   await expect(page.locator('table')).toHaveCount(0);
   await expect(page.locator('.catalog-card')).toHaveCount(2);
-  await expect(page.getByText('Edit')).toHaveCount(0);
+  // Scoped to the catalog cards themselves — every tab in this app stays
+  // mounted (just CSS-hidden), so a bare page-wide getByText('Edit') can
+  // also match unrelated copy elsewhere on the page (e.g. Reports' own
+  // toolbar text), not just this tab's own Edit button.
+  await expect(page.locator('.catalog-card').getByText('Edit')).toHaveCount(0);
 
   await page.getByText('Charizard').click();
-  await expect(page.getByText('Edit').first()).toBeVisible();
+  await expect(page.locator('.catalog-card').getByText('Edit').first()).toBeVisible();
 });
 
 test('adding a new item shows up in the catalog immediately', async ({ page }) => {
