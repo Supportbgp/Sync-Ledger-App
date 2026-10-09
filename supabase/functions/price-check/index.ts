@@ -168,18 +168,30 @@ async function withNameFallback(item, queryOnce) {
 }
 
 // pokemontcg.io's `q=` is a Lucene-like query string, not plain text —
-// cardSearch.js's own interactive search (sanitizeStrippingPossessive) has
-// already confirmed, via extensive real live testing, that an unescaped
-// apostrophe/bracket/etc. in a `name:"..."` field can break the query
-// outright, and that stripping a trailing possessive 's (mirroring the
-// index's own English-analyzer possessive filter) is the correct general
-// fix. Ported directly rather than re-guessed — this file's own header
-// already says every provider's field shapes mirror cardSearch.js's
-// already-confirmed ones instead of being rebuilt from scratch.
-function sanitizeForPokemonQuery(s) {
+// cardSearch.js's own interactive search has already confirmed, via
+// extensive real live testing, that an unescaped apostrophe/bracket/etc. in
+// a `name:"..."` field can break the query outright. That same history
+// found that neither "strip the possessive 's outright" nor "keep the
+// apostrophe literally" is correct on its own — cardSearch.js's own
+// `searchPokemon` hedges by trying BOTH representations at every precision
+// tier rather than committing to one theory. A real batch run of this file
+// (233 real catalog items) surfaced the same possessive-name cluster
+// cardSearch.js already solved — "Cynthia's Garchomp ex", "Ethan's Ho-Oh
+// ex", "Lillie's Clefairy ex", "Rocket's Wobbuffet", "N's Zoroark ex",
+// "Iono's Kilowattrel" — all `no_match`, because this file only ever ported
+// the stripping half of that fix. Ported the full hedge now, not re-guessed
+// — ported directly, matching this file's own header: every provider's
+// shapes mirror cardSearch.js's already-confirmed ones.
+function sanitizeStrippingPossessive(s) {
   return String(s || "")
     .replace(/['’]s\b/gi, "")
     .replace(/[+\-!(){}[\]^"~*?:\\/'’]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function sanitizeKeepingApostrophe(s) {
+  return String(s || "")
+    .replace(/[+\-!(){}[\]^"~*?:\\/]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -245,14 +257,33 @@ async function pokemonPrice(item) {
   // everywhere else in this app too — see CLAUDE.md). Name-only, same as
   // every other provider below.
   return withNameFallback(item, async (name) => {
-    const q = `name:"${sanitizeForPokemonQuery(name)}"`;
-    const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
-    if (!res.ok) return { price: null, reason: "fetch_failed" };
-    const data = await res.json();
-    const card = (data.data || [])[0];
-    if (!card) return { price: null, reason: "no_match" };
-    const price = pokemonTcgplayerPrice(card);
-    return { price, reason: price == null ? "no_price" : null };
+    // Two representations of the name, tried in order — identical for the
+    // overwhelming majority of names with no apostrophe at all (same single
+    // request as before this fix), only doubling the request for the
+    // minority that has one, and only until one representation succeeds.
+    const stripped = sanitizeStrippingPossessive(name);
+    const kept = sanitizeKeepingApostrophe(name);
+    const variants = stripped === kept ? [stripped] : [stripped, kept];
+
+    let result = { price: null, reason: "no_match" };
+    for (const variant of variants) {
+      const q = `name:"${variant}"`;
+      const res = await fetchWithPokemonRetry(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=1`);
+      if (!res.ok) {
+        result = { price: null, reason: "fetch_failed" };
+        continue;
+      }
+      const data = await res.json();
+      const card = (data.data || [])[0];
+      if (!card) {
+        result = { price: null, reason: "no_match" };
+        continue;
+      }
+      const price = pokemonTcgplayerPrice(card);
+      result = { price, reason: price == null ? "no_price" : null };
+      if (result.price != null || result.reason === "no_price") return result;
+    }
+    return result;
   });
 }
 
