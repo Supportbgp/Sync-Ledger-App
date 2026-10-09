@@ -364,6 +364,28 @@ async function lookupPrice(item) {
 const MAX_ITEMS_PER_RUN = 200;
 const CONCURRENCY = 3;
 
+// A real manual trigger run hit this exact wall: the previous name-matching
+// fixes (dash-subtitle fallback, Pokemon's 4-attempt retry) made far more
+// lookups actually succeed (checked climbed from 58 to 133 on a 200-item
+// run) — more successful lookups means more total request/retry time, not
+// less, and the run's total wall-clock time crossed Supabase Edge
+// Functions' hard, non-adjustable 150-second idle timeout
+// (`{"code":"IDLE_TIMEOUT","message":"Request idle timeout limit (150s)
+// reached"}` — a real, named platform limit from the error itself, not
+// something to guess at). `MAX_ITEMS_PER_RUN` alone can't prevent this: it
+// bounds how much work *might* be attempted, not how long that work
+// actually takes, and per-item latency varies a lot (a Pokemon item that
+// needs its full 4-attempt backoff takes several seconds; a dash-fallback
+// retry on a no_match name doubles a request). A fixed wall-clock deadline
+// inside the run itself is the direct fix: stop *starting* new lookups once
+// the elapsed time nears the real limit, finish writing whatever was
+// already found, and report what got skipped for time so the next run
+// (or a future tuning pass, if this keeps happening) has a real number to
+// act on instead of another guess. 120s leaves a 30s margin under the
+// documented 150s limit for the final DB round-trips and response
+// serialization once the loop stops.
+const RUN_DEADLINE_MS = 120000;
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return json({ error: "POST only" }, 405);
@@ -433,7 +455,7 @@ Deno.serve(async (req) => {
     return json({ error: error.message }, 500);
   }
 
-  let checked = 0, spikes = 0, failed = 0;
+  let checked = 0, spikes = 0, failed = 0, skippedForTime = 0;
   const failedByGame = {};
   const failedByReason = {};
   // Finer-grained than either tally alone — this round's diagnosis needed to
@@ -445,7 +467,19 @@ Deno.serve(async (req) => {
   const sampleFailures = [];
   const MAX_SAMPLE_FAILURES = 15;
 
+  const startedAt = Date.now();
   await runWithConcurrency(items || [], CONCURRENCY, async (item) => {
+    // Stop starting new lookups once the run is close to Supabase's real
+    // 150s idle-timeout wall (see RUN_DEADLINE_MS above) — an in-flight
+    // request already running when this trips is allowed to finish
+    // naturally (runWithConcurrency doesn't cancel it), but no new one
+    // starts, so total time can't keep climbing past this point. A skipped
+    // item just gets picked up on the next scheduled run, same as one that
+    // fell outside MAX_ITEMS_PER_RUN's own cap.
+    if (Date.now() - startedAt > RUN_DEADLINE_MS) {
+      skippedForTime++;
+      return;
+    }
     const { price, reason } = await lookupPrice(item);
     if (price == null) {
       failed++;
@@ -495,8 +529,15 @@ Deno.serve(async (req) => {
   // a future high-failure run can be diagnosed from the response alone, the
   // same real-usage-driven approach that found the "Other" and
   // Pokemon-retry issues above in the first place — no need to go back to a
-  // SQL query every time.
-  return json({ total: (items || []).length, checked, spikes, failed, failedByGame, failedByReason, failedDetail, sampleFailures }, 200);
+  // SQL query every time. truncated/skippedForTime do the same job for the
+  // real-world time-budget wall found above — a non-zero skippedForTime on
+  // a future run is the real signal that MAX_ITEMS_PER_RUN/CONCURRENCY need
+  // tuning, instead of waiting for another 504 to notice.
+  return json({
+    total: (items || []).length, checked, spikes, failed,
+    truncated: skippedForTime > 0, skippedForTime,
+    failedByGame, failedByReason, failedDetail, sampleFailures,
+  }, 200);
 });
 
 function json(body, status) {

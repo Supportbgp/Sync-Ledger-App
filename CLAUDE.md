@@ -4228,6 +4228,73 @@ price-check`) for this fix to take effect. The next manual
 `workflow_dispatch` run's `failed`/`failedByReason`/`sampleFailures` output
 confirms how much of the remaining 67 this actually resolved.
 
+## Price tracking: hit Supabase's real 150s idle timeout, fixed with an in-run wall-clock deadline
+
+The very next manual trigger after the fix above didn't return a price
+report at all — it returned a real platform error instead:
+`curl: (22) The requested URL returned error: 504` /
+`{"code":"IDLE_TIMEOUT","message":"Request idle timeout limit (150s)
+reached"}`. Not a guess to diagnose — Supabase names the exact limit in the
+error itself: Edge Functions have a hard, non-adjustable 150-second idle
+timeout per invocation.
+
+- **Why this showed up now, not earlier**: every fix before this one made
+  *more* lookups actually succeed (`checked` climbed from 58 to 133 on the
+  same 200-item run two fixes ago) — more successful lookups means more
+  total request/retry time spent, not less, since a successful match still
+  has to make the request(s) first. The dash-subtitle fallback tier added
+  last round doubles the request count for any name containing `" - "`
+  that doesn't match on the first try, and Pokemon's existing 4-attempt
+  backoff can burn up to ~3.6s of pure delay on a single item before
+  failing. None of this was wrong on its own — each fix was a real,
+  verified improvement — but their combined cost finally pushed one run's
+  total wall-clock time past the platform's hard wall.
+- **`MAX_ITEMS_PER_RUN` alone can't prevent this** — it bounds how much
+  work might be *attempted*, not how long that work actually *takes*, and
+  per-item latency varies enormously (a plain single-request match vs. a
+  Pokemon item needing its full retry budget vs. a dash-fallback's second
+  request). Lowering it would only mask the problem until catalog
+  composition or provider latency shifted again.
+- **Fix: `RUN_DEADLINE_MS` (120000ms), a real wall-clock budget checked
+  inside the run itself** — before starting each item's lookup, the
+  worker now checks elapsed time since the run began; once it crosses
+  120s (a 30s margin under the documented 150s limit, left for the final
+  DB round-trips and response serialization), no new lookups start. An
+  already-in-flight request at that moment is allowed to finish naturally
+  (`runWithConcurrency` doesn't cancel in-flight work) — only *new* work
+  stops, so total time can't keep climbing past the deadline. Items that
+  never got started this way are simply left unchecked; they're picked up
+  on the next scheduled run, same as anything that fell outside
+  `MAX_ITEMS_PER_RUN`'s own cap.
+- **`truncated`/`skippedForTime` added to the response** — same
+  diagnose-from-the-response-alone philosophy as `failedByReason`/
+  `sampleFailures` above: a non-zero `skippedForTime` on a future run is
+  the real, direct signal that `MAX_ITEMS_PER_RUN`/`CONCURRENCY` need
+  tuning (or that catalog growth has outpaced a single daily run, the
+  scenario `MAX_ITEMS_PER_RUN`'s own original comment already anticipated
+  — "a shop whose tracked catalog grows past this will need a different
+  approach, e.g. splitting across more frequent runs") — instead of
+  waiting for another 504 to notice.
+- **Deliberately not a concurrency increase** — raising `CONCURRENCY`
+  above 3 would also cut wall-clock time, but it would do so by firing
+  more simultaneous requests at providers this file has already spent
+  several rounds proving need *conservative* request pacing (pokemontcg.io
+  specifically — see its own documented flakiness under load elsewhere in
+  this file). A time budget inside the run achieves the same "don't blow
+  past 150s" goal without touching the concurrency level that keeps those
+  providers reliable.
+- Verified the same way every fix in this section has been (no network
+  path from this sandbox to Supabase or any of these providers):
+  syntax-checked the file and traced the deadline-check placement by hand
+  to confirm it sits before the network call within the worker (so a
+  skipped item genuinely makes zero requests) and that `skippedForTime`
+  increments exactly once per skipped item.
+
+**Requires redeploying `price-check`** again (`supabase functions deploy
+price-check`) for this fix to take effect. The next manual
+`workflow_dispatch` run's `truncated`/`skippedForTime` fields confirm
+whether this run actually needed the budget, or completed well within it.
+
 ## Workflow conventions
 
 - Feature/bugfix work goes through a PR; trivial single-line fixes may go
